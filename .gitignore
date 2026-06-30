@@ -1,0 +1,27 @@
+# Dependency directories
+node_modules/
+
+# Build outputs
+/dist/
+/www/
+/.angular/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs
+*.log
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+
+# TypeScript
+/out-tsc/
+
+temp_data/*

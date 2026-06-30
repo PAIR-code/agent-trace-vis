@@ -1,0 +1,100 @@
+<!--
+  Copyright 2026 Google LLC
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      https://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<div class="trace-vis-layout">
+  <!-- Main Graph Area -->
+  <div class="graph-area">
+    <div #graphContainer class="graph-container">
+      <!-- SVG is injected here by D3 -->
+      <div *ngIf="isLoading" class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">{{ status }}</div>
+      </div>
+      <div *ngIf="!isLoading && chunks.length === 0" class="empty-state">
+        No reasoning trace data to visualize.
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Control Panel -->
+  <div class="controls-panel" *ngIf="chunks.length > 0 && !hideControls">
+    <!-- Row: 3D Toggle (experimental) -->
+    <div class="controls-row">
+      <div class="control-group">
+        <label class="checkbox-label">
+          <input type="checkbox" [(ngModel)]="use3D" (ngModelChange)="onToggle3D()">
+          <span>3D View <em style="opacity:0.5">(experimental)</em></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Row 0: Similarity Method -->
+    <div class="controls-row">
+      <div class="control-group">
+        <label>Similarity Method: </label>
+        <select [(ngModel)]="similarityMethod" (ngModelChange)="onSimilarityMethodChange()">
+          <option value="semantic">Semantic (Embeddings)</option>
+          <option value="lexical">Fast (Jaccard)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Row 1: Internal Structure -->
+    <div class="controls-row">
+      <div class="control-group">
+        <label class="checkbox-label">
+          <input type="checkbox" [(ngModel)]="showInternalStructure" (ngModelChange)="onShowInternalStructureChange($event)">
+          <span>Show Internal Structure</span>
+        </label>
+      </div>
+      <div class="control-group" *ngIf="showInternalStructure">
+        <label>Intra-trace Exponent ({{ config.intraTraceExponent }})</label>
+        <input type="range" min="1" max="100" step="1" [(ngModel)]="config.intraTraceExponent" (ngModelChange)="onConfigChange()">
+      </div>
+    </div>
+
+    <!-- Row 2: Cross-trace Structure -->
+    <div class="controls-row">
+      <div class="control-group">
+        <label class="checkbox-label">
+          <input type="checkbox" [(ngModel)]="config.applyCrossTraceForces" (ngModelChange)="onShowCrossTraceChange($event)">
+          <span>Show Cross-trace Structure</span>
+        </label>
+      </div>
+      <div class="control-group" *ngIf="config.applyCrossTraceForces">
+        <label>Cross-trace Exponent ({{ config.interTraceExponent }})</label>
+        <input type="range" min="1" max="100" step="1" [(ngModel)]="config.interTraceExponent" (ngModelChange)="onConfigChange()">
+      </div>
+
+    </div>
+
+    <!-- Row 3: Other Controls -->
+    <div class="controls-row">
+      <div class="control-group">
+        <label>Sequential Strength ({{ config.sequentialStrength }})</label>
+        <input type="range" min="0" max="2" step="0.05" [(ngModel)]="config.sequentialStrength" (ngModelChange)="onConfigChange()">
+      </div>
+      <div class="control-group">
+        <label>Sequential Distance ({{ config.sequentialDistance }})</label>
+        <input type="range" min="1" max="20" step="1" [(ngModel)]="config.sequentialDistance" (ngModelChange)="onConfigChange()">
+      </div>
+      <div class="control-group">
+        <label>Collision Radius ({{ config.collisionRadius }})</label>
+        <input type="range" min="0" max="20" step="1" [(ngModel)]="config.collisionRadius" (ngModelChange)="onConfigChange()">
+      </div>
+    </div>
+  </div>
+</div>

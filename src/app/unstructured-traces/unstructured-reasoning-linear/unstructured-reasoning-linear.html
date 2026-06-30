@@ -1,0 +1,202 @@
+<!--
+  Copyright 2026 Google LLC
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      https://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<div class="selector-bar">
+  <div class="selector-group">
+    <label class="selector-label">Dataset</label>
+    <app-multi-select-dropdown
+      [items]="dropdownItems"
+      [selectedIds]="selectedDatasetIds"
+      [itemTypeName]="'Dataset'"
+      (selectionChange)="onSelectionChange($event)">
+    </app-multi-select-dropdown>
+  </div>
+
+  <div class="selector-group">
+    <label class="selector-label">Question</label>
+    <select class="selector-dropdown" [ngModel]="selectedQuestion" (ngModelChange)="onQuestionChange($event)">
+      <option *ngFor="let q of uniqueQuestions; let i = index" [value]="q">Q{{ i + 1 }}: {{ truncate(q, 80) }}</option>
+    </select>
+  </div>
+
+  <div class="selector-group">
+    <label class="selector-label">Rollouts ({{ numRollouts }})</label>
+    <input type="range" min="1" [max]="maxRollouts" step="1" [ngModel]="numRollouts" #rolloutSlider 
+           (input)="numRollouts = +rolloutSlider.value" 
+           (change)="onNumRolloutsChange(+rolloutSlider.value)">
+  </div>
+
+  <span class="bar-divider"></span>
+
+  <div class="selector-group">
+    <label class="selector-label">Tokenize</label>
+    <select class="selector-dropdown" [ngModel]="tokenizeMode" (ngModelChange)="onTokenizeModeChange($event)">
+      <option value="word">Word</option>
+      <option value="word_context">Word (with context)</option>
+      <option value="sentence">Sentence</option>
+      <option value="paragraphs">Paragraphs</option>
+      <option value="steps">Steps</option>
+    </select>
+  </div>
+
+  <div class="selector-group">
+    <label class="selector-label">Color By</label>
+    <select class="selector-dropdown" [ngModel]="coloringScheme" (ngModelChange)="onColoringSchemeChange($event)">
+      <option value="count">Count (traces)</option>
+      <option value="total_count">Total Count</option>
+      <option value="dataset">Dataset</option>
+      <option value="score">Score</option>
+      <option value="answer">Answer</option>
+      <option value="chromogram">Chromogram</option>
+    </select>
+  </div>
+
+  <div class="selector-group">
+    <label class="selector-label">Similarity ({{ similarityCutoff.toFixed(2) }})</label>
+    <input type="range" min="0" max="1" step="0.01" [ngModel]="similarityCutoff" #simSlider
+           (input)="similarityCutoff = +simSlider.value"
+           (change)="onSimilarityCutoffChange(+simSlider.value)">
+  </div>
+</div>
+
+<!-- ═══════════ Main content ═══════════ -->
+<div class="app-container" *ngIf="datasetsData.length > 0">
+  <div class="multi-trace-area">
+    <!-- Loading Overlay -->
+    <div *ngIf="isLoading" class="loading-overlay">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">Processing traces...</div>
+    </div>
+
+    <!-- Legend -->
+    <div class="color-legend" *ngIf="legendItems.length > 0">
+      <span class="legend-title">{{ coloringScheme }}</span>
+      
+      <!-- Standard Legend -->
+      <div class="legend-items" *ngIf="coloringScheme !== 'chromogram'">
+        <div *ngFor="let item of legendItems" class="legend-item">
+          <span class="legend-swatch" [style.background]="item.color"></span>
+          <span class="legend-label">{{ item.label }}</span>
+        </div>
+      </div>
+
+      <!-- Chromogram Continuous Legend -->
+      <div class="continuous-legend" *ngIf="coloringScheme === 'chromogram'">
+        <div class="gradient-bar" [style.background]="continuousLegendGradient"></div>
+        <div class="gradient-labels">
+          <span style="left: 0%">0-9</span>
+          <span style="left: 28.6%">a</span>
+          <span style="left: 100%">z</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="dataset-columns">
+      <div *ngFor="let ds of datasetsData" class="dataset-column">
+        <div class="dataset-header">{{ ds.name }}</div>
+        
+        <div class="trace-columns-container">
+          <div *ngFor="let trace of ds.traces; let ti = index" 
+               class="trace-column"
+               [class.selected]="selectedTrace === trace"
+               (click)="onTraceColumnClick(trace, ds)">
+            <div class="trace-column-header">
+              <span class="trace-idx">#{{ ti + 1 }}</span>
+              <span class="trace-score" [class.score-1]="trace.item.score === 1 || trace.item.score === '1'" [class.score-0]="trace.item.score === 0 || trace.item.score === '0'">
+                {{ trace.item.score }}
+              </span>
+            </div>
+            <div class="trace-token-body" [style.line-height]="fontSize < 6 ? '1' : '1.3'">
+              <span *ngFor="let t of trace.coloredTokens; trackBy: trackByIdx"
+                    class="token"
+                    [style.background-color]="t.color"
+                    [style.font-size.px]="fontSize"
+                    [class.token-tiny]="fontSize < 6"
+                    [class.highlighted]="t.merged === hoveredToken"
+                    (mouseenter)="onTokenHover(t.normalized, t.raw)"
+                    (mouseleave)="onTokenHover(null)">{{ t.raw }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="sidebar-panel">
+    <div class="trace-header-bar">
+      <h3>{{ selectedTrace ? 'Trace Details' : 'Select a Trace' }}</h3>
+      <div class="meta-chips" *ngIf="selectedTrace">
+        <span *ngFor="let m of selectedMetaFields" class="meta-chip"
+          [class.score-true]="m.key === 'score' && (m.value === 1 || m.value === '1' || m.value === true)"
+          [class.score-false]="m.key === 'score' && (m.value === 0 || m.value === '0' || m.value === false)">
+          <span class="meta-key">{{ m.key }}</span>
+          <span class="meta-value">{{ m.display }}</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="trace-content" *ngIf="selectedTrace">
+      <!-- Hovered token info -->
+      <div class="hovered-token-info" *ngIf="hoveredToken">
+        <div class="token-info-header">
+          <span class="token-info-word">"<span [innerHTML]="hoveredTokenRenderedHtml"></span>"</span>
+        </div>
+        <div class="token-info-stats">
+          <div class="token-stat">
+            <span class="stat-label">Traces containing</span>
+            <span class="stat-value">{{ getTokenTraceCount(hoveredToken) }}</span>
+          </div>
+          <div class="token-stat">
+            <span class="stat-label">Total occurrences</span>
+            <span class="stat-value">{{ getTokenTotalCount(hoveredToken) }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Full text of selected trace -->
+      <div class="trace-section" *ngIf="selectedRenderedHtml['question']">
+        <div class="section-label">Question</div>
+        <div class="section-body rendered-md" [innerHTML]="selectedRenderedHtml['question']"></div>
+      </div>
+      
+      <div class="trace-section" *ngIf="selectedRenderedHtml['solution']">
+        <div class="section-label">Reasoning Trace (Rendered)</div>
+        <div class="section-body rendered-md" [innerHTML]="selectedRenderedHtml['solution']"></div>
+      </div>
+
+      <div class="trace-section">
+        <div class="section-label">Reasoning Trace (Tokens)</div>
+        <div class="section-body trace-full-text" [style.font-size.px]="Math.max(fontSize, 11)">
+          <span *ngFor="let t of selectedTrace.coloredTokens; trackBy: trackByIdx"
+                class="token-detail"
+                [style.background-color]="t.color"
+                [class.highlighted]="t.merged === hoveredToken"
+                (mouseenter)="onTokenHover(t.normalized, t.raw)"
+                (mouseleave)="onTokenHover(null)">{{ t.raw }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-empty" *ngIf="!selectedTrace">
+      Click a trace column to view its full content.
+    </div>
+  </div>
+</div>
+
+<div class="loading-area" *ngIf="datasetsData.length === 0 && uniqueQuestions.length === 0">
+  Loading trace data...
+</div>

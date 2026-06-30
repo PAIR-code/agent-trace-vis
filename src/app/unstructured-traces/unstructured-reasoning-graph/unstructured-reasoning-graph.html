@@ -1,0 +1,214 @@
+<!--
+  Copyright 2026 Google LLC
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      https://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<div class="selector-bar">
+  <div class="selector-group">
+    <label class="selector-label">Dataset</label>
+    <app-multi-select-dropdown
+      [items]="dropdownItems"
+      [selectedIds]="selectedDatasetIds"
+      [itemTypeName]="'Dataset'"
+      (selectionChange)="onSelectionChange($event)">
+    </app-multi-select-dropdown>
+  </div>
+
+  <div class="selector-group">
+    <label class="selector-label">Question</label>
+    <select class="selector-dropdown" [ngModel]="selectedQuestion" (ngModelChange)="onQuestionChange($event)">
+      <option *ngFor="let q of uniqueQuestions; let i = index" [value]="q">Q{{ i + 1 }}: {{ truncate(q, 80) }}</option>
+    </select>
+  </div>
+
+  <div class="selector-group">
+    <label class="selector-label">Rollouts ({{ numRollouts }})</label>
+    <input type="range" min="1" [max]="maxRollouts" step="1" [ngModel]="numRollouts" #rolloutSlider 
+           (input)="numRollouts = +rolloutSlider.value" 
+           (change)="onNumRolloutsChange(+rolloutSlider.value)">
+  </div>
+
+  <div class="selector-group">
+    <label class="selector-label">Chunk By</label>
+    <select class="selector-dropdown" [ngModel]="chunkBy" (ngModelChange)="onChunkByChange($event)">
+      <option value="word">Word</option>
+      <option value="word_context">Word (with context)</option>
+      <option value="sentence">Sentence</option>
+      <option value="first_sentence">First Sentence</option>
+      <option value="paragraphs">Paragraphs</option>
+      <option value="steps">Steps</option>
+    </select>
+  </div>
+
+  <div class="selector-group">
+    <label class="selector-label">Similarity</label>
+    <select class="selector-dropdown" [(ngModel)]="similarityMethod" (ngModelChange)="onSimilarityMethodChange()">
+      <option value="semantic">Semantic</option>
+      <option value="lexical">Fast (Jaccard)</option>
+    </select>
+  </div>
+
+  <div class="selector-group">
+    <label class="selector-label">Color By</label>
+    <select class="selector-dropdown" [ngModel]="colorByField" (ngModelChange)="onColorByChange($event)">
+      <option value="answer">Answer</option>
+      <option value="gt">GT</option>
+      <option value="score">Score</option>
+    </select>
+  </div>
+
+  <div class="selector-group">
+    <label class="checkbox-label" style="margin-top: 18px;">
+      <input type="checkbox" [(ngModel)]="use3D">
+      <span>3D <em style="opacity:0.5">(exp)</em></span>
+    </label>
+  </div>
+
+</div>
+
+<!-- ═══════════ Compare-rollouts mode ═══════════ -->
+<div class="app-container compare-mode" *ngIf="datasetsData.length > 0">
+  <div class="multi-trace-area">
+
+    <!-- Legend in top right of the multi-trace area -->
+    <div class="color-legend" *ngIf="colorLegendItems.length > 0">
+      <span class="legend-title">{{ colorByField }}</span>
+      <div class="legend-items">
+        <div *ngFor="let item of colorLegendItems" class="legend-item">
+          <span class="legend-swatch" [style.background]="item.color"></span>
+          <span class="legend-label">{{ item.label }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="dataset-columns">
+      <div *ngFor="let ds of datasetsData" class="dataset-column">
+        <div class="dataset-header">{{ ds.name }}</div>
+        
+        <div class="compare-titles">
+          <div *ngFor="let item of ds.matchingItems; let i = index" 
+               class="column-title" 
+               [class.active]="selectedSidebarItem === item" 
+               (click)="onCompareColumnClick(item, i)">
+            <span class="column-idx">#{{ i + 1 }}</span>
+            <span class="column-meta" *ngIf="item[colorByField] !== undefined">{{ colorByField }}: {{ item[colorByField] }}</span>
+          </div>
+        </div>
+
+        <div class="single-vis-area">
+          <app-single-graph-vis
+            [dataItems]="ds.matchingItems"
+            [traceColors]="ds.traceColors"
+            [hideControls]="true"
+            [chunkBy]="chunkBy"
+            [similarityMethod]="similarityMethod"
+            [use3D]="use3D"
+            (chunkHover)="onChunkHover($event)"
+            (traceClick)="onCompareTraceClick($event, ds.file)">
+          </app-single-graph-vis>
+        </div>
+      </div>
+    </div>
+
+    <!-- Shared Controls Panel for compare mode -->
+    <div class="shared-controls-panel">
+      <!-- Row 1: Internal Structure -->
+      <div class="controls-row">
+        <div class="control-group">
+          <label class="checkbox-label">
+            <input type="checkbox" [(ngModel)]="showInternalStructure" (ngModelChange)="onShowInternalStructureChange($event)">
+            <span>Show Internal Structure</span>
+          </label>
+        </div>
+        <div class="control-group" *ngIf="showInternalStructure">
+          <label>Intra-trace Exponent ({{ sharedConfig.intraTraceExponent }})</label>
+          <input type="range" min="1" max="100" step="1" [(ngModel)]="sharedConfig.intraTraceExponent" (ngModelChange)="onSharedConfigChange()">
+        </div>
+      </div>
+
+      <!-- Row 2: Cross-trace Structure -->
+      <div class="controls-row">
+        <div class="control-group">
+          <label class="checkbox-label">
+            <input type="checkbox" [(ngModel)]="sharedConfig.applyCrossTraceForces" (ngModelChange)="onShowCrossTraceChange($event)">
+            <span>Show Cross-trace Structure</span>
+          </label>
+        </div>
+        <div class="control-group" *ngIf="sharedConfig.applyCrossTraceForces">
+          <label>Cross-trace Exponent ({{ sharedConfig.interTraceExponent }})</label>
+          <input type="range" min="1" max="100" step="1" [(ngModel)]="sharedConfig.interTraceExponent" (ngModelChange)="onSharedConfigChange()">
+        </div>
+
+      </div>
+
+      <!-- Row 3: Other Controls -->
+      <div class="controls-row">
+        <div class="control-group">
+          <label>Sequential Strength ({{ sharedConfig.sequentialStrength }})</label>
+          <input type="range" min="0" max="2" step="0.05" [(ngModel)]="sharedConfig.sequentialStrength" (ngModelChange)="onSharedConfigChange()">
+        </div>
+        <div class="control-group">
+          <label>Sequential Distance ({{ sharedConfig.sequentialDistance }})</label>
+          <input type="range" min="1" max="20" step="1" [(ngModel)]="sharedConfig.sequentialDistance" (ngModelChange)="onSharedConfigChange()">
+        </div>
+        <div class="control-group">
+          <label>Collision Radius ({{ sharedConfig.collisionRadius }})</label>
+          <input type="range" min="0" max="20" step="1" [(ngModel)]="sharedConfig.collisionRadius" (ngModelChange)="onSharedConfigChange()">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sidebar for compare mode -->
+  <div class="sidebar-panel">
+    <div class="trace-header-bar">
+      <h3>{{ selectedSidebarItem ? 'Rollout Details' : 'Trace Details' }}</h3>
+      <div class="meta-chips" *ngIf="selectedSidebarItem">
+        <span *ngFor="let m of compareMetaFields" class="meta-chip"
+          [class.score-true]="m.key === 'score' && m.value === true"
+          [class.score-false]="m.key === 'score' && m.value === false">
+          <span class="meta-key">{{ m.key }}</span>
+          <span class="meta-value">{{ m.display }}</span>
+        </span>
+      </div>
+    </div>
+    <div class="trace-content">
+      <ng-container *ngIf="selectedSidebarItem">
+        <div class="trace-section" *ngIf="compareRenderedHtml['question']">
+          <div class="section-label">Question</div>
+          <div class="section-body rendered-md" [innerHTML]="compareRenderedHtml['question']"></div>
+        </div>
+        <div class="trace-section" *ngIf="compareRenderedHtml['code']">
+          <div class="section-label">Code / Reasoning</div>
+          <div class="section-body rendered-md" [innerHTML]="compareRenderedHtml['code']"></div>
+        </div>
+        <div class="trace-section" *ngIf="compareRenderedHtml['solution']">
+          <div class="section-label">Solution</div>
+          <div class="section-body rendered-md" [innerHTML]="compareRenderedHtml['solution']"></div>
+        </div>
+        <div class="trace-section" *ngIf="compareRenderedHtml['gt_cot']">
+          <div class="section-label">Ground Truth CoT</div>
+          <div class="section-body rendered-md" [innerHTML]="compareRenderedHtml['gt_cot']"></div>
+        </div>
+      </ng-container>
+      <div class="compare-empty" *ngIf="!selectedSidebarItem">
+        Click a rollout title or node to view its details.
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="loading-area" *ngIf="!selectedData && uniqueQuestions.length === 0 && !compareRollouts">
+  Loading trace data...
+</div>
