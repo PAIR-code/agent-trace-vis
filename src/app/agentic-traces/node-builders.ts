@@ -128,7 +128,7 @@ export function buildResponseNode(
   an: ReasoningTraceNode
 ): NodeBuildResult {
   const { yAxisMode, traceScale, startTime, stepDarkerAgentColor, stepAgentColor, cols, nodeW, numNodes, stepDuration, currentTs, stepNodeHeight } = ctx;
-  const segmentHeight = yAxisMode === 'time' ? stepNodeHeight : calcHeight(text);
+  const segmentHeight = yAxisMode === 'time' ? nodeW : calcHeight(text);
   const width = nodeW;
   const height = segmentHeight;
 
@@ -187,7 +187,9 @@ export function buildDefaultNode(
   an: ReasoningTraceNode
 ): NodeBuildResult {
   const { yAxisMode, traceScale, startTime, stepAgentColor, cols, nodeW, numNodes, stepDuration, currentTs, stepNodeHeight } = ctx;
-  const segmentHeight = yAxisMode === 'time' ? stepNodeHeight : calcHeight(text);
+  const segmentHeight = yAxisMode === 'time'
+    ? ((type === TraceNodeType.USER_INPUT || type === TraceNodeType.SYSTEM || type === TraceNodeType.ERROR) ? nodeW : stepNodeHeight)
+    : calcHeight(text);
   const width = nodeW;
   const height = (type === TraceNodeType.SYSTEM || type === TraceNodeType.TOOL_DATA) ? width : segmentHeight;
 

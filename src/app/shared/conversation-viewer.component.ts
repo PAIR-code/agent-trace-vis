@@ -413,9 +413,9 @@ export class ConversationViewerComponent implements OnChanges {
   @Input() searchQuery: string = '';
   @Input() title: string = '';
   @Input() subtitle: string = '';
-  
+
   @Output() messageHover = new EventEmitter<string | null>();
-  
+
   // Color mapping functions passed from parent
   @Input() getSpeakerColor: (msg: any) => string = () => '';
   @Input() getSpeakerBgColor: (msg: any) => string = () => '';
@@ -439,7 +439,7 @@ export class ConversationViewerComponent implements OnChanges {
     if ((changes['activeNodeId'] || changes['messages']) && this.activeNodeId) {
       const wasClicked = this.activeNodeId === this.lastClickedNodeId;
       this.lastClickedNodeId = null; // Always reset
-      
+
       if (!wasClicked) {
         this.scrollToNode(this.activeNodeId);
       }
@@ -474,7 +474,7 @@ export class ConversationViewerComponent implements OnChanges {
         const containerRect = container.getBoundingClientRect();
         const elementRect = el.getBoundingClientRect();
         const relativeTop = elementRect.top - containerRect.top + container.scrollTop;
-        
+
         container.scrollTo({
           top: relativeTop,
           behavior: this.scrollBehavior as ScrollBehavior
@@ -489,7 +489,8 @@ export class ConversationViewerComponent implements OnChanges {
     if (isNaN(date.getTime())) {
       return String(timestamp);
     }
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const formatted = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return formatted;
   }
 
   // Raw JSON view state
@@ -509,7 +510,7 @@ export class ConversationViewerComponent implements OnChanges {
 
   formatJson(obj: any, depth = 0): string {
     if (!obj) return '';
-    
+
     if (depth === 0) {
       const { children, ...rest } = obj;
       obj = rest;
@@ -522,9 +523,9 @@ export class ConversationViewerComponent implements OnChanges {
       const escaped = obj.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       return `<span class="json-string-val">${escaped}</span>`;
     }
-    
+
     const indent = '  '.repeat(depth);
-    
+
     if (Array.isArray(obj)) {
       if (obj.length === 0) return '[]';
       let html = '[\n';
@@ -534,7 +535,7 @@ export class ConversationViewerComponent implements OnChanges {
       html += `${indent}]`;
       return html;
     }
-    
+
     if (typeof obj === 'object') {
       const keys = Object.keys(obj).filter(k => k !== 'children');
       if (keys.length === 0) return '{}';
@@ -547,7 +548,7 @@ export class ConversationViewerComponent implements OnChanges {
       html += `${indent}}`;
       return html;
     }
-    
+
     return String(obj);
   }
 

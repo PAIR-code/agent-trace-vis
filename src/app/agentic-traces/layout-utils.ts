@@ -66,7 +66,7 @@ export function swapPathCoords(pathStr: string): string {
 }
 
 export function calcHeight(text: string): number {
-  return Math.max(12, Math.min(80, text.length / 12));
+  return Math.max(12, Math.min(80, text.length / 20));
 }
 
 export function truncate(text: string, max: number): string {
