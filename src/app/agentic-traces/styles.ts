@@ -117,10 +117,18 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       display: flex;
       flex-direction: column;
       background: #ffffff;
+      position: relative;
+      min-width: 200px;
+      overflow: hidden;
+    }
+
+    .vis-scroll-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
       overflow-y: auto;
       overflow-x: auto;
       position: relative;
-      min-width: 200px;
       padding-left: 32px;
       padding-right: 32px;
     }
@@ -137,7 +145,7 @@ export const AGENTIC_TRACES_STYLES: string[] = [
 
     .trace-legend {
       position: absolute;
-      top: 12px;
+      bottom: 80px;
       right: 12px;
       background: rgba(255,255,255,0.9);
       backdrop-filter: blur(8px);
@@ -151,9 +159,8 @@ export const AGENTIC_TRACES_STYLES: string[] = [
 
     .legend-item {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 8px;
-      white-space: nowrap;
       flex-shrink: 0;
     }
 
@@ -162,14 +169,27 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       height: 10px;
       border-radius: 50%;
       flex-shrink: 0;
+      margin-top: 3px;
     }
 
     .legend-label {
       font-size: 0.75rem;
       font-weight: 500;
       color: #374151;
-      white-space: nowrap;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.2;
       flex-shrink: 0;
+    }
+
+    .legend-main-label {
+      font-weight: 600;
+    }
+
+    .legend-sub-label {
+      font-size: 0.65rem;
+      color: #64748b;
+      font-weight: normal;
     }
 
     .col-headers {

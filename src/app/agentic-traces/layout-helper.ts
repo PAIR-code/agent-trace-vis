@@ -19,7 +19,7 @@
  * backbone lines, and SVG dimensions for the trace visualization.
  */
 
-import { TraceNodeType, TraceNodeColumn, ModelFamily, ReasoningTrace, ReasoningTraceStep, ReasoningTraceNode, BASE_OFFSET } from './layout-types';
+import { TraceNodeType, TraceNodeColumn, ReasoningTrace, ReasoningTraceStep, ReasoningTraceNode, BASE_OFFSET } from './layout-types';
 import { getModelColor, getDarkerModelColor, COLORS } from './colors';
 import { getNodeVisualConfig } from './node-rendering-helper';
 import { LayoutOutput, LayoutParams, VisNode, BackboneLine } from './layout-types';
@@ -83,16 +83,19 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
     const steps = (data as ReasoningTrace).steps || [];
     const rawStops: { y: number, color: string }[] = [];
 
-    // Find a model family in the steps to assign trace colors
-    let traceModelFamily = ModelFamily.UNKNOWN;
+    // Find a model family/name in the steps to assign fallback trace colors
+    let traceModel = 'Agent';
     for (const step of steps) {
       if (step.modelFamily) {
-        traceModelFamily = step.modelFamily;
+        traceModel = step.modelFamily;
+        break;
+      } else if (step.model) {
+        traceModel = step.model;
         break;
       }
     }
-    const agentColor = getModelColor(traceModelFamily);
-    const darkerAgentColor = getDarkerModelColor(traceModelFamily);
+    const agentColor = getModelColor(traceModel);
+    const darkerAgentColor = getDarkerModelColor(traceModel);
     trace.agentColor = agentColor;
     trace.darkerAgentColor = darkerAgentColor;
 
@@ -123,9 +126,8 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
     steps.forEach((step: ReasoningTraceStep, index: number) => {
       const numNodes = step.nodes.length;
 
-      const stepModel = step.modelFamily || traceModelFamily;
-      const stepAgentColor = getModelColor(stepModel);
-      const stepDarkerAgentColor = getDarkerModelColor(stepModel);
+      const stepAgentColor = step.color || getModelColor(step.modelFamily || traceModel);
+      const stepDarkerAgentColor = step.darkerColor || getDarkerModelColor(step.modelFamily || traceModel);
 
       let currentTs = step.timestamp ? new Date(step.timestamp).getTime() : NaN;
       let completedTs = step.completedAt ? new Date(step.completedAt).getTime() : NaN;
@@ -203,10 +205,8 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
       const stepNodes = traceNodes.filter(n => n.data === step);
       if (stepNodes.length > 0) {
         const minY = Math.min(...stepNodes.map(n => n.y));
-        if (step.modelFamily) {
-          const color = getModelColor(step.modelFamily);
-          rawStops.push({ y: minY, color: color });
-        }
+        const color = step.color || getModelColor(step.modelFamily || traceModel);
+        rawStops.push({ y: minY, color: color });
       }
 
       if (yAxisMode === 'tokens') {

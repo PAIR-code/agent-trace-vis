@@ -35,8 +35,6 @@ import {
   TraceNodeColumn,
   TraceNodeType,
   ReasoningStepType,
-  ModelType,
-  ModelFamily,
   ReasoningTrace,
 } from "./layout-helper";
 import {
@@ -44,7 +42,6 @@ import {
   getModelColor,
   createStyle,
   COLORS,
-  lightenColor,
 } from "./colors";
 import { getNodeVisualConfig } from "./node-rendering-helper";
 import { AGENTIC_TRACES_TEMPLATE } from "./template";
@@ -60,6 +57,15 @@ import {
   sanitizeId,
 } from "./layout-helper";
 import { groupThreadMessages } from "./thread-helper";
+
+interface LegendEntry {
+  label: string;
+  subLabel?: string;
+  color: string;
+  isAI: boolean;
+  border?: string;
+  isDiamond?: boolean;
+}
 
 @Component({
   selector: "app-agentic-traces",
@@ -121,19 +127,39 @@ export class AgenticTracesComponent implements OnInit {
       .filter(Boolean);
   });
 
-  legendEntries = computed(() => {
+  legendEntries = computed<LegendEntry[]>(() => {
     const traces = this.selectedTraces();
-    // Use the first selected trace's model color as the legend's agent color, or fallback to COLORS.AGENT
-    const activeAgentColor =
-      traces.length > 0 && (traces[0] as any).agentColor
-        ? (traces[0] as any).agentColor
-        : COLORS.AGENT;
+    const modelEntries: LegendEntry[] = [];
+    const seenNames = new Set<string>();
 
-    // Thinking color: if we have an active trace, use a lighter version of the model color or fallback to COLORS.THINKING
-    const activeThinkingColor =
-      traces.length > 0 && (traces[0] as any).agentColor
-        ? lightenColor((traces[0] as any).agentColor, 0.4)
-        : COLORS.THINKING;
+    for (const trace of traces) {
+      if (trace?.models) {
+        for (const m of trace.models) {
+          if (!seenNames.has(m.name)) {
+            seenNames.add(m.name);
+            
+            let label = m.name;
+            let subLabel: string | undefined = undefined;
+            const parenIdx = m.name.indexOf('(');
+            if (parenIdx !== -1) {
+              label = m.name.substring(0, parenIdx).trim();
+              subLabel = m.name.substring(parenIdx).trim();
+            }
+
+            modelEntries.push({
+              label: label,
+              subLabel: subLabel,
+              color: m.color,
+              isAI: true,
+            });
+          }
+        }
+      }
+    }
+
+    if (modelEntries.length === 0) {
+      modelEntries.push({ label: "Agent", color: COLORS.AGENT, isAI: true });
+    }
 
     return [
       {
@@ -142,8 +168,7 @@ export class AgenticTracesComponent implements OnInit {
         isAI: false,
         border: `1px solid ${COLORS.USER_BORDER}`,
       },
-      { label: "Agent", color: activeAgentColor, isAI: true },
-      { label: "Thinking", color: activeThinkingColor, isAI: true },
+      ...modelEntries,
       { label: "Harness", color: COLORS.USER_BG, isAI: false, isDiamond: true },
       { label: "Error", color: COLORS.ERROR_LIGHT, isAI: false },
       { label: "Tool", color: COLORS.USER_BG, isAI: false },
@@ -215,6 +240,7 @@ export class AgenticTracesComponent implements OnInit {
   /** Returns the text color for a message type. */
   getSpeakerColorForViewer = (msg: any) => {
     if (msg.type === "response" || msg.type === "thinking") {
+      if (msg.color) return msg.color;
       const traceId = msg.traceId || this.activeTraceId();
       const trace = this.traces().find((t) => t.id === traceId);
       const color = (trace as any)?.agentColor;
@@ -225,9 +251,7 @@ export class AgenticTracesComponent implements OnInit {
   /** Returns the background color for a message type. */
   getSpeakerBgColorForViewer = (msg: any) => {
     if (msg.type === "response" || msg.type === "thinking") {
-      const traceId = msg.traceId || this.activeTraceId();
-      const trace = this.traces().find((t) => t.id === traceId);
-      const color = (trace as any)?.agentColor;
+      const color = msg.color || (this.traces().find((t) => t.id === (msg.traceId || this.activeTraceId())) as any)?.agentColor;
       if (color) {
         return createStyle(color).bg;
       }
@@ -243,9 +267,7 @@ export class AgenticTracesComponent implements OnInit {
       }
     }
     if (msg.type === "response" || msg.type === "thinking") {
-      const traceId = msg.traceId || this.activeTraceId();
-      const trace = this.traces().find((t) => t.id === traceId);
-      const color = (trace as any)?.agentColor;
+      const color = msg.color || (this.traces().find((t) => t.id === (msg.traceId || this.activeTraceId())) as any)?.agentColor;
       if (color) {
         return createStyle(color).border;
       }
@@ -301,31 +323,7 @@ export class AgenticTracesComponent implements OnInit {
                 trace.title = parsedTrace.title;
               }
 
-              // Extract models
-              const modelMap = new Map<
-                string,
-                { name: string; color: string }
-              >();
-              parsedTrace.steps.forEach((step) => {
-                if (step.model && step.modelFamily) {
-                  const name = `${step.modelFamily} ${step.model}`;
-                  if (!modelMap.has(name)) {
-                    modelMap.set(name, {
-                      name,
-                      color: getModelColor(step.model),
-                    });
-                  }
-                } else if (step.modelFamily) {
-                  const name = step.modelFamily;
-                  if (!modelMap.has(name)) {
-                    modelMap.set(name, {
-                      name,
-                      color: getModelColor(step.modelFamily),
-                    });
-                  }
-                }
-              });
-              trace.models = Array.from(modelMap.values());
+              trace.models = parsedTrace.models || [];
 
               return parsedTrace;
             }),
@@ -450,25 +448,7 @@ export class AgenticTracesComponent implements OnInit {
               trace.timestamp = date.getTime();
             }
 
-            // Extract models
-            const modelMap = new Map<string, { name: string; color: string }>();
-            parsedTrace.steps.forEach((step) => {
-              if (step.model && step.modelFamily) {
-                const name = `${step.modelFamily} ${step.model}`;
-                if (!modelMap.has(name)) {
-                  modelMap.set(name, { name, color: getModelColor(step.model) });
-                }
-              } else if (step.modelFamily) {
-                const name = step.modelFamily;
-                if (!modelMap.has(name)) {
-                  modelMap.set(name, {
-                    name,
-                    color: getModelColor(step.modelFamily),
-                  });
-                }
-              }
-            });
-            trace.models = Array.from(modelMap.values());
+            trace.models = parsedTrace.models || [];
 
             // Sort by timestamp descending
             const updatedTraces = [...this.traces()];

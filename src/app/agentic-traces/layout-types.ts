@@ -76,22 +76,6 @@ export enum ReasoningStepType {
   VIEW_FILE_OUTLINE = 'VIEW_FILE_OUTLINE'
 }
 
-export enum ModelType {
-  OPUS = 'Opus',
-  SONNET = 'Sonnet',
-  HAIKU = 'Haiku'
-}
-
-export enum ModelFamily {
-  GEMINI = 'Gemini',
-  CLAUDE = 'Claude',
-  GPT = 'GPT',
-  LLAMA = 'Llama',
-  MISTRAL = 'Mistral',
-  QWEN = 'Qwen',
-  UNKNOWN = 'Agent'
-}
-
 export interface ReasoningTrace {
   id: string;
   title: string;
@@ -110,12 +94,14 @@ export interface ReasoningTraceStep {
   id: string;
   timestamp?: string;
   completedAt?: string;
-  model?: ModelType;
-  modelFamily?: ModelFamily;
+  model?: string;
+  modelFamily?: string;
   userIntent?: string;
   stepType?: ReasoningStepType;
   nodes: ReasoningTraceNode[];
   token_usage?: TokenUsage;
+  color?: string;
+  darkerColor?: string;
 }
 
 export interface ReasoningTraceNode {
@@ -209,13 +195,13 @@ export interface ErrorNode extends InteractiveNodeBase {
   connectionLine?: ConnectionLine;
 }
 
-export type VisNode = 
-  | UserInputNode 
-  | ResponseNode 
-  | ThinkingStepNode 
-  | ToolCallNode 
-  | ToolDataNode 
-  | SystemNode 
+export type VisNode =
+  | UserInputNode
+  | ResponseNode
+  | ThinkingStepNode
+  | ToolCallNode
+  | ToolDataNode
+  | SystemNode
   | ErrorNode
   | ThinkingAreaNode;
 

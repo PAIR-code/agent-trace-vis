@@ -19,7 +19,7 @@
  */
 
 import { color as d3Color } from 'd3';
-import { ModelType, ModelFamily } from './layout-types';
+
 
 export interface SpeakerStyle {
   color: string;
@@ -115,35 +115,48 @@ export const SPEAKER_STYLES: { [key: string]: SpeakerStyle } = {
 
 export const LINE_COLOR = COLORS.TOOL_LINE;
 
-export const MODEL_FAMILY_COLORS: Record<ModelFamily, string> = {
-  [ModelFamily.GEMINI]: '#6366f1',   // Indigo
-  [ModelFamily.CLAUDE]: '#0284c7',   // Ocean Blue
-  [ModelFamily.GPT]: '#10b981',      // Emerald Green
-  [ModelFamily.LLAMA]: '#2563eb',    // Royal Blue
-  [ModelFamily.MISTRAL]: '#0d9488',  // Teal
-  [ModelFamily.QWEN]: '#06b6d4',     // Cyan
-  [ModelFamily.UNKNOWN]: '#64748b'   // Slate Gray
-};
-
-export function getModelColor(model: ModelType | ModelFamily | undefined | null): string {
-  if (!model) {
+export function getModelColor(modelStr?: string | null): string {
+  if (!modelStr) {
     return COLORS.AGENT;
   }
-
-  // If it's a known ModelFamily value
-  if (Object.values(ModelFamily).includes(model as ModelFamily)) {
-    return MODEL_FAMILY_COLORS[model as ModelFamily];
+  const lower = modelStr.toLowerCase();
+  
+  if (lower.includes('gemini') || lower.includes('google')) {
+    return '#6366f1'; // Indigo
+  }
+  if (lower.includes('claude') || lower.includes('anthropic') || lower.includes('opus') || lower.includes('sonnet') || lower.includes('haiku')) {
+    return '#0284c7'; // Ocean Blue
+  }
+  if (lower.includes('gpt') || lower.includes('openai')) {
+    return '#10b981'; // Emerald Green
+  }
+  if (lower.includes('llama')) {
+    return '#2563eb'; // Royal Blue
+  }
+  if (lower.includes('mistral')) {
+    return '#0d9488'; // Teal
+  }
+  if (lower.includes('qwen')) {
+    return '#06b6d4'; // Cyan
+  }
+  if (lower === 'agent') {
+    return '#64748b'; // Slate Gray for generic Agent
   }
 
-  // If it's a known ModelType value (e.g., Opus, Sonnet, Haiku)
-  if (Object.values(ModelType).includes(model as ModelType)) {
-    return MODEL_FAMILY_COLORS[ModelFamily.CLAUDE];
-  }
-
-  return COLORS.AGENT;
+  // Fallback: hash the string to generate a dynamic categorical color
+  return hashStringToColor(modelStr);
 }
 
-export function getDarkerModelColor(model: ModelType | ModelFamily | undefined | null): string {
-  return darkenColor(getModelColor(model));
+export function getDarkerModelColor(modelStr?: string | null): string {
+  return darkenColor(getModelColor(modelStr));
+}
+
+function hashStringToColor(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 65%, 45%)`;
 }
 

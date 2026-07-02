@@ -110,10 +110,18 @@ export const AGENTIC_TRACES_TEMPLATE = `
                    [style.border]="entry.border ? entry.border : (entry.isDiamond ? '1.5px solid #c4c9d0' : ((entry.isAI || entry.color === '#ffffff') ? '1px solid #9ca3af' : 'none'))"
                    [style.border-radius]="entry.isDiamond ? '0' : '50%'"
                    [style.transform]="entry.isDiamond ? 'rotate(45deg)' : 'none'"></div>
-              <span class="legend-label">{{ entry.label }}</span>
+              <span class="legend-label">
+                <ng-container *ngIf="entry.subLabel; else simpleLabel">
+                  <span class="legend-main-label">{{ entry.label }}</span>
+                  <span class="legend-sub-label">{{ entry.subLabel }}</span>
+                </ng-container>
+                <ng-template #simpleLabel>{{ entry.label }}</ng-template>
+              </span>
             </div>
           </div>
 
+          <!-- Scrollable area for headers and SVG -->
+          <div class="vis-scroll-area">
           <!-- Column mode headers (at top) -->
           <div class="col-headers" *ngIf="layoutMode() === 'column'" [style.width.px]="contentWidth()" [style.min-width.px]="contentWidth()">
             <ng-container *ngFor="let t of selectedTraces(); let i = index">
@@ -324,6 +332,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
               </div>
               </ng-container>
             </div>
+          </div>
           </div>
         </div>
 

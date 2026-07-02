@@ -19,8 +19,9 @@
  */
 
 import { Injectable } from '@angular/core';
-import { ReasoningTrace, ReasoningTraceStep, ReasoningTraceNode, TraceNodeColumn, TraceNodeType, ReasoningStepType, ModelType, ModelFamily } from './layout-helper';
-import { TraceRecord, Step, ToolCall, Observation } from './trace';
+import { ReasoningTrace, ReasoningTraceStep, ReasoningTraceNode, TraceNodeColumn, TraceNodeType, ReasoningStepType } from './layout-helper';
+import { TraceRecord, Step, ToolCall, Observation, Agent } from './trace';
+import { getModelColor, getDarkerModelColor, darkenColor } from './colors';
 
 const SKIP_EPHEMERAL_MESSAGES = true;
 
@@ -39,11 +40,16 @@ export class TraceLoaderService {
     }));
   }
 
-  parseStep(step: Step, traceId: string, stepIndex: number): ReasoningTraceStep {
+  parseStep(step: Step, traceId: string, stepIndex: number, defaultAgent?: Agent): ReasoningTraceStep {
     const stepId = `${traceId}_step_${stepIndex}`;
     const nodes: ReasoningTraceNode[] = [];
 
-    const { model, family } = parseModelAndFamily(step.model);
+    const model = step.model || defaultAgent?.model || undefined;
+    const modelFamily = defaultAgent?.name || 'Agent';
+
+    const colorTarget = model || modelFamily;
+    const color = getModelColor(colorTarget);
+    const darkerColor = getDarkerModelColor(colorTarget);
 
     const createNode = (
       nid: string,
@@ -105,11 +111,13 @@ export class TraceLoaderService {
     return {
       id: stepId,
       timestamp: step.timestamp,
-      model: model,
-      modelFamily: family,
+      model,
+      modelFamily,
       stepType: step.role === 'user' ? ReasoningStepType.USER_INPUT : (step.role === 'system' ? ReasoningStepType.SYSTEM_MESSAGE : ReasoningStepType.PLANNER_RESPONSE),
       nodes: nodes,
-      token_usage: step.token_usage
+      token_usage: step.token_usage,
+      color,
+      darkerColor
     };
   }
 
@@ -118,46 +126,31 @@ export class TraceLoaderService {
     const title = traceData.task?.description || traceId;
     const steps = traceData.steps || [];
     const parsedSteps = steps.map((step: Step, index: number) => 
-      this.parseStep(step, traceId, index)
+      this.parseStep(step, traceId, index, traceData.agent)
     );
+
+    const modelMap = new Map<string, { name: string; color: string }>();
+    parsedSteps.forEach((step) => {
+      if (step.stepType === ReasoningStepType.PLANNER_RESPONSE && step.color) {
+        const familyName = step.modelFamily || 'Agent';
+        let displayName = familyName;
+        if (step.model && step.model !== familyName) {
+          displayName = `${familyName} (${step.model})`;
+        }
+        if (!modelMap.has(displayName)) {
+          modelMap.set(displayName, { name: displayName, color: step.color });
+        }
+      }
+    });
+
     return {
       id: traceId,
       title: title,
       steps: parsedSteps,
-      metadata: traceData.metadata
+      metadata: traceData.metadata,
+      models: Array.from(modelMap.values())
     };
   }
-}
-
-function parseModelAndFamily(modelStr?: string): { model?: ModelType, family?: ModelFamily } {
-  if (!modelStr) return {};
-  const lower = modelStr.toLowerCase();
-  
-  let family: ModelFamily = ModelFamily.UNKNOWN;
-  if (lower.includes('gemini') || lower.includes('google')) {
-    family = ModelFamily.GEMINI;
-  } else if (lower.includes('claude') || lower.includes('anthropic')) {
-    family = ModelFamily.CLAUDE;
-  } else if (lower.includes('gpt') || lower.includes('openai')) {
-    family = ModelFamily.GPT;
-  } else if (lower.includes('llama')) {
-    family = ModelFamily.LLAMA;
-  } else if (lower.includes('mistral')) {
-    family = ModelFamily.MISTRAL;
-  } else if (lower.includes('qwen')) {
-    family = ModelFamily.QWEN;
-  }
-  
-  let model: ModelType | undefined = undefined;
-  if (lower.includes('opus')) {
-    model = ModelType.OPUS;
-  } else if (lower.includes('sonnet')) {
-    model = ModelType.SONNET;
-  } else if (lower.includes('haiku')) {
-    model = ModelType.HAIKU;
-  }
-  
-  return { model, family };
 }
 
 function mapToolNameToStepType(toolName: string): ReasoningStepType {
@@ -222,4 +215,6 @@ function getObservationLabel(tc: ToolCall, obs: Observation): string {
   const duration = tc.duration_ms ? ` (${tc.duration_ms}ms)` : '';
   return `Output of ${tc.tool_name}${duration}`;
 }
+
+
 
