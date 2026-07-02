@@ -25,9 +25,8 @@ export const AGENTIC_TRACES_STYLES: string[] = [
     :host {
       display: block;
       background-color: #f8fafc;
-      height: 100vh;
+      height: calc(100vh - 50px);
       overflow: hidden;
-      margin: -24px;
       box-sizing: border-box;
     }
 
@@ -145,7 +144,7 @@ export const AGENTIC_TRACES_STYLES: string[] = [
 
     .trace-legend {
       position: absolute;
-      bottom: 80px;
+      bottom: 25px;
       right: 12px;
       background: rgba(255,255,255,0.9);
       backdrop-filter: blur(8px);

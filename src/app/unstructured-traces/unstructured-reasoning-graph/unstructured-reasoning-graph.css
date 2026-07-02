@@ -19,7 +19,6 @@
   background-color: #f8fafc;
   height: calc(100vh - 50px);
   overflow: hidden;
-  margin: -24px;
   box-sizing: border-box;
 }
 

@@ -53,6 +53,11 @@ import { RouterLink } from '@angular/router';
     </div>
   `,
   styles: [`
+    :host {
+      display: block;
+      padding: 24px;
+    }
+
     .home-container {
       max-width: 1000px;
       margin: 0 auto;

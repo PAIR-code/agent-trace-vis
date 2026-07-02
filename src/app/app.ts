@@ -55,7 +55,6 @@ import { RouterOutlet, RouterLink } from '@angular/router';
     }
 
     main {
-      padding: 24px;
     }
   `]
 })
