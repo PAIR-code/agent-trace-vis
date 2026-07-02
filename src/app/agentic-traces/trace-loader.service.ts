@@ -23,7 +23,6 @@ import { ReasoningTrace, ReasoningTraceStep, ReasoningTraceNode, TraceNodeColumn
 import { TraceRecord, Step, ToolCall, Observation, Agent } from './trace';
 import { getModelColor, getDarkerModelColor, darkenColor } from './colors';
 
-const SKIP_EPHEMERAL_MESSAGES = true;
 
 @Injectable({
   providedIn: 'root'
