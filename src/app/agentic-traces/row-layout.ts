@@ -75,7 +75,7 @@ export function applyRowLayout(params: {
     });
 
     // Swap horizontal ticks
-    if (yAxisMode === 'time') {
+    if (yAxisMode === 'time' || yAxisMode === 'tokens') {
       timeTicks.forEach(tick => {
         tick.x = tick.y;
         tick.y = 0;
@@ -104,7 +104,7 @@ export function applyRowLayout(params: {
     // Column Mode contentWidth
     const count = selectedTraceIds.size;
     const baseWidth = count * 140 + (count > 1 ? (count - 1) * 20 : 0);
-    const axisWidth = yAxisMode === 'time' ? 60 : 0;
+    const axisWidth = (yAxisMode === 'time' || yAxisMode === 'tokens') ? 60 : 0;
     contentWidth = Math.max(130, baseWidth + axisWidth);
   }
 

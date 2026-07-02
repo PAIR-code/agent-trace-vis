@@ -44,7 +44,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
         <div class="timeline-toggle">
           <button class="timeline-btn" [class.active]="yAxisMode() === 'default'" (click)="setYAxisMode('default')">Default</button>
           <button class="timeline-btn" [class.active]="yAxisMode() === 'time'" (click)="setYAxisMode('time')">Time</button>
-          <button class="timeline-btn" [class.active]="yAxisMode() === 'tokens'" (click)="setYAxisMode('tokens')" disabled title="Tokens (Coming Soon)">Tokens</button>
+          <button class="timeline-btn" [class.active]="yAxisMode() === 'tokens'" (click)="setYAxisMode('tokens')">Tokens</button>
         </div>
       </div>
 
@@ -54,6 +54,19 @@ export const AGENTIC_TRACES_TEMPLATE = `
           <input type="checkbox" [ngModel]="hideGaps()" (ngModelChange)="hideGaps.set($event); processTraces()" style="margin: 0;">
           Hide Gaps
         </label>
+      </div>
+
+      <!-- Token Options Dropdown -->
+      <div class="selector-group" *ngIf="yAxisMode() === 'tokens'">
+        <label class="selector-label">Metrics</label>
+        <app-multi-select-dropdown
+          [items]="tokenMetricItems()"
+          [selectedIds]="selectedTokenTypes()"
+          [itemTypeName]="'metric'"
+          [allowRename]="false"
+          [showSelectOnly]="true"
+          (selectionChange)="onTokenMetricSelectionChange($event)">
+        </app-multi-select-dropdown>
       </div>
 
       <!-- Layout Toggle -->
@@ -104,7 +117,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
           <!-- Column mode headers (at top) -->
           <div class="col-headers" *ngIf="layoutMode() === 'column'" [style.width.px]="contentWidth()" [style.min-width.px]="contentWidth()">
             <ng-container *ngFor="let t of selectedTraces(); let i = index">
-              <div class="trace-header" [style.left.px]="(yAxisMode() === 'time' ? 60 : 0) + i * 160">
+              <div class="trace-header" [style.left.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + i * 160">
                 <div class="trace-title" [title]="t.title">{{ t.title }}</div>
                 <div class="model-list">
                   <div class="model-item" *ngFor="let m of t.models">
@@ -112,9 +125,9 @@ export const AGENTIC_TRACES_TEMPLATE = `
                   </div>
                 </div>
               </div>
-              <div class="col-header" [style.left.px]="(yAxisMode() === 'time' ? 60 : 0) + i * 160 + 23.33">U</div>
-              <div class="col-header" [style.left.px]="(yAxisMode() === 'time' ? 60 : 0) + i * 160 + 70">A</div>
-              <div class="col-header" [style.left.px]="(yAxisMode() === 'time' ? 60 : 0) + i * 160 + 116.66">T</div>
+              <div class="col-header" [style.left.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + i * 160 + 23.33">U</div>
+              <div class="col-header" [style.left.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + i * 160 + 70">A</div>
+              <div class="col-header" [style.left.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + i * 160 + 116.66">T</div>
             </ng-container>
           </div>
 
@@ -125,7 +138,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
                [style.height.px]="contentHeight()"
                [style.margin-left.px]="0">
             <!-- Time Axis (column mode: left side) -->
-            <div class="time-axis" *ngIf="yAxisMode() === 'time' && layoutMode() === 'column'">
+            <div class="time-axis" *ngIf="(yAxisMode() === 'time' || yAxisMode() === 'tokens') && layoutMode() === 'column'">
               <div class="time-tick" *ngFor="let tick of timeTicks()" [style.top.px]="tick.y">
                 <span class="time-tick-label">{{ tick.label }}</span>
                 <div class="time-tick-line"></div>
@@ -141,7 +154,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
             </div>
 
             <!-- Time Axis (row mode: top side) -->
-            <div class="time-axis-horizontal" *ngIf="yAxisMode() === 'time' && layoutMode() === 'row'">
+            <div class="time-axis-horizontal" *ngIf="(yAxisMode() === 'time' || yAxisMode() === 'tokens') && layoutMode() === 'row'">
               <div class="time-tick-h" *ngFor="let tick of timeTicks()" [style.left.px]="tick.x">
                 <div class="time-tick-line-h"></div>
                 <span class="time-tick-label-h">{{ tick.label }}</span>
@@ -149,7 +162,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
             </div>
 
             <!-- Column Lanes (column mode) -->
-            <div class="col-lanes" *ngIf="layoutMode() === 'column'" [style.height.px]="contentHeight()" [style.padding-left.px]="yAxisMode() === 'time' ? 60 : 0">
+            <div class="col-lanes" *ngIf="layoutMode() === 'column'" [style.height.px]="contentHeight()" [style.padding-left.px]="(yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0">
               <div class="trace-background" *ngFor="let t of selectedTraces()">
                 <div class="col-lane lane-user" [style.height.px]="t.maxTraceY"></div>
                 <div class="col-lane lane-agent" [style.height.px]="t.maxTraceY">
@@ -159,7 +172,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
             </div>
 
             <!-- Row Lanes (row mode) -->
-            <div class="row-lanes" *ngIf="layoutMode() === 'row'" [style.width.px]="contentWidth()" [style.padding-top.px]="(yAxisMode() === 'time' ? 60 : 0) + 18">
+            <div class="row-lanes" *ngIf="layoutMode() === 'row'" [style.width.px]="contentWidth()" [style.padding-top.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + 18">
               <div class="trace-background-row" *ngFor="let t of selectedTraces()">
                 <div class="row-lane lane-user" [style.width.px]="contentWidth()"></div>
                 <div class="row-lane lane-agent" [style.width.px]="contentWidth()">
@@ -171,13 +184,13 @@ export const AGENTIC_TRACES_TEMPLATE = `
             <!-- Row mode: trace titles above each row + channel labels on first trace -->
             <ng-container *ngIf="layoutMode() === 'row'">
               <ng-container *ngFor="let t of selectedTraces(); let i = index">
-                <div class="row-trace-title" [style.top.px]="(yAxisMode() === 'time' ? 60 : 0) + i * 160 + 2">
+                <div class="row-trace-title" [style.top.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + i * 160 + 2">
                   <span class="row-trace-title-text" [title]="t.title">{{ t.title }}</span>
                 </div>
                 <ng-container *ngIf="i === 0">
-                  <span class="row-channel-label" [style.top.px]="(yAxisMode() === 'time' ? 60 : 0) + 18 + 4">user / agent conversation</span>
-                  <span class="row-channel-label" [style.top.px]="(yAxisMode() === 'time' ? 60 : 0) + 18 + 46.66 + 4">agent internal processes</span>
-                  <span class="row-channel-label" [style.top.px]="(yAxisMode() === 'time' ? 60 : 0) + 18 + 93.33 + 4">tools and external world</span>
+                  <span class="row-channel-label" [style.top.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + 18 + 4">user / agent conversation</span>
+                  <span class="row-channel-label" [style.top.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + 18 + 46.66 + 4">agent internal processes</span>
+                  <span class="row-channel-label" [style.top.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + 18 + 93.33 + 4">tools and external world</span>
                 </ng-container>
               </ng-container>
             </ng-container>

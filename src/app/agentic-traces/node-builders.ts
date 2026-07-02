@@ -72,7 +72,7 @@ export function buildThinkingNode(
   an: ReasoningTraceNode
 ): NodeBuildResult {
   const { yAxisMode, traceScale, startTime, stepAgentColor, cols, numNodes, stepDuration, currentTs, stepNodeHeight } = ctx;
-  const segmentHeight = yAxisMode === 'time' ? stepNodeHeight : calcHeight(text);
+  const segmentHeight = (yAxisMode === 'time' || yAxisMode === 'tokens') ? stepNodeHeight : calcHeight(text);
   const words = text.split(/\s+/).filter(w => w.length > 0).length;
   let units = 1;
   if (words <= 50) units = 1;
@@ -84,7 +84,7 @@ export function buildThinkingNode(
   const height = segmentHeight;
 
   let y = currentY;
-  if (yAxisMode === 'time') {
+  if (yAxisMode === 'time' || yAxisMode === 'tokens') {
     const t_end = !isNaN(currentTs) ? currentTs + ((nodeIndex + 1) / numNodes) * stepDuration : currentTs;
     const y_end = !isNaN(t_end) ? BASE_OFFSET + (t_end - startTime) * traceScale : currentY;
     y = y_end - height;
@@ -113,7 +113,7 @@ export function buildThinkingNode(
     stepType: an.stepType
   };
 
-  const nextY = currentY + (yAxisMode !== 'time' ? segmentHeight : height) + nodeGap;
+  const nextY = currentY + ((yAxisMode !== 'time' && yAxisMode !== 'tokens') ? segmentHeight : height) + nodeGap;
   return { node, nextY, nodeBottom: y + height, column: 'agent' };
 }
 
@@ -128,12 +128,12 @@ export function buildResponseNode(
   an: ReasoningTraceNode
 ): NodeBuildResult {
   const { yAxisMode, traceScale, startTime, stepDarkerAgentColor, stepAgentColor, cols, nodeW, numNodes, stepDuration, currentTs, stepNodeHeight } = ctx;
-  const segmentHeight = yAxisMode === 'time' ? nodeW : calcHeight(text);
+  const segmentHeight = (yAxisMode === 'time' || yAxisMode === 'tokens') ? nodeW : calcHeight(text);
   const width = nodeW;
   const height = segmentHeight;
 
   let y = currentY;
-  if (yAxisMode === 'time') {
+  if (yAxisMode === 'time' || yAxisMode === 'tokens') {
     const t_end = !isNaN(currentTs) ? currentTs + ((nodeIndex + 1) / numNodes) * stepDuration : currentTs;
     const y_end = !isNaN(t_end) ? BASE_OFFSET + (t_end - startTime) * traceScale : currentY;
     y = y_end - height;
@@ -187,14 +187,14 @@ export function buildDefaultNode(
   an: ReasoningTraceNode
 ): NodeBuildResult {
   const { yAxisMode, traceScale, startTime, stepAgentColor, cols, nodeW, numNodes, stepDuration, currentTs, stepNodeHeight } = ctx;
-  const segmentHeight = yAxisMode === 'time'
+  const segmentHeight = (yAxisMode === 'time' || yAxisMode === 'tokens')
     ? ((type === TraceNodeType.USER_INPUT || type === TraceNodeType.SYSTEM || type === TraceNodeType.ERROR) ? nodeW : stepNodeHeight)
     : calcHeight(text);
   const width = nodeW;
   const height = (type === TraceNodeType.SYSTEM || type === TraceNodeType.TOOL_DATA) ? width : segmentHeight;
 
   let y = currentY;
-  if (yAxisMode === 'time') {
+  if (yAxisMode === 'time' || yAxisMode === 'tokens') {
     const t_end = !isNaN(currentTs) ? currentTs + ((nodeIndex + 1) / numNodes) * stepDuration : currentTs;
     const y_end = !isNaN(t_end) ? BASE_OFFSET + (t_end - startTime) * traceScale : currentY;
     y = y_end - height;
@@ -247,7 +247,7 @@ export function buildDefaultNode(
     const isFailed = !!an.data?.observation?.error;
     const stroke = isFailed ? COLORS.ERROR : lightenColor(stepAgentColor, 0.3);
 
-    if (yAxisMode === 'time') {
+    if (yAxisMode === 'time' || yAxisMode === 'tokens') {
       const callPath = `M ${tx} ${y} C ${nx} ${y}, ${nx} ${y + (ny - y) * 0.5}, ${nx} ${ny}`;
       const returnPath = `M ${nx} ${ny} L ${tx} ${ny}`;
       const normalStroke = lightenColor(stepAgentColor, 0.3);
@@ -335,7 +335,7 @@ export function buildRateLimitNode(
 ): RateLimitResult {
   const { yAxisMode, traceScale, startTime, currentTs, completedTs } = ctx;
   let y = currentY;
-  if (yAxisMode === 'time') {
+  if (yAxisMode === 'time' || yAxisMode === 'tokens') {
     const t = !isNaN(completedTs) ? completedTs : currentTs;
     y = !isNaN(t) ? BASE_OFFSET + (t - startTime) * traceScale : currentY;
   }
@@ -369,7 +369,7 @@ export function buildRateLimitNode(
   };
 
   let nextY = currentY;
-  if (yAxisMode !== 'time') {
+  if (yAxisMode !== 'time' && yAxisMode !== 'tokens') {
     nextY += 10 + gap;
   }
 

@@ -43,7 +43,7 @@ export interface DropdownItem {
       <div class="conv-dropdown-menu" *ngIf="showDropdown" (click)="$event.stopPropagation()">
         <div class="conv-dropdown-item" *ngFor="let item of items"
              [class.is-selected]="isSelected(item.id)">
-          <input *ngIf="editingId === item.id"
+          <input *ngIf="allowRename && editingId === item.id"
                  type="text"
                  class="conv-inline-input"
                  [ngModel]="item.title"
@@ -52,12 +52,12 @@ export interface DropdownItem {
                  (keydown.enter)="finishRename(item.id, item.title)"
                  (click)="$event.stopPropagation()"
                  autofocus />
-          <div *ngIf="editingId !== item.id"
+          <div *ngIf="!allowRename || editingId !== item.id"
                 class="conv-item-title"
                 (mousedown)="onMouseDown(item.id, $event)"
                 (mouseup)="onMouseUp(item.id, $event)">
             <div class="conv-item-main-title">{{ item.title }}</div>
-            <div class="conv-item-subtitle">
+            <div class="conv-item-subtitle" *ngIf="item.date || item.models">
               <span *ngIf="item.date" class="conv-item-date">{{ item.date }}</span>
               <div *ngIf="item.models" class="conv-item-models">
                 <span *ngFor="let m of item.models" [style.color]="m.color">{{ m.name }}</span>
@@ -68,10 +68,11 @@ export interface DropdownItem {
             <button class="conv-btn-toggle"
                     (click)="onToggle(item.id)"
                     [class.is-checked]="isSelected(item.id)"
-                    [title]="isSelected(item.id) ? 'Remove from view' : 'Add to view'">
+                    [title]="isSelected(item.id) ? 'Remove' : 'Add'">
               {{ isSelected(item.id) ? '✓' : '+' }}
             </button>
-            <button class="conv-btn-only"
+            <button *ngIf="showSelectOnly"
+                    class="conv-btn-only"
                     (click)="onSelectOnly(item.id)"
                     title="View only this item">
               only
@@ -124,7 +125,7 @@ export interface DropdownItem {
       position: absolute;
       top: calc(100% + 4px);
       left: 0;
-      min-width: 320px;
+      min-width: 260px;
       max-width: 450px;
       max-height: 360px;
       overflow-y: auto;
@@ -262,6 +263,8 @@ export class MultiSelectDropdownComponent {
   @Input() items: DropdownItem[] = [];
   @Input() selectedIds: Set<string> = new Set();
   @Input() itemTypeName: string = 'item';
+  @Input() allowRename = true;
+  @Input() showSelectOnly = true;
 
   @Output() selectionChange = new EventEmitter<Set<string>>();
   @Output() renameItem = new EventEmitter<{ id: string, title: string }>();
@@ -310,6 +313,7 @@ export class MultiSelectDropdownComponent {
   }
 
   onMouseDown(id: string, event: MouseEvent) {
+    if (!this.allowRename) return;
     this.longPressed = false;
     this.pressTimer = setTimeout(() => {
       this.longPressed = true;
@@ -321,8 +325,12 @@ export class MultiSelectDropdownComponent {
     if (this.pressTimer) {
       clearTimeout(this.pressTimer);
     }
-    if (!this.longPressed) {
-      this.onSelectOnly(id);
+    if (!this.allowRename || !this.longPressed) {
+      if (this.showSelectOnly) {
+        this.onSelectOnly(id);
+      } else {
+        this.onToggle(id);
+      }
     }
   }
 

@@ -104,6 +104,8 @@ export interface ReasoningTrace {
   timestamp?: number;
 }
 
+import { TokenUsage } from './trace';
+
 export interface ReasoningTraceStep {
   id: string;
   timestamp?: string;
@@ -113,6 +115,7 @@ export interface ReasoningTraceStep {
   userIntent?: string;
   stepType?: ReasoningStepType;
   nodes: ReasoningTraceNode[];
+  token_usage?: TokenUsage;
 }
 
 export interface ReasoningTraceNode {
@@ -250,4 +253,5 @@ export interface LayoutParams {
   yAxisMode: 'default' | 'time' | 'tokens';
   layoutMode: 'column' | 'row';
   hideGaps: boolean;
+  selectedTokenTypes?: Set<string>;
 }

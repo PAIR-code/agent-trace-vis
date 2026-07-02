@@ -108,7 +108,8 @@ export class TraceLoaderService {
       model: model,
       modelFamily: family,
       stepType: step.role === 'user' ? ReasoningStepType.USER_INPUT : (step.role === 'system' ? ReasoningStepType.SYSTEM_MESSAGE : ReasoningStepType.PLANNER_RESPONSE),
-      nodes: nodes
+      nodes: nodes,
+      token_usage: step.token_usage
     };
   }
 

@@ -35,8 +35,21 @@ export { sanitizeId } from './layout-utils';
 
 
 
+function getStepTokens(usage: any, selectedTypes?: Set<string>): number {
+  if (!usage) return 0;
+  let sum = 0;
+  if (!selectedTypes) {
+    return (usage.input_tokens || 0) + (usage.output_tokens || 0) + (usage.cache_read_tokens || 0) + (usage.cache_write_tokens || 0);
+  }
+  if (selectedTypes.has('input_tokens')) sum += usage.input_tokens || 0;
+  if (selectedTypes.has('output_tokens')) sum += usage.output_tokens || 0;
+  if (selectedTypes.has('cache_read_tokens')) sum += usage.cache_read_tokens || 0;
+  if (selectedTypes.has('cache_write_tokens')) sum += usage.cache_write_tokens || 0;
+  return sum;
+}
+
 export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
-  const { traces, selectedTraceIds, yAxisMode, layoutMode, hideGaps } = params;
+  const { traces, selectedTraceIds, yAxisMode, layoutMode, hideGaps, selectedTokenTypes } = params;
 
   const allNodes: VisNode[] = [];
   const backboneLines: BackboneLine[] = [];
@@ -46,7 +59,7 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
 
   const idsArray = [...selectedTraceIds];
 
-  const timeAxis = computeTimeAxis(traces, selectedTraceIds, yAxisMode, hideGaps);
+  const timeAxis = computeTimeAxis(traces, selectedTraceIds, yAxisMode, hideGaps, selectedTokenTypes);
   const { scale, baseScale, timeTicks, intervalLabel } = timeAxis;
 
   idsArray.forEach((id, traceIndex) => {
@@ -56,7 +69,7 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
     const data = trace.data;
     const waitingRects: any[] = [];
     const rowTitlePad = layoutMode === 'row' ? 18 : 0;
-    const axisWidth = yAxisMode === 'time' ? 60 : 0;
+    const axisWidth = (yAxisMode === 'time' || yAxisMode === 'tokens') ? 60 : 0;
     const xOffset = axisWidth + rowTitlePad + traceIndex * 160;
     const traceSpecialErrorLines: any[] = [];
 
@@ -85,9 +98,12 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
 
     // Find start time for this trace
     const firstStepWithTime = steps.find((s: ReasoningTraceStep) => s.timestamp);
-    const startTime = firstStepWithTime?.timestamp ? new Date(firstStepWithTime.timestamp).getTime() : 0;
+    let startTime = firstStepWithTime?.timestamp ? new Date(firstStepWithTime.timestamp).getTime() : 0;
+    if (yAxisMode === 'tokens') {
+      startTime = 0;
+    }
 
-
+    let cumulativeTokens = 0;
 
     const traceScale = scale;
     const traceNodes: VisNode[] = [];
@@ -111,7 +127,7 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
       const stepAgentColor = getModelColor(stepModel);
       const stepDarkerAgentColor = getDarkerModelColor(stepModel);
 
-      const currentTs = step.timestamp ? new Date(step.timestamp).getTime() : NaN;
+      let currentTs = step.timestamp ? new Date(step.timestamp).getTime() : NaN;
       let completedTs = step.completedAt ? new Date(step.completedAt).getTime() : NaN;
 
       if (isNaN(completedTs) && index < steps.length - 1) {
@@ -124,8 +140,16 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
         stepDuration = completedTs - currentTs;
       }
 
+      const stepTokens = getStepTokens(step.token_usage, selectedTokenTypes);
+
+      if (yAxisMode === 'tokens') {
+        currentTs = cumulativeTokens;
+        stepDuration = stepTokens;
+        completedTs = cumulativeTokens + stepTokens;
+      }
+
       let stepNodeHeight = nodeW;
-      if (yAxisMode === 'time' && stepDuration > 0) {
+      if ((yAxisMode === 'time' || yAxisMode === 'tokens') && stepDuration > 0) {
         stepNodeHeight = Math.max(12, (stepDuration * traceScale) / numNodes);
       }
 
@@ -183,6 +207,10 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
           const color = getModelColor(step.modelFamily);
           rawStops.push({ y: minY, color: color });
         }
+      }
+
+      if (yAxisMode === 'tokens') {
+        cumulativeTokens += stepTokens;
       }
     });
 

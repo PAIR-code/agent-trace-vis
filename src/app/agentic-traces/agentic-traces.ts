@@ -49,7 +49,7 @@ import {
 import { getNodeVisualConfig } from "./node-rendering-helper";
 import { AGENTIC_TRACES_TEMPLATE } from "./template";
 import { AGENTIC_TRACES_STYLES } from "./styles";
-import { MultiSelectDropdownComponent } from "../shared/multi-select-dropdown.component";
+import { MultiSelectDropdownComponent, DropdownItem } from "../shared/multi-select-dropdown.component";
 import { SearchBarComponent } from "../shared/search/search-bar.component";
 import { ConversationViewerComponent } from "../shared/conversation-viewer.component";
 import {
@@ -91,6 +91,19 @@ export class AgenticTracesComponent implements OnInit {
   timeTicks = signal<{ label: string; y: number; x?: number }[]>([]);
   hideGaps = signal<boolean>(false);
   timeUnitLabel = signal<string>("");
+  selectedTokenTypes = signal<Set<string>>(new Set(['input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens']));
+  tokenMetricOptions = signal<Array<{ id: string; label: string }>>([
+    { id: 'input_tokens', label: 'Input Tokens' },
+    { id: 'output_tokens', label: 'Output Tokens' },
+    { id: 'cache_read_tokens', label: 'Cache Read (Hit)' },
+    { id: 'cache_write_tokens', label: 'Cache Write (Miss)' }
+  ]);
+  tokenMetricItems = computed<DropdownItem[]>(() =>
+    this.tokenMetricOptions().map(opt => ({
+      id: opt.id,
+      title: opt.label
+    }))
+  );
 
   private speakerColorMap = new Map<string, string>();
   private warmColorIndex = { value: 0 };
@@ -141,7 +154,7 @@ export class AgenticTracesComponent implements OnInit {
   svgWidth = computed(() => {
     const count = this.selectedTraceIds().size;
     const baseWidth = count * 140 + (count > 1 ? (count - 1) * 20 : 0);
-    const axisWidth = this.yAxisMode() === "time" ? 60 : 0;
+    const axisWidth = this.yAxisMode() === "time" || this.yAxisMode() === "tokens" ? 60 : 0;
     return Math.max(130, baseWidth + axisWidth);
   });
 
@@ -379,6 +392,11 @@ export class AgenticTracesComponent implements OnInit {
     this.processTraces();
   }
 
+  onTokenMetricSelectionChange(newSelection: Set<string>) {
+    this.selectedTokenTypes.set(newSelection);
+    this.processTraces();
+  }
+
   /** Sets the layout mode (column or row). */
   setLayoutMode(mode: "column" | "row") {
     this.layoutMode.set(mode);
@@ -495,6 +513,7 @@ export class AgenticTracesComponent implements OnInit {
       yAxisMode: this.yAxisMode(),
       layoutMode: this.layoutMode(),
       hideGaps: this.hideGaps(),
+      selectedTokenTypes: this.selectedTokenTypes(),
     });
 
     console.log('Nodes about to render:', layout.nodes);
