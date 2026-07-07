@@ -29,8 +29,10 @@ import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { DomSanitizer } from "@angular/platform-browser";
 import { HttpClient } from "@angular/common/http";
+import { forkJoin, of } from "rxjs";
+import { catchError, map } from "rxjs/operators";
 import { AnalysisLayersService } from "./analysis-layers.service";
-import { TraceLoaderService } from "./trace-loader.service";
+import { TraceLoaderService, DatasetItem, HF_PRESETS } from "./trace-loader.service";
 import {
   TraceNodeColumn,
   TraceNodeType,
@@ -57,6 +59,7 @@ import {
   sanitizeId,
 } from "./layout-helper";
 import { groupThreadMessages } from "./thread-helper";
+import { HuggingFaceImportComponent } from "./hugging-face-import.component";
 
 interface LegendEntry {
   label: string;
@@ -67,6 +70,8 @@ interface LegendEntry {
   isDiamond?: boolean;
 }
 
+
+
 @Component({
   selector: "app-agentic-traces",
   standalone: true,
@@ -76,14 +81,19 @@ interface LegendEntry {
     MultiSelectDropdownComponent,
     AnalysisToolbarComponent,
     ConversationViewerComponent,
+    HuggingFaceImportComponent,
   ],
   providers: [AnalysisLayersService],
   template: AGENTIC_TRACES_TEMPLATE,
   styles: AGENTIC_TRACES_STYLES,
 })
 export class AgenticTracesComponent implements OnInit {
-  datasets = signal<any[]>([]);
+  datasets = signal<DatasetItem[]>([]);
   selectedDatasetFile = signal<string>("");
+  isLoading = signal<boolean>(false);
+
+  // HF Import Modal State
+  showImportModal = signal<boolean>(false);
   traces = signal<any[]>([]);
   selectedTraceId = signal<string>("");
   activeTrace = signal<any>(null);
@@ -113,6 +123,7 @@ export class AgenticTracesComponent implements OnInit {
 
   private speakerColorMap = new Map<string, string>();
   private warmColorIndex = { value: 0 };
+  private lastSelectedDataset = '';
 
   nodes = signal<VisNode[]>([]);
   thinkingAreaNodes = computed(() => this.nodes().filter((n): n is ThinkingAreaNode => n.type === 'thinking_area' as any));
@@ -520,93 +531,249 @@ export class AgenticTracesComponent implements OnInit {
     return line.id;
   }
 
+  private loadImportedDatasets(): DatasetItem[] {
+    try {
+      const data = localStorage.getItem('imported_datasets');
+      return data ? JSON.parse(data) : [];
+    } catch (e) {
+      console.error('Failed to load imported datasets from localStorage', e);
+      return [];
+    }
+  }
+
+  private saveImportedDatasets(datasets: DatasetItem[]) {
+    try {
+      localStorage.setItem('imported_datasets', JSON.stringify(datasets));
+    } catch (e) {
+      console.error('Failed to save imported datasets to localStorage', e);
+    }
+  }
+
   /** Loads the initial list of datasets. */
-  loadDatasets() {
+  loadDatasets(selectDatasetId?: string) {
+    this.isLoading.set(true);
     this.http.get<any>('assets/data/traces/manifest.json').subscribe({
       next: (manifest) => {
+        let loadedDatasets: DatasetItem[] = [];
         if (Array.isArray(manifest) && manifest.length > 0 && typeof manifest[0] === 'object' && 'files' in manifest[0]) {
-          const loadedDatasets = manifest.map(ds => ({ name: ds.name, file: ds.id }));
-          this.datasets.set(loadedDatasets);
-          if (loadedDatasets.length > 0) {
-            this.onDatasetChange(loadedDatasets[0].file);
-          }
+          loadedDatasets = manifest.map(ds => ({ name: ds.name, file: ds.id }));
         } else {
-          this.datasets.set([
-            { name: "Developer Agent Traces", file: "__generic_traces__" },
-          ]);
-          this.onDatasetChange("__generic_traces__");
+          loadedDatasets = [
+            { name: "Developer Agent Traces", file: "developer_agent_traces" },
+          ];
+        }
+
+        // Add presets
+        loadedDatasets = [...loadedDatasets, ...HF_PRESETS];
+
+        // Add user-imported datasets
+        const imported = this.loadImportedDatasets();
+        loadedDatasets = [...loadedDatasets, ...imported];
+
+        this.datasets.set(loadedDatasets);
+        this.isLoading.set(false);
+
+        const targetId = selectDatasetId || (loadedDatasets.length > 0 ? loadedDatasets[0].file : '');
+        if (targetId) {
+          this.onDatasetChange(targetId);
         }
       },
       error: (err) => {
         console.error('Failed to load trace manifest.json', err);
-        this.datasets.set([
-          { name: "Developer Agent Traces", file: "__generic_traces__" },
-        ]);
-        this.onDatasetChange("__generic_traces__");
+        let loadedDatasets = [...HF_PRESETS];
+        const imported = this.loadImportedDatasets();
+        loadedDatasets = [...loadedDatasets, ...imported];
+        this.datasets.set(loadedDatasets);
+        this.isLoading.set(false);
+
+        const targetId = selectDatasetId || (loadedDatasets.length > 0 ? loadedDatasets[0].file : '');
+        if (targetId) {
+          this.onDatasetChange(targetId);
+        }
       }
     });
   }
 
   /** Handles dataset selection changes. */
   onDatasetChange(file: string) {
+    if (file === '__import_hf_dataset__') {
+      this.openImportModal();
+      setTimeout(() => {
+        this.selectedDatasetFile.set(this.lastSelectedDataset);
+      });
+      return;
+    }
+    this.lastSelectedDataset = file;
     this.selectedDatasetFile.set(file);
 
-    this.http.get<any>('assets/data/traces/manifest.json').subscribe({
-      next: (manifest) => {
-        let files: string[] = [];
-        if (Array.isArray(manifest) && manifest.length > 0 && typeof manifest[0] === 'object' && 'files' in manifest[0]) {
-          const ds = manifest.find((d: any) => d.id === file);
-          if (ds) {
-            files = ds.files;
-          }
-        } else {
-          files = manifest;
-        }
+    const ds = this.datasets().find((d) => d.file === file);
+    if (!ds) return;
 
-        const traces = this.traceLoaderService.getTraces(files);
-        this.traces.set(traces);
+    if (ds.isRemote || ds.isImported) {
+      // Remote Hugging Face Dataset Ingestion
+      this.isLoading.set(true);
+      this.traces.set([]);
+      this.activeTrace.set(null);
 
-        // Preload titles in background programmatically from JSON
-        traces.forEach((trace) => {
-          this.http.get(trace.file).subscribe((data: any) => {
-            const parsedTrace = this.traceLoaderService.parseTrace(data, trace.id);
+      const maxTraces = ds.maxTraces || (ds.isRemote ? 5 : 50);
 
-            if (parsedTrace.title) {
-              trace.title = parsedTrace.title;
-            }
-
-            const firstStep = parsedTrace.steps[0];
-            if (firstStep?.timestamp) {
-              const date = new Date(firstStep.timestamp);
-              trace.date = date.toLocaleDateString([], {
-                month: "short",
-                day: "numeric",
-              });
-              trace.timestamp = date.getTime();
-            }
-
-            trace.models = parsedTrace.models || [];
-
-            // Sort by timestamp descending
-            const updatedTraces = [...this.traces()];
-            updatedTraces.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-            this.traces.set(updatedTraces);
+      const startLoading = (urls: string[]) => {
+        this.traceLoaderService.loadRemoteDataset(urls, maxTraces)
+          .then((records) => {
+            this.processLoadedRecords(records, maxTraces);
+          })
+          .catch((err) => {
+            console.error('Failed to load remote dataset traces', err);
+            this.isLoading.set(false);
           });
-        });
+      };
 
-        if (traces.length > 0) {
-          const firstId = traces[0].id;
-          this.selectedTraceIds.set(new Set([firstId]));
-          this.onTraceChange(firstId);
-        } else {
-          this.selectedTraceIds.set(new Set());
-          this.activeTrace.set(null);
-        }
-      },
-      error: (err) => {
-        console.error('Failed to load trace manifest.json', err);
+      if (ds.urls && ds.urls.length > 0) {
+        startLoading(ds.urls);
+      } else if (ds.repoId) {
+        this.traceLoaderService.resolveRepositoryUrls(ds.repoId)
+          .then((urls) => {
+            ds.urls = urls; // cache the resolved URLs
+            startLoading(urls);
+          })
+          .catch((err) => {
+            console.error('Failed to resolve repository files', err);
+            this.isLoading.set(false);
+          });
+      } else {
+        this.isLoading.set(false);
       }
+    } else {
+      // Local Dataset Loading
+      this.isLoading.set(true);
+      this.traces.set([]);
+      this.activeTrace.set(null);
+
+      this.http.get<any>('assets/data/traces/manifest.json').subscribe({
+        next: (manifest) => {
+          let files: string[] = [];
+          if (Array.isArray(manifest) && manifest.length > 0 && typeof manifest[0] === 'object' && 'files' in manifest[0]) {
+            const matchingDs = manifest.find((d: any) => d.id === file);
+            if (matchingDs) {
+              files = matchingDs.files;
+            }
+          } else {
+            files = manifest;
+          }
+
+          const traces = this.traceLoaderService.getTraces(files);
+          this.traces.set(traces);
+
+          let remainingToPreload = traces.length;
+          if (remainingToPreload === 0) {
+            this.isLoading.set(false);
+            return;
+          }
+
+          // Preload titles in background programmatically from JSON
+          traces.forEach((trace) => {
+            this.http.get(trace.file).subscribe({
+              next: (data: any) => {
+                const parsedTrace = this.traceLoaderService.parseTrace(data, trace.id);
+
+                if (parsedTrace.title) {
+                  trace.title = parsedTrace.title;
+                }
+
+                const firstStep = parsedTrace.steps[0];
+                if (firstStep?.timestamp) {
+                  const date = new Date(firstStep.timestamp);
+                  trace.date = date.toLocaleDateString([], {
+                    month: "short",
+                    day: "numeric",
+                  });
+                  trace.timestamp = date.getTime();
+                }
+
+                trace.models = parsedTrace.models || [];
+
+                const updatedTraces = [...this.traces()];
+                updatedTraces.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                this.traces.set(updatedTraces);
+
+                remainingToPreload--;
+                if (remainingToPreload === 0) {
+                  this.isLoading.set(false);
+                }
+              },
+              error: (err) => {
+                console.error(`Failed to preload trace ${trace.file}`, err);
+                remainingToPreload--;
+                if (remainingToPreload === 0) {
+                  this.isLoading.set(false);
+                }
+              }
+            });
+          });
+
+          if (traces.length > 0) {
+            const firstId = traces[0].id;
+            this.selectedTraceIds.set(new Set([firstId]));
+            this.onTraceChange(firstId);
+          } else {
+            this.selectedTraceIds.set(new Set());
+            this.activeTrace.set(null);
+          }
+        },
+        error: (err) => {
+          console.error('Failed to load trace manifest.json', err);
+          this.isLoading.set(false);
+        }
+      });
+    }
+  }
+
+  private processLoadedRecords(records: any[], maxTraces: number) {
+    if (maxTraces && maxTraces > 0) {
+      records = records.slice(0, maxTraces);
+    }
+
+    const traces = records.map((record: any) => {
+      const traceId = record.trace_id || record.session_id || 'default';
+      const parsedTrace = this.traceLoaderService.parseTrace(record, traceId);
+
+      let dateStr = '';
+      let timestampVal = 0;
+      const firstStep = parsedTrace.steps[0];
+      if (firstStep?.timestamp) {
+        const date = new Date(firstStep.timestamp);
+        dateStr = date.toLocaleDateString([], {
+          month: "short",
+          day: "numeric",
+        });
+        timestampVal = date.getTime();
+      }
+
+      return {
+        id: parsedTrace.id,
+        title: parsedTrace.title || traceId,
+        data: parsedTrace,
+        file: '',
+        models: parsedTrace.models || [],
+        date: dateStr,
+        timestamp: timestampVal
+      };
     });
+
+    // Sort by timestamp descending
+    traces.sort((a: any, b: any) => (b.timestamp || 0) - (a.timestamp || 0));
+
+    this.traces.set(traces);
+    this.isLoading.set(false);
+
+    if (traces.length > 0) {
+      const firstId = traces[0].id;
+      this.selectedTraceIds.set(new Set([firstId]));
+      this.onTraceChange(firstId);
+    } else {
+      this.selectedTraceIds.set(new Set());
+      this.activeTrace.set(null);
+    }
   }
 
   /** Handles trace selection changes (single selection). */
@@ -661,5 +828,23 @@ export class AgenticTracesComponent implements OnInit {
         }
       }, 2000);
     }
+  }
+
+  openImportModal() {
+    this.showImportModal.set(true);
+  }
+
+  closeImportModal() {
+    this.showImportModal.set(false);
+  }
+
+  onImportDataset(newDataset: DatasetItem) {
+    const currentImported = this.loadImportedDatasets();
+    this.saveImportedDatasets([newDataset, ...currentImported]);
+
+    // Reload all datasets and switch to the new one asynchronously
+    this.loadDatasets(newDataset.file);
+
+    this.closeImportModal();
   }
 }

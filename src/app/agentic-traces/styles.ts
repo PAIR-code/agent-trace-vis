@@ -620,14 +620,38 @@ export const AGENTIC_TRACES_STYLES: string[] = [
 
 
 
-    .loading {
+    /* ── Loading Spinner & Container ── */
+    .loading-container {
       display: flex;
+      flex-direction: column;
       justify-content: center;
       align-items: center;
       height: 100%;
-      font-size: 1.2rem;
-      color: #64748b;
+      min-height: 400px;
+      gap: 16px;
     }
+
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3.5px solid rgba(255, 255, 255, 0.1);
+      border-top-color: #6366f1; /* beautiful premium indigo */
+      border-radius: 50%;
+      animation: spin 1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+
+    .loading-text {
+      font-size: 1.1rem;
+      color: rgba(255, 255, 255, 0.6);
+      font-weight: 400;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+
 
     /* ── Timeline Toggle ── */
     .timeline-toggle {

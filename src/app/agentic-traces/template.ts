@@ -24,6 +24,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
         <label class="selector-label">Dataset</label>
         <select class="selector-dropdown" [ngModel]="selectedDatasetFile()" (ngModelChange)="onDatasetChange($event)">
           <option *ngFor="let ds of datasets()" [value]="ds.file">{{ ds.name }}</option>
+          <option value="__import_hf_dataset__">➕ Import OpenTraces HF Dataset...</option>
         </select>
       </div>
 
@@ -89,7 +90,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
     <!-- Analysis Toolbar (separate row below header) -->
     <app-analysis-toolbar [nodes]="nodes()"></app-analysis-toolbar>
 
-    <div class="vis-page-container" *ngIf="activeTrace(); else loading" (click)="onBackgroundClick($event)">
+    <div class="vis-page-container" *ngIf="!isLoading() && activeTrace(); else loading" (click)="onBackgroundClick($event)">
       <div class="main-layout">
         <div class="vis-container">
           <!-- No results banner -->
@@ -360,6 +361,15 @@ export const AGENTIC_TRACES_TEMPLATE = `
 
 
     <ng-template #loading>
-      <div class="loading">Loading trace data...</div>
+      <div class="loading-container">
+        <div class="loading-spinner" *ngIf="isLoading()"></div>
+        <div class="loading-text" *ngIf="isLoading(); else noData">Loading dataset and traces...</div>
+        <ng-template #noData>
+          <div class="loading-text">No active trace selected or trace list is empty.</div>
+        </ng-template>
+      </div>
     </ng-template>
+
+    <!-- Hugging Face Import Modal -->
+    <app-hugging-face-import *ngIf="showImportModal()" (close)="closeImportModal()" (import)="onImportDataset($event)"></app-hugging-face-import>
 `;
