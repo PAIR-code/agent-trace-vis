@@ -522,19 +522,47 @@ export class AgenticTracesComponent implements OnInit {
 
   /** Loads the initial list of datasets. */
   loadDatasets() {
-    this.datasets.set([
-      { name: "Developer Agent Traces", file: "__generic_traces__" },
-    ]);
-    this.onDatasetChange("__generic_traces__");
+    this.http.get<any>('assets/data/traces/manifest.json').subscribe({
+      next: (manifest) => {
+        if (Array.isArray(manifest) && manifest.length > 0 && typeof manifest[0] === 'object' && 'files' in manifest[0]) {
+          const loadedDatasets = manifest.map(ds => ({ name: ds.name, file: ds.id }));
+          this.datasets.set(loadedDatasets);
+          if (loadedDatasets.length > 0) {
+            this.onDatasetChange(loadedDatasets[0].file);
+          }
+        } else {
+          this.datasets.set([
+            { name: "Developer Agent Traces", file: "__generic_traces__" },
+          ]);
+          this.onDatasetChange("__generic_traces__");
+        }
+      },
+      error: (err) => {
+        console.error('Failed to load trace manifest.json', err);
+        this.datasets.set([
+          { name: "Developer Agent Traces", file: "__generic_traces__" },
+        ]);
+        this.onDatasetChange("__generic_traces__");
+      }
+    });
   }
 
   /** Handles dataset selection changes. */
   onDatasetChange(file: string) {
     this.selectedDatasetFile.set(file);
 
-    // Multi-file generic trace dataset: load filenames from manifest, populate and load on demand
-    this.http.get<string[]>('assets/data/traces/manifest.json').subscribe({
-      next: (files) => {
+    this.http.get<any>('assets/data/traces/manifest.json').subscribe({
+      next: (manifest) => {
+        let files: string[] = [];
+        if (Array.isArray(manifest) && manifest.length > 0 && typeof manifest[0] === 'object' && 'files' in manifest[0]) {
+          const ds = manifest.find((d: any) => d.id === file);
+          if (ds) {
+            files = ds.files;
+          }
+        } else {
+          files = manifest;
+        }
+
         const traces = this.traceLoaderService.getTraces(files);
         this.traces.set(traces);
 
@@ -570,6 +598,9 @@ export class AgenticTracesComponent implements OnInit {
           const firstId = traces[0].id;
           this.selectedTraceIds.set(new Set([firstId]));
           this.onTraceChange(firstId);
+        } else {
+          this.selectedTraceIds.set(new Set());
+          this.activeTrace.set(null);
         }
       },
       error: (err) => {
