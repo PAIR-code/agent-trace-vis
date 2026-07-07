@@ -22,6 +22,7 @@ import { Injectable } from '@angular/core';
 import { ReasoningTrace, ReasoningTraceStep, ReasoningTraceNode, TraceNodeColumn, TraceNodeType, ReasoningStepType } from './layout-helper';
 import { TraceRecord, Step, ToolCall, Observation, Agent } from './trace';
 import { getModelColor, getDarkerModelColor, darkenColor } from './colors';
+import { hashString } from './layout-utils';
 
 
 @Injectable({
@@ -30,13 +31,16 @@ import { getModelColor, getDarkerModelColor, darkenColor } from './colors';
 export class TraceLoaderService {
   getTraces(files: string[]): { id: string, title: string, data: any, file: string, models: any[], date?: string, timestamp?: number }[] {
     const base = 'assets/data/traces/';
-    return files.map(f => ({
-      id: f.replace('.json', ''),
-      title: f.replace('.json', ''),
-      data: null,
-      file: base + f,
-      models: [],
-    }));
+    return files.map(f => {
+      const filename = f.replace('.json', '');
+      return {
+        id: hashString(filename),
+        title: filename,
+        data: null,
+        file: base + f,
+        models: [],
+      };
+    });
   }
 
   parseStep(step: Step, traceId: string, stepIndex: number, defaultAgent?: Agent): ReasoningTraceStep {
@@ -120,8 +124,12 @@ export class TraceLoaderService {
     };
   }
 
-  parseTrace(traceData: TraceRecord): ReasoningTrace {
-    const traceId = traceData.trace_id || traceData.session_id || 'default';
+  parseTrace(traceData: TraceRecord, fallbackTraceId?: string): ReasoningTrace {
+    let traceId = fallbackTraceId || traceData.trace_id || traceData.session_id || 'default';
+    // Hash long trace IDs (or those with spaces) to keep prompt turn keys short and clean
+    if (traceId.length > 30 || traceId.includes(' ') || traceId.includes('/') || traceId.includes('\\')) {
+      traceId = hashString(traceId);
+    }
     const title = traceData.task?.description || traceId;
     const steps = traceData.steps || [];
     const parsedSteps = steps.map((step: Step, index: number) => 

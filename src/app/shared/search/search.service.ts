@@ -124,6 +124,7 @@ export class SearchService {
 
     const prompt = this.buildPrompt(query, referenceChips, nodes);
     console.log('[Search] Prompt sent to Gemini:\n', prompt);
+    // return {} as any;
     return from(this.callGemini(prompt, apiKey)).pipe(
       map(responseText => {
         console.log('[Search] Raw Gemini response:', responseText);
@@ -171,6 +172,12 @@ ${searchInstruction}
 Here is the full conversation:
 ${conversation}
 
+### IMPORTANT:
+
+Again, you are a strict relevance judge analyzing a conversation. For each turn, rate how well it matches the search query using a 1-5 integer scale. Focus on semantic meaning, not just exact word overlap.
+
+${searchInstruction}
+
 ### Match Scoring Guidelines (5-Point Scale)
 
 5 - Strong Match: The turn clearly and directly matches the query. The concept is explicitly present or strongly implied. Little to no ambiguity.
@@ -188,7 +195,6 @@ ${conversation}
 
 ### Output Rules
 - Use the EXACT ID values from the conversation (e.g. "${exampleIds[0]}", "${exampleIds[1]}").
-- Only include turns with a score >= 2 in your response. Omit any turn scored 1.
 - For each matching turn, provide the overall score AND an array of "spans" — the specific word(s) or phrase(s) from the turn text that support the match. Each span has a "text" (exact substring from the turn) and a "score" (1-5, how strongly that span supports the match).
 - Spans should be EXACT substrings of the turn text (copy-paste from the turn, preserving casing).
 - A span can be a single word, a phrase, or the entire turn text.

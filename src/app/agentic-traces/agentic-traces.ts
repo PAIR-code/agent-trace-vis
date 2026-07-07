@@ -424,7 +424,7 @@ export class AgenticTracesComponent implements OnInit {
             .toPromise()
             .then((data: any) => {
               console.log('Thread data loaded (raw JSON):', data);
-              const parsedTrace = this.traceLoaderService.parseTrace(data);
+              const parsedTrace = this.traceLoaderService.parseTrace(data, trace.id);
               console.log('Thread data parsed:', parsedTrace);
               trace.data = parsedTrace;
 
@@ -541,7 +541,7 @@ export class AgenticTracesComponent implements OnInit {
         // Preload titles in background programmatically from JSON
         traces.forEach((trace) => {
           this.http.get(trace.file).subscribe((data: any) => {
-            const parsedTrace = this.traceLoaderService.parseTrace(data);
+            const parsedTrace = this.traceLoaderService.parseTrace(data, trace.id);
 
             if (parsedTrace.title) {
               trace.title = parsedTrace.title;
