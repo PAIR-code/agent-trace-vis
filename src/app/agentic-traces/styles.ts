@@ -82,27 +82,35 @@ export const AGENTIC_TRACES_STYLES: string[] = [
 
 
 
-    .vis-node.search-match {
-      box-shadow: 0 0 12px 4px rgba(59, 130, 246, 0.5);
-      transform: scale(1.2);
+    .vis-node.layer-match {
+      transform: scale(1.05);
       z-index: 20;
     }
 
-    .search-overlay {
-      position: absolute;
-      top: 0;
+    .vis-node.layer-dim {
+      filter: grayscale(100%);
+      opacity: 0.35;
+      transition: filter 0.3s, opacity 0.3s;
+    }
+
+    .lines-layer.layer-active {
+      filter: grayscale(100%);
+      opacity: 0.3;
+      transition: filter 0.3s, opacity 0.3s;
+    }
+    ::ng-deep app-analysis-toolbar {
+      position: fixed;
+      top: 64px;
       left: 0;
-      width: 100%;
-      height: 100%;
-      background: transparent;
-      z-index: 15;
-      cursor: pointer;
+      right: 0;
+      z-index: 90;
     }
 
     .vis-page-container {
       display: flex;
       flex-direction: column;
       height: 100%;
+      padding-top: 44px;
     }
 
     .main-layout {
@@ -128,8 +136,26 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       overflow-y: auto;
       overflow-x: auto;
       position: relative;
-      padding-left: 32px;
       padding-right: 32px;
+    }
+
+    .no-results-banner {
+      padding: 0;
+      font-size: 0.68rem;
+      color: #94a3b8;
+      background: transparent;
+      margin: 12px 24px 0 24px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      border: none;
+      width: fit-content;
+      font-weight: 500;
+      user-select: none;
+    }
+
+    .no-results-layer-name {
+      font-weight: 600;
     }
 
     /* ── Legend ── */
@@ -515,8 +541,6 @@ export const AGENTIC_TRACES_STYLES: string[] = [
     }
 
     ::ng-deep .message-card.search-match {
-      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3) !important;
-      border-color: #3b82f6 !important;
       z-index: 10;
     }
 

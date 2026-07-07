@@ -29,7 +29,7 @@ import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { DomSanitizer } from "@angular/platform-browser";
 import { HttpClient } from "@angular/common/http";
-import { AgenticTracesSearchService } from "./search.service";
+import { AnalysisLayersService } from "./analysis-layers.service";
 import { TraceLoaderService } from "./trace-loader.service";
 import {
   TraceNodeColumn,
@@ -47,7 +47,7 @@ import { getNodeVisualConfig } from "./node-rendering-helper";
 import { AGENTIC_TRACES_TEMPLATE } from "./template";
 import { AGENTIC_TRACES_STYLES } from "./styles";
 import { MultiSelectDropdownComponent, DropdownItem } from "../shared/multi-select-dropdown.component";
-import { SearchBarComponent } from "../shared/search/search-bar.component";
+import { AnalysisToolbarComponent } from "./analysis-toolbar.component";
 import { ConversationViewerComponent } from "../shared/conversation-viewer.component";
 import {
   calculateTraceLayout,
@@ -74,10 +74,10 @@ interface LegendEntry {
     CommonModule,
     FormsModule,
     MultiSelectDropdownComponent,
-    SearchBarComponent,
+    AnalysisToolbarComponent,
     ConversationViewerComponent,
   ],
-  providers: [AgenticTracesSearchService],
+  providers: [AnalysisLayersService],
   template: AGENTIC_TRACES_TEMPLATE,
   styles: AGENTIC_TRACES_STYLES,
 })
@@ -201,6 +201,32 @@ export class AgenticTracesComponent implements OnInit {
   // Group nodes into thread messages: tool/system/error nest under agent turns
   threadMessages = computed(() => {
     const messages = groupThreadMessages(this.activeTraceId(), this.nodes());
+    
+    // Recursively annotate layer search matches and card glowStyle outlines
+    const annotateMatches = (msgs: any[]) => {
+      for (const m of msgs) {
+        const matches = this.layersService.isNodeMatch(m.id);
+        m.isSearchMatch = matches;
+        
+        if (matches) {
+          const colors = this.layersService.getLayerColorMap().get(m.id);
+          if (colors && colors.length > 0) {
+            // Apply outline/glow using the matching search layer's color
+            m.glowStyle = `0 0 0 2px ${colors[0]}, 0 0 8px ${colors[0]}50`;
+          } else {
+            m.glowStyle = undefined;
+          }
+        } else {
+          m.glowStyle = undefined;
+        }
+
+        if (m.children) {
+          annotateMatches(m.children);
+        }
+      }
+    };
+    annotateMatches(messages);
+    
     console.log('Thread messages about to render:', messages);
     return messages;
   });
@@ -209,10 +235,30 @@ export class AgenticTracesComponent implements OnInit {
 
   constructor(
     private http: HttpClient,
-    public searchService: AgenticTracesSearchService,
+    public layersService: AnalysisLayersService,
     private traceLoaderService: TraceLoaderService,
     private sanitizer: DomSanitizer,
   ) { }
+
+  @HostListener('window:keydown.escape')
+  handleEscape() {
+    this.layersService.disableAllLayers();
+  }
+
+  onBackgroundClick(event: MouseEvent) {
+    const target = event.target as HTMLElement;
+    const isBackground = 
+      target.classList.contains('vis-container') ||
+      target.classList.contains('vis-scroll-area') ||
+      target.classList.contains('vis-content') ||
+      target.classList.contains('col-lane') ||
+      target.classList.contains('row-lane') ||
+      target.classList.contains('vis-page-container');
+
+    if (isBackground) {
+      this.layersService.disableAllLayers();
+    }
+  }
 
   ngOnInit() {
     this.loadDatasets();
@@ -277,20 +323,83 @@ export class AgenticTracesComponent implements OnInit {
 
   /** Returns the highlighted text for a message. */
   getHighlightedTextForViewer = (msg: any) => {
+    const text = msg.text || "";
+
+    // Collect all matching search spans for this node ID
+    const matchingSpans: Array<{ text: string; color: string }> = [];
+    for (const layer of this.layersService.layers()) {
+      if (layer.enabled && !layer.loading) {
+        const result = layer.results.get(msg.id);
+        if (result && result.spans) {
+          for (const span of result.spans) {
+            if (span.text.trim()) {
+              matchingSpans.push({ text: span.text, color: layer.color });
+            }
+          }
+        }
+      }
+    }
+
+    // Helper to highlight spans in a text block
+    const highlightSpans = (rawText: string): string => {
+      // Escape HTML
+      let html = rawText
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+      if (matchingSpans.length === 0) return html;
+
+      // Sort longer spans first
+      const sortedSpans = [...matchingSpans].sort((a, b) => b.text.length - a.text.length);
+
+      for (const span of sortedSpans) {
+        const escapedSpan = span.text.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+        try {
+          const regex = new RegExp(`(${escapedSpan})`, 'gi');
+          html = html.replace(regex, (match) => {
+            return `___MARK_START_${span.color}___${match}___MARK_END___`;
+          });
+        } catch (e) {
+          console.warn('Regex failed:', span.text, e);
+        }
+      }
+
+      // Convert tokens back to styling
+      const startRegex = /___MARK_START_(.+?)___/g;
+      const endRegex = /___MARK_END___/g;
+      html = html
+        .replace(startRegex, (_, color) => {
+          let highlightBg = color;
+          if (highlightBg.startsWith('rgb')) {
+            highlightBg = highlightBg.replace('rgb(', 'rgba(').replace(')', ', 0.35)');
+          } else if (highlightBg.startsWith('#')) {
+            highlightBg = highlightBg + '55';
+          }
+          return `<mark class="search-span-highlight" style="background-color: ${highlightBg}; color: inherit; padding: 1px 3px; border-radius: 3px; border-bottom: 1.5px solid ${color}; font-weight: 500;">`;
+        })
+        .replace(endRegex, '</mark>');
+
+      return html;
+    };
+
     if (msg.type === "thinking") {
-      const paragraphs = msg.text.split("\n\n");
+      const paragraphs = text.split("\n\n");
       const html = paragraphs
         .map((p: string, idx: number) => {
           const baseId = msg.id.replace("_thinking_0", "");
           const fullChunkId = `${baseId}_thinking_${idx}`;
           const isHighlighted = this.highlightedChunkId() === fullChunkId;
+          const highlightedContent = highlightSpans(p);
 
-          return `<span id="chunk-${fullChunkId}" class="text-chunk ${isHighlighted ? "is-highlighted" : ""}">${p}</span>`;
+          return `<span id="chunk-${fullChunkId}" class="text-chunk ${isHighlighted ? "is-highlighted" : ""}">${highlightedContent}</span>`;
         })
         .join("\n\n");
       return this.sanitizer.bypassSecurityTrustHtml(html);
     }
-    return msg.text || "";
+
+    const finalHtml = highlightSpans(text);
+    return this.sanitizer.bypassSecurityTrustHtml(finalHtml);
   };
 
   /** Selects a node in the visualization by its ID. */
@@ -498,6 +607,7 @@ export class AgenticTracesComponent implements OnInit {
 
     console.log('Nodes about to render:', layout.nodes);
     this.nodes.set(layout.nodes);
+    this.layersService.reRunAllEnabledLayers(layout.nodes);
     this.backboneLines.set(layout.backboneLines);
     this.contentWidth.set(layout.contentWidth);
     this.contentHeight.set(layout.contentHeight);

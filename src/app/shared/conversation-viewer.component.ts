@@ -220,7 +220,6 @@ export interface ConversationMessage {
     }
 
     .message-card.search-match {
-      border-left-color: rgba(59, 130, 246, 0.6) !important;
       z-index: 20;
       position: relative;
     }

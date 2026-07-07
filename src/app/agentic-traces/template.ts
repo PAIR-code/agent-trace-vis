@@ -84,24 +84,22 @@ export const AGENTIC_TRACES_TEMPLATE = `
 
 
 
-      <!-- Search Bar -->
-      <app-search-bar
-        [searchMode]="searchService.searchMode()"
-        [searchQuery]="searchService.searchQuery()"
-        [searchLoading]="searchService.searchLoading()"
-        [searchFocused]="searchService.searchFocused()"
-        [aiDisabled]="!searchService.apiKey()"
-        (searchModeChange)="searchService.setSearchMode($event, nodes())"
-        (searchQueryChange)="searchService.onSearchInput($event, nodes())"
-        (executeSearch)="searchService.executeSearch(nodes())"
-        (clearSearch)="searchService.clearSearch()"
-        (focusChange)="searchService.searchFocused.set($event)">
-      </app-search-bar>
     </div>
 
-    <div class="vis-page-container" *ngIf="activeTrace(); else loading">
+    <!-- Analysis Toolbar (separate row below header) -->
+    <app-analysis-toolbar [nodes]="nodes()"></app-analysis-toolbar>
+
+    <div class="vis-page-container" *ngIf="activeTrace(); else loading" (click)="onBackgroundClick($event)">
       <div class="main-layout">
         <div class="vis-container">
+          <!-- No results banner -->
+          <div class="no-results-banner" *ngIf="layersService.noResultsLayers().length > 0">
+            No matches found for:
+            <span class="no-results-layer-name" *ngFor="let l of layersService.noResultsLayers(); let last = last" [style.color]="l.color">
+              "{{ l.name }}"{{ last ? '' : ', ' }}
+            </span>
+          </div>
+
           <!-- Legend -->
           <div class="legend-bar trace-legend" *ngIf="legendEntries().length > 0">
             <div class="legend-item" *ngFor="let entry of legendEntries()">
@@ -203,7 +201,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
               </ng-container>
             </ng-container>
 
-            <svg class="lines-layer" [attr.width]="contentWidth()" [attr.height]="contentHeight()" [style.height.px]="contentHeight()" [class.search-active]="searchService.searchScores().size > 0">
+            <svg class="lines-layer" [attr.width]="contentWidth()" [attr.height]="contentHeight()" [style.height.px]="contentHeight()" [class.layer-active]="layersService.anyLayerEnabled()">
               <defs>
                 <!-- Column mode: vertical gradient -->
                 <ng-container *ngIf="layoutMode() === 'column'">
@@ -268,8 +266,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
               </g>
             </svg>
 
-            <!-- Search Overlay -->
-            <div class="search-overlay" *ngIf="searchService.searchScores().size > 0" (click)="searchService.clearSearch()"></div>
+
 
             <div class="nodes-layer">
               <ng-container *ngFor="let node of nodes(); trackBy: trackByNodeId">
@@ -285,8 +282,9 @@ export const AGENTIC_TRACES_TEMPLATE = `
                    [class.is-waiting]="node.isWaiting"
                    [class.is-failed]="node.isFailed"
                    [class.hidden]="node.hidden"
-                   [class.search-match]="searchService.isSearchMatch(node.id)"
-                   [class.search-dim]="searchService.searchScores().size > 0 && !searchService.isSearchMatch(node.id)"
+                   [class.layer-match]="layersService.isNodeMatch(node.id)"
+                   [class.layer-dim]="layersService.anyLayerEnabled() && !layersService.isNodeMatch(node.id)"
+                   [style.box-shadow]="layersService.getNodeShadow(node.id)"
                    (click)="selectNode(node)"
                    (mouseenter)="hoveredNodeId.set(node.id)"
                    (mouseleave)="hoveredNodeId.set(null)"
@@ -342,7 +340,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
             [messages]="threadMessages()"
             [activeNodeId]="selectedNode()?.id"
             [hoveredNodeId]="hoveredNodeId()"
-            [searchQuery]="searchService.searchQuery()"
+            [searchQuery]="layersService.anyLayerEnabled() ? ' ' : ''"
             [title]="'Trace Conversation'"
             [subtitle]="activeTraceStepsCount() + ' steps'"
             [getSpeakerLabel]="getSpeakerLabelForViewer"
@@ -353,7 +351,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
             [scrollBehavior]="'smooth'"
             (messageClick)="selectNodeById($event)"
             (messageHover)="hoveredNodeId.set($event)"
-            (overlayClick)="searchService.clearSearch()">
+            (overlayClick)="null">
           </app-conversation-viewer>
         </div>
       </div>
