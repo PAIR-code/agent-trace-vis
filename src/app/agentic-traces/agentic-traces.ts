@@ -691,6 +691,7 @@ export class AgenticTracesComponent implements OnInit {
                 }
 
                 trace.models = parsedTrace.models || [];
+                trace.data = parsedTrace;
 
                 const updatedTraces = [...this.traces()];
                 updatedTraces.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
@@ -699,6 +700,9 @@ export class AgenticTracesComponent implements OnInit {
                 remainingToPreload--;
                 if (remainingToPreload === 0) {
                   this.isLoading.set(false);
+                  if (updatedTraces.length > 0) {
+                    this.onTraceChange(updatedTraces[0].id);
+                  }
                 }
               },
               error: (err) => {
@@ -706,19 +710,14 @@ export class AgenticTracesComponent implements OnInit {
                 remainingToPreload--;
                 if (remainingToPreload === 0) {
                   this.isLoading.set(false);
+                  const currentTraces = this.traces();
+                  if (currentTraces.length > 0) {
+                    this.onTraceChange(currentTraces[0].id);
+                  }
                 }
               }
             });
           });
-
-          if (traces.length > 0) {
-            const firstId = traces[0].id;
-            this.selectedTraceIds.set(new Set([firstId]));
-            this.onTraceChange(firstId);
-          } else {
-            this.selectedTraceIds.set(new Set());
-            this.activeTrace.set(null);
-          }
         },
         error: (err) => {
           console.error('Failed to load trace manifest.json', err);
