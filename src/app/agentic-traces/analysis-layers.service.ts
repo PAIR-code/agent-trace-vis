@@ -180,6 +180,11 @@ export class AnalysisLayersService {
     this.currentMode.set(mode);
   }
 
+  /** Clear all cached search results from memory and localStorage. */
+  clearSearchCache(): void {
+    this.searchService.clearCache();
+  }
+
   // ─── Query helpers (used by template bindings) ────────────────────
 
   /** Check if a node matches any enabled layer. */
@@ -242,6 +247,7 @@ export class AnalysisLayersService {
       id: n.id,
       role: n.type || n.role || '',
       text: n.text || '',
+      traceId: n.traceId || '',
     }));
 
     const sub = this.searchService

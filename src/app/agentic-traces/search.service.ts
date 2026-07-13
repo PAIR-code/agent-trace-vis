@@ -62,7 +62,12 @@ export class AgenticTracesSearchService {
 
   executeSearch(nodes: any[]) {
     const query = this.searchQuery();
-    const searchNodes = nodes.map(n => ({ id: n.id, role: n.type, text: n.text }));
+    const searchNodes = nodes.map(n => ({
+      id: n.id,
+      role: n.type,
+      text: n.text,
+      traceId: n.traceId || '',
+    }));
     if (!query.trim()) { this.searchScores.set(new Map()); return; }
     this.searchSubscription?.unsubscribe();
     this.searchLoading.set(true);
