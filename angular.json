@@ -50,11 +50,6 @@
               {
                 "glob": "**/*",
                 "input": "public"
-              },
-              {
-                "glob": "**/*",
-                "input": "../reasoning_vis_data",
-                "output": "/assets/data"
               }
             ],
             "styles": [

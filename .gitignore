@@ -25,3 +25,6 @@ logs
 /out-tsc/
 
 temp_data/*
+# Local Netlify folder
+.netlify
+/public/assets/data/

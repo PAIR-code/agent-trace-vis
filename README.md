@@ -26,42 +26,42 @@ A linear token-level visualization for comparing reasoning traces across dataset
 
 ## Getting Started
 
-### Prerequisites
-
-- [Node.js](https://nodejs.org/) (v18+)
-- npm (comes with Node.js)
-
-### Setup
-
+### 1. Setup & Run Locally
 ```bash
 npm install
 npm start
 ```
+The app will run at `http://localhost:4200`. By default, the build script automatically detects, copies, and manifests all data from your sibling data folder.
 
-The app will be available at `http://localhost:4200`.
-
-## Adding Your Own Data
-
-This repo ships without data for security reasons. By default, the app is configured to load data from a sibling directory (`../reasoning_vis_data/`) which is mapped to `assets/data/` in `angular.json`.
-
-The expected directory layout is:
-
+### 2. Expected Directory Layout
 ```
 parent/
-├── reasoning_vis/          ← this app
+├── agent-trace-vis/        ← this app
 └── reasoning_vis_data/     ← your data
-    ├── traces/             ← agentic trace JSON files
+    ├── traces/             ← agentic trace JSON folders (e.g., website_updates)
     └── rlvr_vs_base/       ← unstructured reasoning datasets
 ```
 
-### Agentic Traces
+### 3. Building & Deploying (Netlify)
 
-1. Place your JSON trace files in the sibling `reasoning_vis_data/traces/` directory.
-2. The trace files will be dynamically detected. Starting the dev server (`npm start`) or compiling the project (`npm run build`) automatically triggers a script that lists the trace files in a generated `manifest.json` file.
-   * If you've manually added trace files while the server is not running or want to update the manifest manually, you can run:
-     ```bash
-     npm run manifest
-     ```
+Building compiles the app locally to `dist/reasoning-trace-vis/browser/`. Deploying uploads those files to Netlify.
+
+To build and deploy with a **subset** of datasets:
+```bash
+DATASETS=website_updates,rlvr_vs_base npm run build
+npx netlify deploy --dir=dist/reasoning-trace-vis/browser --prod --no-build
+```
+
+To build and deploy with **all** datasets:
+```bash
+npm run build
+npx netlify deploy --dir=dist/reasoning-trace-vis/browser --prod --no-build
+```
+
+Or deploy the default public datasets (`website_updates,rlvr_vs_base`) via the pre-configured script:
+```bash
+npm run deploy:public
+```
 
 Each trace file should follow this structure:
 
@@ -120,13 +120,7 @@ Each dataset file should be a JSON array of objects with at minimum:
 ]
 ```
 
-## Building for Production
 
-```bash
-npm run build
-```
-
-Build artifacts are output to `dist/reasoning-trace-vis/browser/`, ready for static hosting.
 
 ## License and Disclaimer
 

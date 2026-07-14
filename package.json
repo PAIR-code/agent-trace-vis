@@ -8,6 +8,8 @@
     "start": "ng serve",
     "prebuild": "npm run manifest",
     "build": "ng build",
+    "build:public": "PUBLIC_ONLY=true npm run build",
+    "deploy:public": "npm run build:public && npx netlify deploy --dir=dist/reasoning-trace-vis/browser --prod --no-build",
     "prewatch": "npm run manifest",
     "watch": "ng build --watch --configuration development"
   },
