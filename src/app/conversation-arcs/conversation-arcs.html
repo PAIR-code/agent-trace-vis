@@ -1,0 +1,154 @@
+<!--
+  Copyright 2026 Google LLC
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      https://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<div class="selector-bar">
+  <div class="selector-group">
+    <label class="selector-label">Dataset</label>
+    <select class="selector-dropdown" [ngModel]="'wildchat'">
+      <option value="wildchat">WildChat</option>
+    </select>
+  </div>
+
+  <div class="selector-group">
+    <label class="selector-label">Conversation</label>
+    <select class="selector-dropdown" [(ngModel)]="selectedConversationHash" (change)="onConversationChange()">
+      <option *ngFor="let c of conversations" [value]="c.conversation_hash">
+        [{{ c.turn }} turns] {{ c.conversation[0].content | slice:0:60 }}...
+      </option>
+    </select>
+  </div>
+
+  <div class="selector-group" *ngIf="references.length > 0">
+    <label class="selector-label">Min Strength ({{ minStrength }})</label>
+    <input type="range" min="1" max="5" step="1" [(ngModel)]="minStrength">
+  </div>
+
+  <div class="selector-group" *ngIf="references.length === 0">
+    <button class="selector-btn" (click)="runReferenceAnalysis()">
+      Analyze References
+    </button>
+  </div>
+</div>
+
+<div class="app-container">
+  <!-- Left Panel: Arc Diagram -->
+  <div class="arc-panel" #arcSvgContainer>
+    <div *ngIf="isLoading" class="loading-overlay">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">{{ loadingPhase }}</div>
+    </div>
+
+    <div class="svg-scroll-container" *ngIf="annotatedConversation" (click)="selectedSentenceGlobalIndex = null">
+      <svg [attr.height]="svgHeight" class="arc-svg">
+        <!-- Alternating Turn Background Helpers (Invisible/Subtle markers) -->
+        <g class="turn-markers">
+          <line *ngFor="let label of turnLabels" 
+                [attr.x1]="300" [attr.y1]="label.y - 12" 
+                [attr.x2]="label.align === 'end' ? 100 : 500" [attr.y2]="label.y - 12" 
+                class="turn-divider-line" />
+        </g>
+
+        <!-- Highlight Boxes (Rendered Behind Lines) -->
+        <g class="highlight-boxes">
+          <ng-container *ngFor="let s of getAllSentences()">
+            <rect *ngIf="isSentenceConnectedToActive(s.globalIndex)"
+                  [attr.x]="getSentenceLayout(s.globalIndex).x - 4"
+                  [attr.y]="getSentenceLayout(s.globalIndex).y - 3"
+                  [attr.width]="getSentenceLayout(s.globalIndex).w + 8"
+                  [attr.height]="10"
+                  [attr.rx]="3"
+                  [attr.fill]="getActiveSentenceColor(s.globalIndex)"
+                  [attr.opacity]="getActiveReferenceOpacity(s.globalIndex)" />
+          </ng-container>
+        </g>
+
+        <!-- Sentence Lines -->
+        <g class="sentence-lines">
+          <rect *ngFor="let s of getAllSentences()"
+                [attr.x]="getSentenceLayout(s.globalIndex).x"
+                [attr.y]="getSentenceLayout(s.globalIndex).y"
+                [attr.width]="getSentenceLayout(s.globalIndex).w"
+                [attr.height]="3"
+                [attr.rx]="1"
+                class="sentence-line"
+                [class.active]="hoveredSentenceGlobalIndex === s.globalIndex || selectedSentenceGlobalIndex === s.globalIndex"
+                [class.connected]="isSentenceConnectedToActive(s.globalIndex)"
+                (mouseenter)="hoverSentence(s.globalIndex)"
+                (mouseleave)="hoverSentence(null)"
+                (click)="selectSentence(s.globalIndex); $event.stopPropagation()" />
+        </g>
+
+        <!-- Turn Labels -->
+        <g class="turn-labels">
+          <text *ngFor="let label of turnLabels"
+                [attr.x]="label.x"
+                [attr.y]="label.y"
+                [attr.text-anchor]="label.align"
+                class="turn-label-text">
+            {{ label.text }}
+          </text>
+        </g>
+
+        <!-- Reference Arcs -->
+        <g class="reference-arcs">
+          <path *ngFor="let ref of getFilteredReferences()"
+                [attr.d]="getArcPath(ref)"
+                [attr.fill]="referenceColors[ref.type]"
+                [attr.opacity]="getArcOpacity(ref)"
+                class="reference-arc-path"
+                [class.dimmed]="isArcDimmed(ref)"
+                [class.highlighted]="isArcHighlighted(ref)" />
+        </g>
+      </svg>
+    </div>
+
+    <!-- Floating/Bottom Legend -->
+    <div class="legend-container" *ngIf="annotatedConversation && references.length > 0">
+      <div class="legend-section">
+        <span class="legend-title">Reference Types:</span>
+        <div class="legend-items">
+          <div *ngFor="let type of getUsedReferenceTypes()" 
+               class="legend-item"
+               [class.active]="selectedReferenceType === type"
+               [class.dimmed]="selectedReferenceType !== null && selectedReferenceType !== type"
+               (click)="toggleReferenceTypeFilter(type); $event.stopPropagation()">
+            <span class="legend-dot" [style.background-color]="referenceColors[type]"></span>
+            <span class="legend-label">{{ referenceLabels[type] }}</span>
+          </div>
+        </div>
+      </div>
+      <div class="legend-section">
+        <span class="legend-title">Strength:</span>
+        <span class="legend-sub">thin/transparent (1) ── thick/opaque (5)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Panel: Conversation Viewer -->
+  <div class="chat-panel">
+    <app-conversation-viewer
+      [title]="'Conversation Thread'"
+      [subtitle]="annotatedConversation ? annotatedConversation.id : ''"
+      [messages]="messages"
+      [getSpeakerColor]="getSpeakerColor"
+      [getSpeakerBgColor]="getSpeakerBgColor"
+      [getSpeakerBorder]="getSpeakerBorder"
+      [getHighlightedText]="getHighlightedText"
+      (messageHover)="hoverSentence(null)"
+      class="conversation-thread-viewer">
+    </app-conversation-viewer>
+  </div>
+</div>

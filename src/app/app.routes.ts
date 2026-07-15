@@ -23,10 +23,13 @@ import { HomeComponent } from './home/home';
 import { AgenticTracesComponent } from './agentic-traces/agentic-traces';
 import { UnstructuredReasoningGraphComponent } from './unstructured-traces/unstructured-reasoning-graph/unstructured-reasoning-graph';
 import { UnstructuredReasoningLinearComponent } from './unstructured-traces/unstructured-reasoning-linear/unstructured-reasoning-linear';
+import { ConversationArcsComponent } from './conversation-arcs/conversation-arcs';
 
 export const routes: Routes = [
   { path: '', component: HomeComponent },
   { path: 'agentic-traces/:id', component: AgenticTracesComponent },
   { path: 'unstructured-reasoning-graph', component: UnstructuredReasoningGraphComponent },
   { path: 'unstructured-reasoning-linear', component: UnstructuredReasoningLinearComponent },
+  { path: 'conversation-arcs', component: ConversationArcsComponent },
 ];
+

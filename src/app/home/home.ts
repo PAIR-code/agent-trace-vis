@@ -49,6 +49,10 @@ import { RouterLink } from '@angular/router';
           <h3>Unstructured Reasoning (Linear)</h3>
           <p>View multiple rollouts of unstructured reasoning.</p>
         </div>
+        <div class="vis-card" routerLink="/conversation-arcs">
+          <h3>Conversational Arcs</h3>
+          <p>Analyze how sentences in a conversation reference previous turns.</p>
+        </div>
       </div>
     </div>
   `,
