@@ -20,6 +20,7 @@
 
 import { Component } from '@angular/core';
 import { RouterOutlet, RouterLink } from '@angular/router';
+import { UrlParamService } from './shared/url-param.service';
 
 @Component({
   selector: 'app-root',
@@ -59,4 +60,8 @@ import { RouterOutlet, RouterLink } from '@angular/router';
   `]
 })
 export class AppComponent {
+  constructor(private urlParamService: UrlParamService) {
+    this.urlParamService.processUrlParameters();
+  }
 }
+
