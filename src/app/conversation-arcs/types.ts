@@ -58,6 +58,7 @@ export interface SentenceReference {
   targetGlobal: number;
   type: ReferenceType;
   strength: number;
+  artifactId?: string;
 }
 
 /** The categorical types of cross-turn references. */

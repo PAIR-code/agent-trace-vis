@@ -36,11 +36,28 @@ import {
   ReferenceType
 } from './types';
 import { ConversationViewerComponent, ConversationMessage } from '../shared/conversation-viewer.component';
+import { MultiSelectDropdownComponent, DropdownItem } from '../shared/multi-select-dropdown.component';
+
+export interface ConversationColumnState {
+  conversationHash: string;
+  raw: WildChatConversation;
+  annotated: AnnotatedConversation | null;
+  messages: ConversationMessage[];
+  references: SentenceReference[];
+  hoveredSentenceGlobalIndex: number | null;
+  selectedSentenceGlobalIndex: number | null;
+  selectedReferenceType: ReferenceType | null;
+  svgHeight: number;
+  turnLabels: Array<{ text: string; x: number; y: number; align: string }>;
+  sentenceLayouts: Map<number, { role: string; segments: Array<{ x: number; y: number; w: number; h: number }> }>;
+  sentenceArcIntervals: Map<number, { yMin: number; yMax: number }>;
+  getHighlightedTextFn?: (msg: ConversationMessage) => SafeHtml;
+}
 
 @Component({
   selector: 'app-conversation-arcs',
   standalone: true,
-  imports: [CommonModule, FormsModule, ConversationViewerComponent],
+  imports: [CommonModule, FormsModule, ConversationViewerComponent, MultiSelectDropdownComponent],
   templateUrl: './conversation-arcs.html',
   styleUrls: ['./conversation-arcs.css']
 })
@@ -49,21 +66,18 @@ export class ConversationArcsComponent implements OnInit {
 
   // Dropdown options
   conversations: WildChatConversation[] = [];
-  selectedConversationHash = '';
+  dropdownItems: DropdownItem[] = [];
+  selectedConversationHashes: Set<string> = new Set();
   
-  // Active conversation state
-  annotatedConversation: AnnotatedConversation | null = null;
-  messages: ConversationMessage[] = [];
-  references: SentenceReference[] = [];
-  
-  // Interactive states
-  hoveredSentenceGlobalIndex: number | null = null;
-  selectedSentenceGlobalIndex: number | null = null;
-  selectedReferenceType: ReferenceType | null = null;
-  
+  // Side-by-side columns
+  columns: ConversationColumnState[] = [];
+
+  // Active column for the single conversation viewer
+  activeColumn: ConversationColumnState | null = null;
+
   // Controls
   minStrength = 1;
-  maxArcRadius = 100;
+  maxArcRadius = 75;
   isLoading = false;
   loadingPhase = '';
 
@@ -73,12 +87,8 @@ export class ConversationArcsComponent implements OnInit {
   allReferenceTypes = ALL_REFERENCE_TYPES;
 
   // Layout properties for rendering
-  svgHeight = 600;
-  readonly COL_LEFT = 290;
+  readonly COL_LEFT = 95;
   readonly COL_WIDTH = 60;
-  turnLabels: Array<{ text: string; x: number; y: number; align: string }> = [];
-  sentenceLayouts = new Map<number, { role: string; segments: Array<{ x: number; y: number; w: number; h: number }> }>();
-  sentenceArcIntervals = new Map<number, { yMin: number; yMax: number }>();
 
   constructor(
     private wildChatService: WildChatService,
@@ -110,9 +120,15 @@ export class ConversationArcsComponent implements OnInit {
     this.loadingPhase = 'Loading WildChat conversations...';
     try {
       this.conversations = await this.wildChatService.fetchConversations();
+      this.dropdownItems = this.conversations.map(c => ({
+        id: c.conversation_hash,
+        title: `[${c.turn} turns] ${c.conversation[0]?.content?.slice(0, 60) || ''}...`
+      }));
+
       if (this.conversations.length > 0) {
-        this.selectedConversationHash = this.conversations[0].conversation_hash;
-        await this.onConversationChange();
+        const defaultHash = this.conversations[0].conversation_hash;
+        this.selectedConversationHashes = new Set([defaultHash]);
+        await this.updateColumns();
       }
     } catch (e) {
       console.error('Failed to load conversations:', e);
@@ -123,107 +139,103 @@ export class ConversationArcsComponent implements OnInit {
     }
   }
 
-  async onConversationChange() {
-    const raw = this.conversations.find(c => c.conversation_hash === this.selectedConversationHash);
-    if (!raw) return;
+  async onSelectionChange(newSelection: Set<string>) {
+    this.selectedConversationHashes = newSelection;
+    await this.updateColumns();
+  }
 
+  async updateColumns() {
     this.isLoading = true;
-    this.loadingPhase = 'Preprocessing conversation...';
-    
-    // Reset states
-    this.annotatedConversation = null;
-    this.messages = [];
-    this.references = [];
-    this.hoveredSentenceGlobalIndex = null;
-    this.selectedSentenceGlobalIndex = null;
-    this.selectedReferenceType = null;
-    this.turnLabels = [];
-    this.sentenceLayouts.clear();
-    this.sentenceArcIntervals.clear();
+    this.loadingPhase = 'Updating columns...';
 
-    try {
-      // Step 1: Preprocess conversation
-      const annotated = this.referenceService.preprocessConversation(raw);
-      this.annotatedConversation = annotated;
+    const currentHashes = new Set(this.columns.map(c => c.conversationHash));
 
-      // Map turns to messages for ConversationViewerComponent
-      this.messages = annotated.turns.map(turn => ({
-        id: `turn-${turn.turnIndex}`,
-        speaker: turn.role === 'user' ? 'User' : 'Assistant',
-        text: turn.content,
-        data: turn // Attach full turn data for sentence rendering
-      }));
+    // Remove columns that are no longer selected
+    this.columns = this.columns.filter(c => this.selectedConversationHashes.has(c.conversationHash));
 
-      // Calculate coordinates for sentence lines
-      this.calculateLayout(annotated);
+    // Add new columns
+    for (const hash of this.selectedConversationHashes) {
+      if (!currentHashes.has(hash)) {
+        const raw = this.conversations.find(c => c.conversation_hash === hash);
+        if (raw) {
+          const colState: ConversationColumnState = {
+            conversationHash: hash,
+            raw,
+            annotated: null,
+            messages: [],
+            references: [],
+            hoveredSentenceGlobalIndex: null,
+            selectedSentenceGlobalIndex: null,
+            selectedReferenceType: null,
+            svgHeight: 600,
+            turnLabels: [],
+            sentenceLayouts: new Map(),
+            sentenceArcIntervals: new Map()
+          };
 
-      // Auto-run reference analysis ONLY if API key is already stored in localStorage
-      if (this.hasStoredApiKey()) {
-        await this.executeReferenceAnalysis();
+          this.preprocessColumn(colState);
+          this.columns.push(colState);
+
+          await this.executeReferenceAnalysisForColumn(colState);
+        }
       }
-
-    } catch (e) {
-      console.error('Preprocessing failed:', e);
-    } finally {
-      this.isLoading = false;
-      this.cdr.detectChanges();
     }
-  }
 
-  hasStoredApiKey(): boolean {
-    return !!localStorage.getItem('reasoning_vis_api_key');
-  }
-
-  async runReferenceAnalysis() {
-    this.isLoading = true;
-    try {
-      const apiKey = this.referenceService.getApiKey();
-      if (!apiKey) {
-        alert('API Key is required to run reference analysis.');
-        return;
-      }
-      await this.executeReferenceAnalysis();
-    } catch (e) {
-      console.error('Analysis failed:', e);
-      alert('Analysis failed. Check console for details.');
-    } finally {
-      this.isLoading = false;
-      this.cdr.detectChanges();
+    // Set activeColumn to first column if current is invalid
+    if (!this.activeColumn || !this.columns.includes(this.activeColumn)) {
+      this.activeColumn = this.columns[0] || null;
     }
+
+    this.isLoading = false;
+    this.cdr.detectChanges();
   }
 
-  private async executeReferenceAnalysis() {
-    if (!this.annotatedConversation) return;
+  preprocessColumn(col: ConversationColumnState) {
+    const annotated = this.referenceService.preprocessConversation(col.raw);
+    col.annotated = annotated;
+
+    col.messages = annotated.turns.map(turn => ({
+      id: `turn-${turn.turnIndex}`,
+      speaker: turn.role === 'user' ? 'User' : 'Assistant',
+      text: turn.content,
+      data: turn
+    }));
+
+    this.calculateLayoutForColumn(col);
+  }
+
+  private async executeReferenceAnalysisForColumn(col: ConversationColumnState) {
+    if (!col.annotated) return;
     
-    this.loadingPhase = 'Analyzing references using Gemini...';
-    const apiKey = localStorage.getItem('reasoning_vis_api_key') || '';
+    const apiKey = this.referenceService.getApiKey();
     if (!apiKey) return;
 
-    const refs = await this.referenceService.analyzeReferences(this.annotatedConversation, apiKey);
-    this.references = refs;
+    try {
+      const refs = await this.referenceService.analyzeReferences(col.annotated, apiKey);
+      col.references = refs;
 
-    // Associate references back to sentences for easy rendering
-    this.mapReferencesToSentences(this.annotatedConversation, refs);
-
-    // Calculate adjacent intervals for active reference endpoints
-    this.calculateArcIntervals();
+      this.mapReferencesToSentencesForColumn(col, refs);
+      this.calculateArcIntervalsForColumn(col);
+    } catch (e) {
+      console.error(`Analysis failed for ${col.conversationHash}:`, e);
+    }
   }
 
-  /**
-   * Precalculates layout coordinates for sentence lines.
-   */
-  private calculateLayout(conversation: AnnotatedConversation) {
+  private calculateLayoutForColumn(col: ConversationColumnState) {
+    if (!col.annotated) return;
     let currentY = 30; // top padding
+    col.turnLabels = [];
+    col.sentenceLayouts.clear();
+    col.sentenceArcIntervals.clear();
     
-    for (const turn of conversation.turns) {
-      // Add turn label position
-      this.turnLabels.push({
+    for (const turn of col.annotated.turns) {
+      col.turnLabels.push({
         text: turn.role === 'user' ? 'User' : 'Assistant',
         x: turn.role === 'user' ? this.COL_LEFT : this.COL_LEFT + this.COL_WIDTH,
         y: currentY + 10,
         align: turn.role === 'user' ? 'start' : 'end'
       });
-      currentY += 18; // space for turn label
+      currentY += 18;
 
       for (const sentence of turn.sentences) {
         let remaining = Math.max(20, sentence.charLength * 1.5);
@@ -234,68 +246,59 @@ export class ConversationArcsComponent implements OnInit {
           const w = Math.min(remaining, this.COL_WIDTH);
           const x = turn.role === 'user' ? this.COL_LEFT : this.COL_LEFT + this.COL_WIDTH - w;
           
-          segments.push({
-            x,
-            y: currentY,
-            w,
-            h
-          });
+          segments.push({ x, y: currentY, w, h });
           
-          currentY += h + 2; // segment height + small spacing within the same sentence
+          currentY += h + 2;
           remaining -= w;
           if (remaining < 1) break;
         }
         
-        currentY += 4; // gap between sentences in the same turn
+        currentY += 4;
         
-        this.sentenceLayouts.set(sentence.globalIndex, {
+        col.sentenceLayouts.set(sentence.globalIndex, {
           role: turn.role,
           segments
         });
       }
       
-      currentY += 12; // gap between turns
+      currentY += 12;
     }
     
-    this.svgHeight = currentY + 40; // bottom padding
+    col.svgHeight = currentY + 40;
 
-    // Calculate adjacent intervals for highlight boxes (aligned with sentences, no vertical shift)
-    const sentences = this.getAllSentences();
+    const sentences = col.annotated.turns.flatMap(t => t.sentences);
     for (let i = 0; i < sentences.length; i++) {
       const s = sentences[i];
-      const box = this.getSentenceBoundingBox(s.globalIndex);
+      const box = this.getSentenceBoundingBoxForColumn(col, s.globalIndex);
       
       let yMin = box.y - 1;
       let yMax = box.y + box.h + 1;
       
       if (i > 0) {
-        const prevBox = this.getSentenceBoundingBox(sentences[i - 1].globalIndex);
+        const prevBox = this.getSentenceBoundingBoxForColumn(col, sentences[i - 1].globalIndex);
         yMin = (prevBox.y + prevBox.h + box.y) / 2;
       }
       
       if (i < sentences.length - 1) {
-        const nextBox = this.getSentenceBoundingBox(sentences[i + 1].globalIndex);
+        const nextBox = this.getSentenceBoundingBoxForColumn(col, sentences[i + 1].globalIndex);
         yMax = (box.y + box.h + nextBox.y) / 2;
       }
       
-      this.sentenceArcIntervals.set(s.globalIndex, { yMin, yMax });
+      col.sentenceArcIntervals.set(s.globalIndex, { yMin, yMax });
     }
   }
 
-  getSentenceLayout(globalIndex: number) {
-    return this.sentenceLayouts.get(globalIndex) || { role: '', segments: [] };
+  getSentenceLayoutForColumn(col: ConversationColumnState, globalIndex: number) {
+    return col.sentenceLayouts.get(globalIndex) || { role: '', segments: [] };
   }
 
-  /**
-   * Generates a closed SVG path for a semicircular arc with variable thickness.
-   */
-  getArcPath(ref: SentenceReference): string {
-    const boxSource = this.getSentenceBoundingBox(ref.sourceGlobal);
-    const boxTarget = this.getSentenceBoundingBox(ref.targetGlobal);
+  getArcPathForColumn(col: ConversationColumnState, ref: SentenceReference): string {
+    const boxSource = this.getSentenceBoundingBoxForColumn(col, ref.sourceGlobal);
+    const boxTarget = this.getSentenceBoundingBoxForColumn(col, ref.targetGlobal);
     if (boxSource.w === 0 || boxTarget.w === 0) return '';
 
-    const intervalSource = this.sentenceArcIntervals.get(ref.sourceGlobal);
-    const intervalTarget = this.sentenceArcIntervals.get(ref.targetGlobal);
+    const intervalSource = col.sentenceArcIntervals.get(ref.sourceGlobal);
+    const intervalTarget = col.sentenceArcIntervals.get(ref.targetGlobal);
     if (!intervalSource || !intervalTarget) return '';
 
     const ySource = (intervalSource.yMin + intervalSource.yMax) / 2;
@@ -308,7 +311,6 @@ export class ConversationArcsComponent implements OnInit {
     const isRhs = ref.type === 'summary' || ref.type === 'artifact';
     const anchorX = isRhs ? this.COL_LEFT + this.COL_WIDTH : this.COL_LEFT;
 
-    // Arc thickness matches the contiguous stacked interval height
     const tSource = intervalSource.yMax - intervalSource.yMin;
     const tTarget = intervalTarget.yMax - intervalTarget.yMin;
 
@@ -324,8 +326,6 @@ export class ConversationArcsComponent implements OnInit {
     const rxInner = Math.max(5, Math.min(this.maxArcRadius - (tTop + tBottom) / 2, rInner));
     const ryInner = rInner;
 
-    // Outer arc: sweep=1 for rhs, sweep=0 for lhs.
-    // Inner arc: sweep=0 for rhs, sweep=1 for lhs.
     const sweepOuter = isRhs ? 1 : 0;
     const sweepInner = isRhs ? 0 : 1;
 
@@ -335,35 +335,32 @@ export class ConversationArcsComponent implements OnInit {
             A ${rxInner} ${ryInner} 0 0 ${sweepInner} ${anchorX} ${yTop + tTop/2} Z`;
   }
 
-  getArcOpacity(ref: SentenceReference): number {
-    return 0.08 + (ref.strength - 1) * 0.08;
+  getArcOpacityForColumn(col: ConversationColumnState, ref: SentenceReference): number {
+    return 0.03 + (ref.strength - 1) * 0.03;
   }
 
-
-  isArcDimmed(ref: SentenceReference): boolean {
-    const activeIndex = this.hoveredSentenceGlobalIndex ?? this.selectedSentenceGlobalIndex;
+  isArcDimmedForColumn(col: ConversationColumnState, ref: SentenceReference): boolean {
+    const activeIndex = col.hoveredSentenceGlobalIndex ?? col.selectedSentenceGlobalIndex;
     if (activeIndex === null) return false;
     return ref.sourceGlobal !== activeIndex && ref.targetGlobal !== activeIndex;
   }
 
-  isArcHighlighted(ref: SentenceReference): boolean {
-    const activeIndex = this.hoveredSentenceGlobalIndex ?? this.selectedSentenceGlobalIndex;
+  isArcHighlightedForColumn(col: ConversationColumnState, ref: SentenceReference): boolean {
+    const activeIndex = col.hoveredSentenceGlobalIndex ?? col.selectedSentenceGlobalIndex;
     if (activeIndex === null) return false;
     return ref.sourceGlobal === activeIndex || ref.targetGlobal === activeIndex;
   }
 
-  private mapReferencesToSentences(conversation: AnnotatedConversation, refs: SentenceReference[]) {
-
-    // Clear existing references
-    for (const turn of conversation.turns) {
+  private mapReferencesToSentencesForColumn(col: ConversationColumnState, refs: SentenceReference[]) {
+    if (!col.annotated) return;
+    for (const turn of col.annotated.turns) {
       for (const sentence of turn.sentences) {
         sentence.references = [];
       }
     }
 
-    // Map new references
     const sentenceMap = new Map<number, AnnotatedSentence>();
-    for (const turn of conversation.turns) {
+    for (const turn of col.annotated.turns) {
       for (const sentence of turn.sentences) {
         sentenceMap.set(sentence.globalIndex, sentence);
       }
@@ -377,10 +374,10 @@ export class ConversationArcsComponent implements OnInit {
     }
   }
 
-  getSentenceStyle(globalIndex: number): string {
-    const refs = this.getFilteredReferences().filter(ref => ref.targetGlobal === globalIndex);
+  getSentenceStyleForColumn(col: ConversationColumnState, globalIndex: number): string {
+    const refs = this.getFilteredReferencesForColumn(col).filter(ref => ref.targetGlobal === globalIndex);
     if (refs.length === 0) {
-      const isActive = globalIndex === this.hoveredSentenceGlobalIndex || globalIndex === this.selectedSentenceGlobalIndex;
+      const isActive = globalIndex === col.hoveredSentenceGlobalIndex || globalIndex === col.selectedSentenceGlobalIndex;
       if (isActive) {
         return 'background-color: rgba(15, 23, 42, 0.06);';
       }
@@ -389,56 +386,53 @@ export class ConversationArcsComponent implements OnInit {
 
     const gradients = refs.map(ref => {
       const color = this.referenceColors[ref.type];
-      const isDimmed = this.isArcDimmed(ref);
-      const alpha = isDimmed ? '03' : '26'; // 03 is ~1% opacity, 26 is ~15% opacity
+      const isDimmed = this.isArcDimmedForColumn(col, ref);
+      const alpha = isDimmed ? '03' : '26';
       return `linear-gradient(0deg, ${color}${alpha}, ${color}${alpha})`;
     });
 
     let style = `background: ${gradients.join(', ')};`;
     
-    const isActive = globalIndex === this.hoveredSentenceGlobalIndex || globalIndex === this.selectedSentenceGlobalIndex;
+    const isActive = globalIndex === col.hoveredSentenceGlobalIndex || globalIndex === col.selectedSentenceGlobalIndex;
     if (isActive) {
       style += ' border-bottom: 2px solid #0f172a; font-weight: 500;';
     }
     return style;
   }
 
-  getActiveSentenceSegments(): Array<{ x: number; y: number; w: number; h: number }> {
-    const idx = this.hoveredSentenceGlobalIndex ?? this.selectedSentenceGlobalIndex;
+  getActiveSentenceSegmentsForColumn(col: ConversationColumnState): Array<{ x: number; y: number; w: number; h: number }> {
+    const idx = col.hoveredSentenceGlobalIndex ?? col.selectedSentenceGlobalIndex;
     if (idx === null) return [];
-    return this.getSentenceLayout(idx).segments;
+    return this.getSentenceLayoutForColumn(col, idx).segments;
   }
 
-  /**
-   * Safe HTML sentence renderer with highlighting wrappers.
-   * Passed to ConversationViewerComponent.
-   */
-  getHighlightedText = (msg: ConversationMessage): SafeHtml => {
-    const turn = msg.data;
-    if (!turn || !turn.sentences) return msg.text;
+  getHighlightedTextForColumn(col: ConversationColumnState) {
+    if (!col.getHighlightedTextFn) {
+      col.getHighlightedTextFn = (msg: ConversationMessage): SafeHtml => {
+        const turn = msg.data;
+        if (!turn || !turn.sentences) return msg.text;
 
-    const html = turn.sentences.map((s: AnnotatedSentence) => {
-      const isHovered = s.globalIndex === this.hoveredSentenceGlobalIndex;
-      const isSelected = s.globalIndex === this.selectedSentenceGlobalIndex;
-      
-      let classes = 'chat-sentence';
-      if (isSelected) classes += ' selected';
-      else if (isHovered) classes += ' hovered';
+        const html = turn.sentences.map((s: AnnotatedSentence) => {
+          const isHovered = s.globalIndex === col.hoveredSentenceGlobalIndex;
+          const isSelected = s.globalIndex === col.selectedSentenceGlobalIndex;
+          
+          let classes = 'chat-sentence';
+          if (isSelected) classes += ' selected';
+          else if (isHovered) classes += ' hovered';
 
-      const style = this.getSentenceStyle(s.globalIndex);
+          const style = this.getSentenceStyleForColumn(col, s.globalIndex);
 
-      return `<span id="chat-sentence-${s.globalIndex}" class="${classes}" style="${style}" 
-                    (click)="selectSentence(${s.globalIndex})">${s.text}</span>`;
-    }).join(' ');
+          return `<span id="chat-sentence-${col.conversationHash}-${s.globalIndex}" class="${classes}" style="${style}">${s.text}</span>`;
+        }).join(' ');
 
-    return this.sanitizer.bypassSecurityTrustHtml(html);
-  };
+        return this.sanitizer.bypassSecurityTrustHtml(html);
+      };
+    }
+    return col.getHighlightedTextFn;
+  }
 
-  /**
-   * Speaker color mappings for chat bubble.
-   */
   getSpeakerColor = (msg: ConversationMessage): string => {
-    return '#0f172a'; // Clean black titles for both User and Assistant
+    return '#0f172a';
   };
 
   getSpeakerBgColor = (msg: ConversationMessage): string => {
@@ -449,123 +443,130 @@ export class ConversationArcsComponent implements OnInit {
     return msg.speaker === 'User' ? '1px solid rgba(74, 144, 217, 0.15)' : '1px solid rgba(16, 185, 129, 0.15)';
   };
 
-  // ─── Interaction Handlers ───────────────────────────────────────────
-
-  hoverSentence(globalIndex: number | null) {
-    if (globalIndex !== null && this.hoveredSentenceGlobalIndex !== globalIndex) {
-      // Scroll to sentence in chat view on hover
+  hoverSentenceForColumn(col: ConversationColumnState, globalIndex: number | null) {
+    if (globalIndex !== null) {
+      this.activeColumn = col;
+    }
+    if (globalIndex !== null && col.hoveredSentenceGlobalIndex !== globalIndex) {
       setTimeout(() => {
-        const el = document.getElementById(`chat-sentence-${globalIndex}`);
+        const el = document.getElementById(`chat-sentence-${col.conversationHash}-${globalIndex}`);
         if (el) {
           el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
       }, 50);
     }
-    this.hoveredSentenceGlobalIndex = globalIndex;
+    col.hoveredSentenceGlobalIndex = globalIndex;
   }
 
-  selectSentence(globalIndex: number) {
-    this.selectedSentenceGlobalIndex = globalIndex;
+  selectSentenceForColumn(col: ConversationColumnState, globalIndex: number) {
+    this.activeColumn = col;
+    col.selectedSentenceGlobalIndex = globalIndex;
   }
 
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: MouseEvent) {
-    // If clicking outside SVG container, reset selections
-    if (this.arcSvgContainer && !this.arcSvgContainer.nativeElement.contains(event.target as Node)) {
-      // Check if clicking inside chat, if so don't clear (let selectSentence handle it)
-      const chatPanel = document.querySelector('.chat-panel');
-      if (chatPanel && chatPanel.contains(event.target as Node)) {
-        // Find if they clicked a chat sentence
-        const target = event.target as HTMLElement;
-        if (target.classList.contains('chat-sentence')) {
-          const idStr = target.id.replace('chat-sentence-', '');
-          const idx = parseInt(idStr, 10);
-          if (!isNaN(idx)) {
-            this.selectSentence(idx);
-            return;
-          }
+    const target = event.target as HTMLElement;
+    if (target && target.classList.contains('chat-sentence')) {
+      const idParts = target.id.split('-');
+      if (idParts.length >= 4) {
+        const hash = idParts[2];
+        const idx = parseInt(idParts[3], 10);
+        const col = this.columns.find(c => c.conversationHash === hash);
+        if (col && !isNaN(idx)) {
+          this.selectSentenceForColumn(col, idx);
+          return;
         }
-      } else {
-        this.selectedSentenceGlobalIndex = null;
+      }
+    }
+
+    let clickedInsideSvg = false;
+    const svgContainers = document.querySelectorAll('.arc-panel');
+    for (let i = 0; i < svgContainers.length; i++) {
+      if (svgContainers[i].contains(event.target as Node)) {
+        clickedInsideSvg = true;
+        break;
+      }
+    }
+
+    if (!clickedInsideSvg) {
+      let clickedInsideChat = false;
+      const chatPanels = document.querySelectorAll('.chat-panel');
+      for (let i = 0; i < chatPanels.length; i++) {
+        if (chatPanels[i].contains(event.target as Node)) {
+          clickedInsideChat = true;
+          break;
+        }
+      }
+
+      if (!clickedInsideChat) {
+        for (const col of this.columns) {
+          col.selectedSentenceGlobalIndex = null;
+        }
       }
     }
   }
 
-  // ─── Reference Helper Methods ──────────────────────────────────────
-
-  getStrengthFilteredReferences(): SentenceReference[] {
-    return this.references.filter(ref => ref.strength >= this.minStrength);
+  getStrengthFilteredReferencesForColumn(col: ConversationColumnState): SentenceReference[] {
+    return col.references.filter(ref => ref.strength >= this.minStrength);
   }
 
-  getFilteredReferences(): SentenceReference[] {
-    return this.getStrengthFilteredReferences().filter(ref => 
-      this.selectedReferenceType === null || ref.type === this.selectedReferenceType
+  getFilteredReferencesForColumn(col: ConversationColumnState): SentenceReference[] {
+    return this.getStrengthFilteredReferencesForColumn(col).filter(ref => 
+      col.selectedReferenceType === null || ref.type === col.selectedReferenceType
     );
   }
 
-  /**
-   * Returns only reference types that are actively present in the strength-filtered references.
-   */
-  getUsedReferenceTypes(): ReferenceType[] {
-    if (this.references.length === 0) return [];
+  getUsedReferenceTypesForColumn(col: ConversationColumnState): ReferenceType[] {
+    if (col.references.length === 0) return [];
     const activeTypes = new Set<ReferenceType>();
-    for (const ref of this.getStrengthFilteredReferences()) {
+    for (const ref of this.getStrengthFilteredReferencesForColumn(col)) {
       activeTypes.add(ref.type);
     }
     return this.allReferenceTypes.filter(type => activeTypes.has(type));
   }
 
-  toggleReferenceTypeFilter(type: ReferenceType) {
-    if (this.selectedReferenceType === type) {
-      this.selectedReferenceType = null; // Toggle off (show all)
+  toggleReferenceTypeFilterForColumn(col: ConversationColumnState, type: ReferenceType) {
+    if (col.selectedReferenceType === type) {
+      col.selectedReferenceType = null;
     } else {
-      this.selectedReferenceType = type; // Toggle on (filter to this type)
+      col.selectedReferenceType = type;
     }
-    this.calculateArcIntervals();
+    this.calculateArcIntervalsForColumn(col);
   }
 
-  /**
-   * Determines if a sentence is the source or target of an active/hovered reference.
-   */
-  isSentenceConnectedToActive(globalIndex: number): boolean {
-    const activeIndex = this.hoveredSentenceGlobalIndex ?? this.selectedSentenceGlobalIndex;
+  isSentenceConnectedToActiveForColumn(col: ConversationColumnState, globalIndex: number): boolean {
+    const activeIndex = col.hoveredSentenceGlobalIndex ?? col.selectedSentenceGlobalIndex;
     if (activeIndex === null) return false;
     if (activeIndex === globalIndex) return true;
 
-    return this.getFilteredReferences().some(ref => 
+    return this.getFilteredReferencesForColumn(col).some(ref => 
       (ref.sourceGlobal === activeIndex && ref.targetGlobal === globalIndex) ||
       (ref.targetGlobal === activeIndex && ref.sourceGlobal === globalIndex)
     );
   }
 
-  /**
-   * Gets the active reference that connects to this sentence.
-   */
-  getActiveReferenceForSentence(globalIndex: number): SentenceReference | null {
-    const activeIndex = this.hoveredSentenceGlobalIndex ?? this.selectedSentenceGlobalIndex;
+  getActiveReferenceForSentenceForColumn(col: ConversationColumnState, globalIndex: number): SentenceReference | null {
+    const activeIndex = col.hoveredSentenceGlobalIndex ?? col.selectedSentenceGlobalIndex;
     if (activeIndex === null) return null;
 
-    return this.getFilteredReferences().find(ref => 
+    return this.getFilteredReferencesForColumn(col).find(ref => 
       (ref.sourceGlobal === activeIndex && ref.targetGlobal === globalIndex) ||
       (ref.targetGlobal === activeIndex && ref.sourceGlobal === globalIndex) ||
       (activeIndex === globalIndex && (ref.sourceGlobal === globalIndex || ref.targetGlobal === globalIndex))
     ) || null;
   }
 
-
-  /**
-   * Gets reference description text for tooltip/legend.
-   */
-  getReferenceDescription(ref: SentenceReference): string {
-    if (!this.annotatedConversation) return '';
-    const sentences = this.getAllSentences();
+  getReferenceDescriptionForColumn(col: ConversationColumnState, ref: SentenceReference): string {
+    if (!col.annotated) return '';
+    const sentences = this.getAllSentencesForColumn(col);
     const sourceText = sentences.find(s => s.globalIndex === ref.sourceGlobal)?.text || '';
     const targetText = sentences.find(s => s.globalIndex === ref.targetGlobal)?.text || '';
-    return `[S${ref.sourceGlobal}] references [S${ref.targetGlobal}] (${this.referenceLabels[ref.type]} - Strength ${ref.strength})`;
+    const artifactStr = ref.artifactId ? ` [${ref.artifactId}]` : '';
+    return `[S${ref.sourceGlobal}] references [S${ref.targetGlobal}] (${this.referenceLabels[ref.type]}${artifactStr} - Strength ${ref.strength})`;
   }
 
-  getSentenceBoundingBox(globalIndex: number): { x: number; y: number; w: number; h: number } {
-    const layout = this.sentenceLayouts.get(globalIndex);
+  getSentenceBoundingBoxForColumn(col: ConversationColumnState, globalIndex: number): { x: number; y: number; w: number; h: number } {
+    const layout = col.sentenceLayouts.get(globalIndex);
     if (!layout || layout.segments.length === 0) return { x: 0, y: 0, w: 0, h: 0 };
     
     const segments = layout.segments;
@@ -587,11 +588,11 @@ export class ConversationArcsComponent implements OnInit {
     };
   }
 
-  getSentenceHighlightBox(globalIndex: number): { x: number; y: number; w: number; h: number } {
-    const box = this.getSentenceBoundingBox(globalIndex);
+  getSentenceHighlightBoxForColumn(col: ConversationColumnState, globalIndex: number): { x: number; y: number; w: number; h: number } {
+    const box = this.getSentenceBoundingBoxForColumn(col, globalIndex);
     if (box.w === 0) return { x: 0, y: 0, w: 0, h: 0 };
     
-    const interval = this.sentenceArcIntervals.get(globalIndex);
+    const interval = col.sentenceArcIntervals.get(globalIndex);
     if (!interval) return { x: 0, y: 0, w: 0, h: 0 };
 
     const x = this.COL_LEFT;
@@ -605,39 +606,36 @@ export class ConversationArcsComponent implements OnInit {
     };
   }
 
-
-  getActiveSentenceBoundingBox(): { x: number; y: number; w: number; h: number } {
-    const idx = this.hoveredSentenceGlobalIndex ?? this.selectedSentenceGlobalIndex;
+  getActiveSentenceBoundingBoxForColumn(col: ConversationColumnState): { x: number; y: number; w: number; h: number } {
+    const idx = col.hoveredSentenceGlobalIndex ?? col.selectedSentenceGlobalIndex;
     if (idx === null) return { x: 0, y: 0, w: 0, h: 0 };
-    return this.getSentenceBoundingBox(idx);
+    return this.getSentenceBoundingBoxForColumn(col, idx);
   }
 
-  getAllSentences(): AnnotatedSentence[] {
-    if (!this.annotatedConversation) return [];
-    return this.annotatedConversation.turns.flatMap(t => t.sentences);
+  getAllSentencesForColumn(col: ConversationColumnState): AnnotatedSentence[] {
+    if (!col.annotated) return [];
+    return col.annotated.turns.flatMap(t => t.sentences);
   }
 
-  calculateArcIntervals() {
-    this.sentenceArcIntervals.clear();
+  calculateArcIntervalsForColumn(col: ConversationColumnState) {
+    col.sentenceArcIntervals.clear();
 
-    const activeRefs = this.getFilteredReferences();
+    const activeRefs = this.getFilteredReferencesForColumn(col);
     const activeSentenceIndices = new Set<number>();
     for (const ref of activeRefs) {
       activeSentenceIndices.add(ref.sourceGlobal);
       activeSentenceIndices.add(ref.targetGlobal);
     }
 
-    if (!this.annotatedConversation) return;
+    if (!col.annotated) return;
 
-    for (const turn of this.annotatedConversation.turns) {
-      // Find active sentences in this turn
+    for (const turn of col.annotated.turns) {
       const activeSentences = turn.sentences.filter(s => activeSentenceIndices.has(s.globalIndex));
 
-      // For inactive sentences, just map to actual box
       for (const s of turn.sentences) {
         if (!activeSentenceIndices.has(s.globalIndex)) {
-          const box = this.getSentenceBoundingBox(s.globalIndex);
-          this.sentenceArcIntervals.set(s.globalIndex, {
+          const box = this.getSentenceBoundingBoxForColumn(col, s.globalIndex);
+          col.sentenceArcIntervals.set(s.globalIndex, {
             yMin: box.y - 1,
             yMax: box.y + box.h + 1
           });
@@ -645,19 +643,17 @@ export class ConversationArcsComponent implements OnInit {
       }
 
       if (activeSentences.length > 0) {
-        // Calculate total stack height for active sentences
         let totalStackHeight = 0;
         const thicknesses: number[] = [];
         for (const s of activeSentences) {
-          const box = this.getSentenceBoundingBox(s.globalIndex);
+          const box = this.getSentenceBoundingBoxForColumn(col, s.globalIndex);
           const t = box.h + 2;
           thicknesses.push(t);
           totalStackHeight += t;
         }
 
-        // Find actual vertical range of active sentences to center the stack
-        const firstBox = this.getSentenceBoundingBox(activeSentences[0].globalIndex);
-        const lastBox = this.getSentenceBoundingBox(activeSentences[activeSentences.length - 1].globalIndex);
+        const firstBox = this.getSentenceBoundingBoxForColumn(col, activeSentences[0].globalIndex);
+        const lastBox = this.getSentenceBoundingBoxForColumn(col, activeSentences[activeSentences.length - 1].globalIndex);
         const actualCenter = (firstBox.y + lastBox.y + lastBox.h) / 2;
 
         let yCursor = actualCenter - totalStackHeight / 2;
@@ -665,7 +661,7 @@ export class ConversationArcsComponent implements OnInit {
         for (let i = 0; i < activeSentences.length; i++) {
           const s = activeSentences[i];
           const t = thicknesses[i];
-          this.sentenceArcIntervals.set(s.globalIndex, {
+          col.sentenceArcIntervals.set(s.globalIndex, {
             yMin: yCursor,
             yMax: yCursor + t
           });

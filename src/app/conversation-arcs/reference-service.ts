@@ -248,6 +248,7 @@ export class ReferenceService {
       targetGlobal: typeof ref.target === 'number' ? ref.target : parseInt(ref.target, 10),
       type: ref.type,
       strength: typeof ref.strength === 'number' ? ref.strength : parseInt(ref.strength, 10),
+      artifactId: ref.artifactId || undefined
     })).filter((ref: any) =>
       !isNaN(ref.sourceGlobal) &&
       !isNaN(ref.targetGlobal) &&
@@ -277,15 +278,17 @@ Do NOT include references between sentences in the SAME turn.
 Reference types:
 - "response": Directly answers, addresses, continues, or expands on the referenced sentence (representing a reply or thread of content)
 - "summary": Summarizes, paraphrases, or rewrites
-- "artifact": Creates, references, or edits a persistent block of content or data structure (like code snippets, lists, emails, template text, documents, etc.)
+- "artifact": Connects a sentence containing a new version, revision, or iteration of a persistent block of content (such as code, lists, templates, documents) back to the sentence containing the PREVIOUS version or iteration of that same block. Do NOT connect a user's request for an artifact to the artifact itself; only connect actual versions/iterations of the artifact to each other.
 - "refusal": Refuses to answer, declines request, states inability to fulfill, or pushes back on assumptions (including statements like "I am not X, I am Y")
+
+For "artifact" references, you must also assign a unique "artifactId" string (e.g. "artifact_1", "artifact_2") indicating which specific persistent block of content is being versioned. If there are multiple distinct artifacts in the same conversation, give each a different ID so we can distinguish them. For other reference types, omit the "artifactId" field.
 
 Strength (1-5): 1=tangential, 3=clear reference, 5=direct reply
 
 Return ONLY valid JSON in this format:
 {"references": [
   {"source": 2, "target": 0, "type": "response", "strength": 5},
-  {"source": 6, "target": 3, "type": "refusal", "strength": 4}
+  {"source": 6, "target": 3, "type": "artifact", "strength": 4, "artifactId": "artifact_1"}
 ]}
 
 Be selective — only include genuine references, not coincidental topic overlap. Do not include any markdown wrappers or text outside the JSON object.`;
