@@ -187,28 +187,73 @@ export class ReferenceService {
     return this.parseGeminiResponse(text);
   }
 
-  /**
-   * Helper to parse references from Gemini JSON output.
-   */
   private parseGeminiResponse(responseText: string): SentenceReference[] {
+    let cleanText = responseText.trim();
+
+    // Strip markdown code block wrappers if present (e.g. ```json ... ```)
+    if (cleanText.startsWith('```')) {
+      const firstLineBreak = cleanText.indexOf('\n');
+      if (firstLineBreak !== -1) {
+        cleanText = cleanText.substring(firstLineBreak + 1);
+      }
+      if (cleanText.endsWith('```')) {
+        cleanText = cleanText.substring(0, cleanText.length - 3);
+      }
+      cleanText = cleanText.trim();
+    }
+
+    // Find the first '{' and try parsing
+    const startIdx = cleanText.indexOf('{');
+    if (startIdx !== -1) {
+      cleanText = cleanText.substring(startIdx);
+    }
+
     try {
-      const parsed = JSON.parse(responseText);
-      const refs = parsed.references || [];
-      return refs.map((ref: any) => ({
-        sourceGlobal: typeof ref.source === 'number' ? ref.source : parseInt(ref.source, 10),
-        targetGlobal: typeof ref.target === 'number' ? ref.target : parseInt(ref.target, 10),
-        type: ref.type,
-        strength: typeof ref.strength === 'number' ? ref.strength : parseInt(ref.strength, 10),
-      })).filter((ref: any) => 
-        !isNaN(ref.sourceGlobal) && 
-        !isNaN(ref.targetGlobal) && 
-        !isNaN(ref.strength) && 
-        ref.type
-      );
+      const parsed = JSON.parse(cleanText);
+      return this.extractRefs(parsed);
     } catch (e) {
+      // Find the matching closing brace for the first '{' to ignore trailing junk/extra braces
+      let braceCount = 0;
+      let endIdx = -1;
+      for (let i = 0; i < cleanText.length; i++) {
+        if (cleanText[i] === '{') {
+          braceCount++;
+        } else if (cleanText[i] === '}') {
+          braceCount--;
+          if (braceCount === 0) {
+            endIdx = i;
+            break;
+          }
+        }
+      }
+
+      if (endIdx !== -1) {
+        try {
+          const parsed = JSON.parse(cleanText.substring(0, endIdx + 1));
+          return this.extractRefs(parsed);
+        } catch (innerError) {
+          console.warn('[ReferenceService] Failed to parse matched brace JSON:', innerError);
+        }
+      }
+
       console.error('[ReferenceService] Failed to parse Gemini JSON response:', e, responseText);
       return [];
     }
+  }
+
+  private extractRefs(parsed: any): SentenceReference[] {
+    const refs = parsed.references || [];
+    return refs.map((ref: any) => ({
+      sourceGlobal: typeof ref.source === 'number' ? ref.source : parseInt(ref.source, 10),
+      targetGlobal: typeof ref.target === 'number' ? ref.target : parseInt(ref.target, 10),
+      type: ref.type,
+      strength: typeof ref.strength === 'number' ? ref.strength : parseInt(ref.strength, 10),
+    })).filter((ref: any) =>
+      !isNaN(ref.sourceGlobal) &&
+      !isNaN(ref.targetGlobal) &&
+      !isNaN(ref.strength) &&
+      ref.type
+    );
   }
 
   /**
@@ -230,19 +275,17 @@ For EVERY sentence that references a sentence from a PREVIOUS turn, output a ref
 Do NOT include references between sentences in the SAME turn.
 
 Reference types:
-- "response": Directly answers/addresses the referenced sentence
+- "response": Directly answers, addresses, continues, or expands on the referenced sentence (representing a reply or thread of content)
 - "summary": Summarizes, paraphrases, or rewrites
-- "elaboration": Expands on, adds detail to
-- "correction": Corrects, contradicts, or revises
-- "mention": Vague reference ("as you mentioned...", "going back to...")
-- "continuation": Continues same thought from prior turn's last sentence
+- "artifact": Creates, references, or edits a persistent block of content or data structure (like code snippets, lists, emails, template text, documents, etc.)
+- "refusal": Refuses to answer, declines request, states inability to fulfill, or pushes back on assumptions (including statements like "I am not X, I am Y")
 
 Strength (1-5): 1=tangential, 3=clear reference, 5=direct reply
 
 Return ONLY valid JSON in this format:
 {"references": [
   {"source": 2, "target": 0, "type": "response", "strength": 5},
-  {"source": 6, "target": 3, "type": "mention", "strength": 4}
+  {"source": 6, "target": 3, "type": "refusal", "strength": 4}
 ]}
 
 Be selective — only include genuine references, not coincidental topic overlap. Do not include any markdown wrappers or text outside the JSON object.`;

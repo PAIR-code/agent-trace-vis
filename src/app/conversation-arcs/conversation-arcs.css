@@ -138,13 +138,13 @@
 
 /* SVG Elements Styling */
 .sentence-line {
-  fill: #cbd5e1;
+  fill: #334155;
   cursor: pointer;
   transition: fill 0.15s, height 0.15s;
 }
 
 .sentence-line:hover {
-  fill: #94a3b8;
+  fill: #0f172a;
 }
 
 .sentence-line.active {
@@ -153,7 +153,7 @@
 }
 
 .sentence-line.connected {
-  fill: #64748b;
+  fill: #0f172a;
 }
 
 .turn-divider-line {

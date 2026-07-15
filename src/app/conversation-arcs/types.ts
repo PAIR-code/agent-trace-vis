@@ -64,37 +64,29 @@ export interface SentenceReference {
 export type ReferenceType =
   | 'response'
   | 'summary'
-  | 'elaboration'
-  | 'correction'
-  | 'mention'
-  | 'continuation';
+  | 'artifact'
+  | 'refusal';
 
 /** Color palette for reference types. */
 export const REFERENCE_COLORS: Record<ReferenceType, string> = {
   response: '#4A90D9',
   summary: '#50C878',
-  elaboration: '#E8A838',
-  correction: '#E85858',
-  mention: '#9B59B6',
-  continuation: '#7F8C8D',
+  artifact: '#9B59B6',
+  refusal: '#E85858',
 };
 
 /** Human-readable labels for reference types. */
 export const REFERENCE_LABELS: Record<ReferenceType, string> = {
   response: 'Response',
   summary: 'Summary',
-  elaboration: 'Elaboration',
-  correction: 'Correction',
-  mention: 'Mention',
-  continuation: 'Continuation',
+  artifact: 'Artifact',
+  refusal: 'Refusal',
 };
 
 /** All valid reference type values. */
 export const ALL_REFERENCE_TYPES: ReferenceType[] = [
   'response',
   'summary',
-  'elaboration',
-  'correction',
-  'mention',
-  'continuation',
+  'artifact',
+  'refusal',
 ];

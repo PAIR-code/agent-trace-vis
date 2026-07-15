@@ -63,6 +63,7 @@ export class ConversationArcsComponent implements OnInit {
   
   // Controls
   minStrength = 1;
+  maxArcRadius = 100;
   isLoading = false;
   loadingPhase = '';
 
@@ -73,15 +74,32 @@ export class ConversationArcsComponent implements OnInit {
 
   // Layout properties for rendering
   svgHeight = 600;
+  readonly COL_LEFT = 290;
+  readonly COL_WIDTH = 60;
   turnLabels: Array<{ text: string; x: number; y: number; align: string }> = [];
-  sentenceLayouts = new Map<number, { x: number; y: number; w: number; h: number; role: string }>();
+  sentenceLayouts = new Map<number, { role: string; segments: Array<{ x: number; y: number; w: number; h: number }> }>();
+  sentenceArcIntervals = new Map<number, { yMin: number; yMax: number }>();
 
   constructor(
     private wildChatService: WildChatService,
     private referenceService: ReferenceService,
     private sanitizer: DomSanitizer,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+    const clearFn = () => {
+      let count = 0;
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('conv_arcs_refs_')) {
+          localStorage.removeItem(key);
+          count++;
+        }
+      }
+      console.log(`Cleared ${count} cached conversation analyses. Reload the page to re-analyze.`);
+    };
+    (window as any).clearCache = clearFn;
+    (window as any).clearcache = clearFn;
+  }
 
   ngOnInit() {
     this.loadConversations();
@@ -121,6 +139,7 @@ export class ConversationArcsComponent implements OnInit {
     this.selectedReferenceType = null;
     this.turnLabels = [];
     this.sentenceLayouts.clear();
+    this.sentenceArcIntervals.clear();
 
     try {
       // Step 1: Preprocess conversation
@@ -185,6 +204,9 @@ export class ConversationArcsComponent implements OnInit {
 
     // Associate references back to sentences for easy rendering
     this.mapReferencesToSentences(this.annotatedConversation, refs);
+
+    // Calculate adjacent intervals for active reference endpoints
+    this.calculateArcIntervals();
   }
 
   /**
@@ -192,64 +214,103 @@ export class ConversationArcsComponent implements OnInit {
    */
   private calculateLayout(conversation: AnnotatedConversation) {
     let currentY = 30; // top padding
-    const centerX = 300; // middle of SVG
     
     for (const turn of conversation.turns) {
       // Add turn label position
       this.turnLabels.push({
         text: turn.role === 'user' ? 'User' : 'Assistant',
-        x: turn.role === 'user' ? centerX - 10 : centerX + 10,
+        x: turn.role === 'user' ? this.COL_LEFT : this.COL_LEFT + this.COL_WIDTH,
         y: currentY + 10,
-        align: turn.role === 'user' ? 'end' : 'start'
+        align: turn.role === 'user' ? 'start' : 'end'
       });
-      currentY += 16; // space for turn label
+      currentY += 18; // space for turn label
 
       for (const sentence of turn.sentences) {
-        const w = Math.max(20, Math.min(sentence.charLength * 1.5, 250));
+        let remaining = Math.max(20, sentence.charLength * 1.5);
+        const segments: Array<{ x: number; y: number; w: number; h: number }> = [];
         const h = 3;
-        const x = turn.role === 'user' ? centerX - w : centerX;
+        
+        while (remaining > 0) {
+          const w = Math.min(remaining, this.COL_WIDTH);
+          const x = turn.role === 'user' ? this.COL_LEFT : this.COL_LEFT + this.COL_WIDTH - w;
+          
+          segments.push({
+            x,
+            y: currentY,
+            w,
+            h
+          });
+          
+          currentY += h + 2; // segment height + small spacing within the same sentence
+          remaining -= w;
+          if (remaining < 1) break;
+        }
+        
+        currentY += 4; // gap between sentences in the same turn
         
         this.sentenceLayouts.set(sentence.globalIndex, {
-          x,
-          y: currentY,
-          w,
-          h,
-          role: turn.role
+          role: turn.role,
+          segments
         });
-        
-        currentY += h + 4; // sentence height + spacer
       }
       
       currentY += 12; // gap between turns
     }
     
     this.svgHeight = currentY + 40; // bottom padding
+
+    // Calculate adjacent intervals for highlight boxes (aligned with sentences, no vertical shift)
+    const sentences = this.getAllSentences();
+    for (let i = 0; i < sentences.length; i++) {
+      const s = sentences[i];
+      const box = this.getSentenceBoundingBox(s.globalIndex);
+      
+      let yMin = box.y - 1;
+      let yMax = box.y + box.h + 1;
+      
+      if (i > 0) {
+        const prevBox = this.getSentenceBoundingBox(sentences[i - 1].globalIndex);
+        yMin = (prevBox.y + prevBox.h + box.y) / 2;
+      }
+      
+      if (i < sentences.length - 1) {
+        const nextBox = this.getSentenceBoundingBox(sentences[i + 1].globalIndex);
+        yMax = (box.y + box.h + nextBox.y) / 2;
+      }
+      
+      this.sentenceArcIntervals.set(s.globalIndex, { yMin, yMax });
+    }
   }
 
   getSentenceLayout(globalIndex: number) {
-    return this.sentenceLayouts.get(globalIndex) || { x: 0, y: 0, w: 0, h: 0, role: '' };
+    return this.sentenceLayouts.get(globalIndex) || { role: '', segments: [] };
   }
 
   /**
    * Generates a closed SVG path for a semicircular arc with variable thickness.
    */
   getArcPath(ref: SentenceReference): string {
-    const layoutSource = this.getSentenceLayout(ref.sourceGlobal);
-    const layoutTarget = this.getSentenceLayout(ref.targetGlobal);
-    if (!layoutSource || !layoutTarget) return '';
+    const boxSource = this.getSentenceBoundingBox(ref.sourceGlobal);
+    const boxTarget = this.getSentenceBoundingBox(ref.targetGlobal);
+    if (boxSource.w === 0 || boxTarget.w === 0) return '';
 
-    const ySource = layoutSource.y + 1.5;
-    const yTarget = layoutTarget.y + 1.5;
+    const intervalSource = this.sentenceArcIntervals.get(ref.sourceGlobal);
+    const intervalTarget = this.sentenceArcIntervals.get(ref.targetGlobal);
+    if (!intervalSource || !intervalTarget) return '';
+
+    const ySource = (intervalSource.yMin + intervalSource.yMax) / 2;
+    const yTarget = (intervalTarget.yMin + intervalTarget.yMax) / 2;
 
     const yTop = Math.min(ySource, yTarget);
     const yBottom = Math.max(ySource, yTarget);
     const R = (yBottom - yTop) / 2;
 
-    const centerX = 300;
+    const isRhs = ref.type === 'summary' || ref.type === 'artifact';
+    const anchorX = isRhs ? this.COL_LEFT + this.COL_WIDTH : this.COL_LEFT;
 
-    // Source is thicker (based on strength), Target is tapered thin (1px)
-    const tSource = Math.max(1.5, ref.strength * 0.8);
-    const tTarget = 1.0;
+    // Arc thickness matches the contiguous stacked interval height
+    const tSource = intervalSource.yMax - intervalSource.yMin;
+    const tTarget = intervalTarget.yMax - intervalTarget.yMin;
 
     const tTop = ySource < yTarget ? tSource : tTarget;
     const tBottom = ySource < yTarget ? tTarget : tSource;
@@ -257,32 +318,27 @@ export class ConversationArcsComponent implements OnInit {
     const rOuter = R + (tTop + tBottom) / 4;
     const rInner = R - (tTop + tBottom) / 4;
 
-    // Arcs originate on the side of the SOURCE speaker
-    const side = layoutSource.role === 'user' ? 'right' : 'left';
+    const rxOuter = Math.min(this.maxArcRadius, rOuter);
+    const ryOuter = rOuter;
 
-    if (side === 'right') {
-      // Outer arc top-to-bottom (sweep=1), Line to inner bottom, Inner arc bottom-to-top (sweep=0), Close
-      return `M ${centerX} ${yTop - tTop/2} 
-              A ${rOuter} ${rOuter} 0 0 1 ${centerX} ${yBottom + tBottom/2} 
-              L ${centerX} ${yBottom - tBottom/2} 
-              A ${rInner} ${rInner} 0 0 0 ${centerX} ${yTop + tTop/2} Z`;
-    } else {
-      // Outer arc top-to-bottom (sweep=0), Line to inner bottom, Inner arc bottom-to-top (sweep=1), Close
-      return `M ${centerX} ${yTop - tTop/2} 
-              A ${rOuter} ${rOuter} 0 0 0 ${centerX} ${yBottom + tBottom/2} 
-              L ${centerX} ${yBottom - tBottom/2} 
-              A ${rInner} ${rInner} 0 0 1 ${centerX} ${yTop + tTop/2} Z`;
-    }
+    const rxInner = Math.max(5, Math.min(this.maxArcRadius - (tTop + tBottom) / 2, rInner));
+    const ryInner = rInner;
+
+    // Outer arc: sweep=1 for rhs, sweep=0 for lhs.
+    // Inner arc: sweep=0 for rhs, sweep=1 for lhs.
+    const sweepOuter = isRhs ? 1 : 0;
+    const sweepInner = isRhs ? 0 : 1;
+
+    return `M ${anchorX} ${yTop - tTop/2} 
+            A ${rxOuter} ${ryOuter} 0 0 ${sweepOuter} ${anchorX} ${yBottom + tBottom/2} 
+            L ${anchorX} ${yBottom - tBottom/2} 
+            A ${rxInner} ${ryInner} 0 0 ${sweepInner} ${anchorX} ${yTop + tTop/2} Z`;
   }
 
   getArcOpacity(ref: SentenceReference): number {
-    return 0.15 + (ref.strength - 1) * 0.175;
+    return 0.08 + (ref.strength - 1) * 0.08;
   }
 
-  getActiveReferenceOpacity(globalIndex: number): number {
-    const ref = this.getActiveReferenceForSentence(globalIndex);
-    return ref ? this.getArcOpacity(ref) * 0.6 : 0;
-  }
 
   isArcDimmed(ref: SentenceReference): boolean {
     const activeIndex = this.hoveredSentenceGlobalIndex ?? this.selectedSentenceGlobalIndex;
@@ -321,6 +377,38 @@ export class ConversationArcsComponent implements OnInit {
     }
   }
 
+  getSentenceStyle(globalIndex: number): string {
+    const refs = this.getFilteredReferences().filter(ref => ref.targetGlobal === globalIndex);
+    if (refs.length === 0) {
+      const isActive = globalIndex === this.hoveredSentenceGlobalIndex || globalIndex === this.selectedSentenceGlobalIndex;
+      if (isActive) {
+        return 'background-color: rgba(15, 23, 42, 0.06);';
+      }
+      return '';
+    }
+
+    const gradients = refs.map(ref => {
+      const color = this.referenceColors[ref.type];
+      const isDimmed = this.isArcDimmed(ref);
+      const alpha = isDimmed ? '03' : '26'; // 03 is ~1% opacity, 26 is ~15% opacity
+      return `linear-gradient(0deg, ${color}${alpha}, ${color}${alpha})`;
+    });
+
+    let style = `background: ${gradients.join(', ')};`;
+    
+    const isActive = globalIndex === this.hoveredSentenceGlobalIndex || globalIndex === this.selectedSentenceGlobalIndex;
+    if (isActive) {
+      style += ' border-bottom: 2px solid #0f172a; font-weight: 500;';
+    }
+    return style;
+  }
+
+  getActiveSentenceSegments(): Array<{ x: number; y: number; w: number; h: number }> {
+    const idx = this.hoveredSentenceGlobalIndex ?? this.selectedSentenceGlobalIndex;
+    if (idx === null) return [];
+    return this.getSentenceLayout(idx).segments;
+  }
+
   /**
    * Safe HTML sentence renderer with highlighting wrappers.
    * Passed to ConversationViewerComponent.
@@ -332,22 +420,12 @@ export class ConversationArcsComponent implements OnInit {
     const html = turn.sentences.map((s: AnnotatedSentence) => {
       const isHovered = s.globalIndex === this.hoveredSentenceGlobalIndex;
       const isSelected = s.globalIndex === this.selectedSentenceGlobalIndex;
-      const isConnected = this.isSentenceConnectedToActive(s.globalIndex);
       
       let classes = 'chat-sentence';
       if (isSelected) classes += ' selected';
       else if (isHovered) classes += ' hovered';
-      else if (isConnected) classes += ' connected';
 
-      // Style highlight if connected/active (no underline, clean color highlight background)
-      let style = '';
-      if (isConnected || isSelected || isHovered) {
-        const activeRef = this.getActiveReferenceForSentence(s.globalIndex);
-        if (activeRef) {
-          const color = this.referenceColors[activeRef.type];
-          style = `background-color: ${color}26;`;
-        }
-      }
+      const style = this.getSentenceStyle(s.globalIndex);
 
       return `<span id="chat-sentence-${s.globalIndex}" class="${classes}" style="${style}" 
                     (click)="selectSentence(${s.globalIndex})">${s.text}</span>`;
@@ -443,6 +521,7 @@ export class ConversationArcsComponent implements OnInit {
     } else {
       this.selectedReferenceType = type; // Toggle on (filter to this type)
     }
+    this.calculateArcIntervals();
   }
 
   /**
@@ -473,17 +552,6 @@ export class ConversationArcsComponent implements OnInit {
     ) || null;
   }
 
-  /**
-   * Safe getter for sentence highlight box color.
-   */
-  getActiveSentenceColor(globalIndex: number): string {
-    const ref = this.getActiveReferenceForSentence(globalIndex);
-    if (ref) {
-      return this.referenceColors[ref.type];
-    }
-    // Neutral slate highlight color if selected/hovered sentence itself has no active connection
-    return '#94a3b8';
-  }
 
   /**
    * Gets reference description text for tooltip/legend.
@@ -496,8 +564,114 @@ export class ConversationArcsComponent implements OnInit {
     return `[S${ref.sourceGlobal}] references [S${ref.targetGlobal}] (${this.referenceLabels[ref.type]} - Strength ${ref.strength})`;
   }
 
+  getSentenceBoundingBox(globalIndex: number): { x: number; y: number; w: number; h: number } {
+    const layout = this.sentenceLayouts.get(globalIndex);
+    if (!layout || layout.segments.length === 0) return { x: 0, y: 0, w: 0, h: 0 };
+    
+    const segments = layout.segments;
+    const first = segments[0];
+    const last = segments[segments.length - 1];
+    
+    const y = first.y;
+    const h = (last.y + last.h) - first.y;
+    
+    const minX = Math.min(...segments.map(seg => seg.x));
+    const maxX = Math.max(...segments.map(seg => seg.x + seg.w));
+    const w = maxX - minX;
+    
+    return {
+      x: minX,
+      y,
+      w,
+      h
+    };
+  }
+
+  getSentenceHighlightBox(globalIndex: number): { x: number; y: number; w: number; h: number } {
+    const box = this.getSentenceBoundingBox(globalIndex);
+    if (box.w === 0) return { x: 0, y: 0, w: 0, h: 0 };
+    
+    const interval = this.sentenceArcIntervals.get(globalIndex);
+    if (!interval) return { x: 0, y: 0, w: 0, h: 0 };
+
+    const x = this.COL_LEFT;
+    const w = this.COL_WIDTH;
+    
+    return {
+      x,
+      y: interval.yMin,
+      w,
+      h: interval.yMax - interval.yMin
+    };
+  }
+
+
+  getActiveSentenceBoundingBox(): { x: number; y: number; w: number; h: number } {
+    const idx = this.hoveredSentenceGlobalIndex ?? this.selectedSentenceGlobalIndex;
+    if (idx === null) return { x: 0, y: 0, w: 0, h: 0 };
+    return this.getSentenceBoundingBox(idx);
+  }
+
   getAllSentences(): AnnotatedSentence[] {
     if (!this.annotatedConversation) return [];
     return this.annotatedConversation.turns.flatMap(t => t.sentences);
+  }
+
+  calculateArcIntervals() {
+    this.sentenceArcIntervals.clear();
+
+    const activeRefs = this.getFilteredReferences();
+    const activeSentenceIndices = new Set<number>();
+    for (const ref of activeRefs) {
+      activeSentenceIndices.add(ref.sourceGlobal);
+      activeSentenceIndices.add(ref.targetGlobal);
+    }
+
+    if (!this.annotatedConversation) return;
+
+    for (const turn of this.annotatedConversation.turns) {
+      // Find active sentences in this turn
+      const activeSentences = turn.sentences.filter(s => activeSentenceIndices.has(s.globalIndex));
+
+      // For inactive sentences, just map to actual box
+      for (const s of turn.sentences) {
+        if (!activeSentenceIndices.has(s.globalIndex)) {
+          const box = this.getSentenceBoundingBox(s.globalIndex);
+          this.sentenceArcIntervals.set(s.globalIndex, {
+            yMin: box.y - 1,
+            yMax: box.y + box.h + 1
+          });
+        }
+      }
+
+      if (activeSentences.length > 0) {
+        // Calculate total stack height for active sentences
+        let totalStackHeight = 0;
+        const thicknesses: number[] = [];
+        for (const s of activeSentences) {
+          const box = this.getSentenceBoundingBox(s.globalIndex);
+          const t = box.h + 2;
+          thicknesses.push(t);
+          totalStackHeight += t;
+        }
+
+        // Find actual vertical range of active sentences to center the stack
+        const firstBox = this.getSentenceBoundingBox(activeSentences[0].globalIndex);
+        const lastBox = this.getSentenceBoundingBox(activeSentences[activeSentences.length - 1].globalIndex);
+        const actualCenter = (firstBox.y + lastBox.y + lastBox.h) / 2;
+
+        let yCursor = actualCenter - totalStackHeight / 2;
+
+        for (let i = 0; i < activeSentences.length; i++) {
+          const s = activeSentences[i];
+          const t = thicknesses[i];
+          this.sentenceArcIntervals.set(s.globalIndex, {
+            yMin: yCursor,
+            yMax: yCursor + t
+          });
+          yCursor += t;
+        }
+      }
+    }
   }
 }

@@ -31,11 +31,6 @@
     </select>
   </div>
 
-  <div class="selector-group" *ngIf="references.length > 0">
-    <label class="selector-label">Min Strength ({{ minStrength }})</label>
-    <input type="range" min="1" max="5" step="1" [(ngModel)]="minStrength">
-  </div>
-
   <div class="selector-group" *ngIf="references.length === 0">
     <button class="selector-btn" (click)="runReferenceAnalysis()">
       Analyze References
@@ -53,42 +48,49 @@
 
     <div class="svg-scroll-container" *ngIf="annotatedConversation" (click)="selectedSentenceGlobalIndex = null">
       <svg [attr.height]="svgHeight" class="arc-svg">
-        <!-- Alternating Turn Background Helpers (Invisible/Subtle markers) -->
-        <g class="turn-markers">
-          <line *ngFor="let label of turnLabels" 
-                [attr.x1]="300" [attr.y1]="label.y - 12" 
-                [attr.x2]="label.align === 'end' ? 100 : 500" [attr.y2]="label.y - 12" 
-                class="turn-divider-line" />
-        </g>
-
         <!-- Highlight Boxes (Rendered Behind Lines) -->
         <g class="highlight-boxes">
-          <ng-container *ngFor="let s of getAllSentences()">
-            <rect *ngIf="isSentenceConnectedToActive(s.globalIndex)"
-                  [attr.x]="getSentenceLayout(s.globalIndex).x - 4"
-                  [attr.y]="getSentenceLayout(s.globalIndex).y - 3"
-                  [attr.width]="getSentenceLayout(s.globalIndex).w + 8"
-                  [attr.height]="10"
-                  [attr.rx]="3"
-                  [attr.fill]="getActiveSentenceColor(s.globalIndex)"
-                  [attr.opacity]="getActiveReferenceOpacity(s.globalIndex)" />
+          <ng-container *ngFor="let ref of getFilteredReferences()">
+            <rect [attr.x]="getSentenceHighlightBox(ref.targetGlobal).x"
+                  [attr.y]="getSentenceHighlightBox(ref.targetGlobal).y"
+                  [attr.width]="getSentenceHighlightBox(ref.targetGlobal).w"
+                  [attr.height]="getSentenceHighlightBox(ref.targetGlobal).h"
+                  [attr.fill]="referenceColors[ref.type]"
+                  [attr.opacity]="isArcDimmed(ref) ? 0.02 : 0.22" />
+          </ng-container>
+        </g>
+
+        <!-- Active Sentence Outline -->
+        <g class="active-outlines">
+          <ng-container *ngIf="getActiveSentenceBoundingBox() as box">
+            <rect *ngIf="box.w > 0"
+                  [attr.x]="box.x - 5"
+                  [attr.y]="box.y - 4"
+                  [attr.width]="box.w + 10"
+                  [attr.height]="box.h + 8"
+                  fill="none"
+                  stroke="#0f172a"
+                  stroke-width="1.5"
+                  [attr.opacity]="hoveredSentenceGlobalIndex !== null || selectedSentenceGlobalIndex !== null ? 0.8 : 0" />
           </ng-container>
         </g>
 
         <!-- Sentence Lines -->
         <g class="sentence-lines">
-          <rect *ngFor="let s of getAllSentences()"
-                [attr.x]="getSentenceLayout(s.globalIndex).x"
-                [attr.y]="getSentenceLayout(s.globalIndex).y"
-                [attr.width]="getSentenceLayout(s.globalIndex).w"
-                [attr.height]="3"
-                [attr.rx]="1"
-                class="sentence-line"
-                [class.active]="hoveredSentenceGlobalIndex === s.globalIndex || selectedSentenceGlobalIndex === s.globalIndex"
-                [class.connected]="isSentenceConnectedToActive(s.globalIndex)"
-                (mouseenter)="hoverSentence(s.globalIndex)"
-                (mouseleave)="hoverSentence(null)"
-                (click)="selectSentence(s.globalIndex); $event.stopPropagation()" />
+          <ng-container *ngFor="let s of getAllSentences()">
+            <rect *ngFor="let seg of getSentenceLayout(s.globalIndex).segments"
+                  [attr.x]="seg.x"
+                  [attr.y]="seg.y"
+                  [attr.width]="seg.w"
+                  [attr.height]="seg.h"
+                  [attr.rx]="1"
+                  class="sentence-line"
+                  [class.active]="hoveredSentenceGlobalIndex === s.globalIndex || selectedSentenceGlobalIndex === s.globalIndex"
+                  [class.connected]="isSentenceConnectedToActive(s.globalIndex)"
+                  (mouseenter)="hoverSentence(s.globalIndex)"
+                  (mouseleave)="hoverSentence(null)"
+                  (click)="selectSentence(s.globalIndex); $event.stopPropagation()" />
+          </ng-container>
         </g>
 
         <!-- Turn Labels -->
@@ -130,10 +132,7 @@
           </div>
         </div>
       </div>
-      <div class="legend-section">
-        <span class="legend-title">Strength:</span>
-        <span class="legend-sub">thin/transparent (1) ── thick/opaque (5)</span>
-      </div>
+
     </div>
   </div>
 
