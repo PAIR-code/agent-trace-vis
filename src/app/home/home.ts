@@ -37,7 +37,7 @@ import { RouterLink } from '@angular/router';
         </p>
       </div>
       <div class="card-grid">
-        <div class="vis-card" routerLink="/agentic-traces/sample">
+        <div class="vis-card primary" routerLink="/agentic-traces/sample">
           <h3>Agentic traces</h3>
           <p>Explore a step-by-step reasoning trace (can include tools).</p>
         </div>
@@ -106,9 +106,10 @@ import { RouterLink } from '@angular/router';
       padding: 24px;
       border: 1px solid #eee;
       box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-      transition: transform 0.2s, box-shadow 0.2s;
+      transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
       cursor: pointer;
       height: 100%;
+      box-sizing: border-box;
     }
 
     .vis-card:hover {
@@ -117,14 +118,28 @@ import { RouterLink } from '@angular/router';
       border-color: #3a506b;
     }
 
+    .vis-card.primary {
+      border: 2px solid #3a506b;
+      background: #f4f7fa;
+      box-shadow: 0 4px 12px rgba(58, 80, 107, 0.12);
+    }
+
+    .vis-card.primary:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 18px rgba(58, 80, 107, 0.22);
+      border-color: #24374c;
+    }
+
     .vis-card h3 {
       margin-top: 0;
+      margin-bottom: 12px;
       color: #3a506b;
     }
 
     .vis-card p {
       color: #666;
       line-height: 1.5;
+      margin-bottom: 0;
     }
   `]
 })
