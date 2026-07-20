@@ -1,5 +1,7 @@
 # Reasoning Trace Visualization
 
+[Live Demo](https://agent-trace-vis.netlify.app)
+
 Visual tools for understanding AI agent reasoning traces. Built for researchers, engineers, and anyone trying to make sense of complex agentic behaviors.
 
 As AI systems increasingly rely on multi-step reasoning and tool use, understanding what they actually do, and why, becomes critical. But most of this behavior is hidden: the implementation steps, tool calls, backtracking, and decision points that shape the final output. This project explores visual approaches to making these patterns legible, from structured agentic traces (where agents coordinate tools, sub-agents, and user interactions) to unstructured chain-of-thought reasoning (where we want to compare strategies across multiple rollouts of the same task). Our goal is to bridge the gap between deep-reading a single trace and aggregate metrics across thousands, supporting the mesoscale analysis needed to form and test hypotheses about how these systems behave.
@@ -9,20 +11,29 @@ As AI systems increasingly rely on multi-step reasoning and tool use, understand
 ### Agentic Traces
 A timeline-based visualization for structured agent traces (e.g., from coding agents, tool-using LLMs). Shows the interplay between user messages, model thinking, tool calls, and observations in a multi-column layout. Supports search, model highlighting, and gap compression for long traces.
 
+- **Demo**: [Demo](https://agent-trace-vis.netlify.app/agentic-traces/sample)
 - **Route**: `/agentic-traces/:id`
 - **Data format**: JSON files following the [OpenTraces](https://www.opentraces.ai) schema
 
 ### Unstructured Reasoning (Graph)
 A force-directed graph visualization for comparing multiple rollouts of unstructured chain-of-thought reasoning (e.g., RLVR-trained models solving math problems). Segments reasoning into chunks, embeds them, and visualizes structural patterns across traces.
 
+- **Demo**: [Demo](https://agent-trace-vis.netlify.app/unstructured-reasoning-graph)
 - **Route**: `/unstructured-reasoning-graph`
 - **Data format**: JSON arrays of reasoning samples with `reasoning_content` and `score` fields
 
 ### Unstructured Reasoning (Linear)
 A linear token-level visualization for comparing reasoning traces across datasets. Highlights token frequency and overlap across rollouts with multiple coloring schemes (chromogram, dataset, score-based).
 
+- **Demo**: [Demo](https://agent-trace-vis.netlify.app/unstructured-reasoning-linear)
 - **Route**: `/unstructured-reasoning-linear`
 - **Data format**: Same as the graph view
+
+### Conversational Arcs
+A sentence-level visualization for analyzing how messages in multi-turn conversations reference and build upon previous turns.
+
+- **Demo**: [Demo](https://agent-trace-vis.netlify.app/conversation-arcs)
+- **Route**: `/conversation-arcs`
 
 ## Getting Started
 
@@ -44,7 +55,7 @@ parent/
 
 ### 3. Building & Deploying (Netlify)
 
-Building compiles the app locally to `dist/reasoning-trace-vis/browser/`. Deploying uploads those files to Netlify.
+Building compiles the app locally to `dist/reasoning-trace-vis/browser/`. Deploying uploads those files to Netlify at [agent-trace-vis.netlify.app](https://agent-trace-vis.netlify.app).
 
 To build and deploy with a **subset** of datasets:
 ```bash
