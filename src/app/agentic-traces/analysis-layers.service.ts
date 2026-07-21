@@ -181,8 +181,8 @@ export class AnalysisLayersService {
   }
 
   /** Clear all cached search results from memory and localStorage. */
-  clearSearchCache(): void {
-    this.searchService.clearCache();
+  clearSearchCache(): number {
+    return this.searchService.clearCache();
   }
 
   // ─── Query helpers (used by template bindings) ────────────────────

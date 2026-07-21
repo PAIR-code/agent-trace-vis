@@ -82,9 +82,39 @@ export const ANALYSIS_PRESETS: AnalysisPreset[] = [
   },
   {
     name: 'User frustrated',
-    query: 'The user is expressing frustration, impatience, or dissatisfaction with the agent',
+    query: 'The user is expressing explicit anger, annoyance, exasperation, or negative emotional frustration toward the agent',
     mode: 'semantic',
-    description: 'Emotional tone detection',
+    description: 'Explicit negative sentiment detection',
+  },
+  {
+    name: 'User correcting agent',
+    query: 'The user is pointing out a mistake, telling the agent it did something incorrectly or wrong, and providing course corrections or alternate instructions',
+    mode: 'semantic',
+    description: 'Detects user feedback correcting agent mistakes',
+  },
+  {
+    name: 'Permission error',
+    query: 'The agent or tool encounters a permission denied error, access violation, or insufficient privileges',
+    mode: 'semantic',
+    description: 'Detects access denied and permission errors',
+  },
+  {
+    name: 'Ambiguous request',
+    query: 'The agent is confused or uncertain because the user prompt is ambiguous, contradictory, or incorrect',
+    mode: 'semantic',
+    description: 'Detects agent confusion from ambiguous user prompts',
+  },
+  {
+    name: 'Handling ambiguity',
+    query: 'The agent identifies multiple possible options in an ambiguous situation and makes an autonomous decision on how to proceed',
+    mode: 'semantic',
+    description: 'Detects autonomous decision-making under ambiguity',
+  },
+  {
+    name: 'Asks for clarification',
+    query: 'The agent asks the user for clarification, additional details, or confirmation',
+    mode: 'semantic',
+    description: 'Detects when the agent asks the user for clarification',
   },
   {
     name: 'Tool repetition',

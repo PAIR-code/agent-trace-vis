@@ -19,7 +19,7 @@
  * comparison view (dataset selection, rollout comparison, shared controls).
  */
 
-import { Component, OnInit, ChangeDetectorRef, signal, computed, ViewChildren, QueryList } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, signal, computed, ViewChildren, QueryList } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { marked } from 'marked';
 import { CommonModule } from '@angular/common';
@@ -48,8 +48,20 @@ interface ReasoningChunk {
   templateUrl: './unstructured-reasoning-graph.html',
   styleUrls: ['./unstructured-reasoning-graph.css']
 })
-export class UnstructuredReasoningGraphComponent implements OnInit {
+export class UnstructuredReasoningGraphComponent implements OnInit, OnDestroy {
   @ViewChildren(SingleGraphVisComponent) traceVisChildren!: QueryList<SingleGraphVisComponent>;
+
+  private clearCacheFn = () => {
+    let count = 0;
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('emb_20_')) {
+        localStorage.removeItem(key);
+        count++;
+      }
+    }
+    console.log(`[Unstructured Reasoning Graph] Cleared ${count} cached embeddings.`);
+  };
 
   private readonly DATA_PATH = 'assets/data/rlvr_vs_base/';
 
@@ -114,8 +126,17 @@ export class UnstructuredReasoningGraphComponent implements OnInit {
   }
 
   ngOnInit() {
+    (window as any).clearCache = this.clearCacheFn;
+    (window as any).clearcache = this.clearCacheFn;
     this.dropdownItems = this.datasets.map(ds => ({ id: ds.file, title: ds.name }));
     this.loadDatasets(this.selectedDatasets);
+  }
+
+  ngOnDestroy() {
+    if ((window as any).clearCache === this.clearCacheFn) {
+      delete (window as any).clearCache;
+      delete (window as any).clearcache;
+    }
   }
 
   onSelectionChange(selectedIds: Set<string>) {

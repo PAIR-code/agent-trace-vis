@@ -21,6 +21,7 @@
 import {
   Component,
   OnInit,
+  OnDestroy,
   signal,
   computed,
   HostListener,
@@ -87,7 +88,7 @@ interface LegendEntry {
   template: AGENTIC_TRACES_TEMPLATE,
   styles: AGENTIC_TRACES_STYLES,
 })
-export class AgenticTracesComponent implements OnInit {
+export class AgenticTracesComponent implements OnInit, OnDestroy {
   datasets = signal<DatasetItem[]>([]);
   selectedDatasetFile = signal<string>("");
   isLoading = signal<boolean>(false);
@@ -271,8 +272,22 @@ export class AgenticTracesComponent implements OnInit {
     }
   }
 
+  private clearCacheFn = () => {
+    const count = this.layersService.clearSearchCache();
+    console.log(`[Agent Trace] Cleared ${count} cached search results.`);
+  };
+
   ngOnInit() {
+    (window as any).clearCache = this.clearCacheFn;
+    (window as any).clearcache = this.clearCacheFn;
     this.loadDatasets();
+  }
+
+  ngOnDestroy() {
+    if ((window as any).clearCache === this.clearCacheFn) {
+      delete (window as any).clearCache;
+      delete (window as any).clearcache;
+    }
   }
 
   /** Renames a trace by its ID. */

@@ -18,7 +18,7 @@
  * @fileoverview Main component for the Conversational Arcs visualization.
  */
 
-import { Component, OnInit, ElementRef, ViewChild, HostListener, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ElementRef, ViewChild, HostListener, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
@@ -61,7 +61,7 @@ export interface ConversationColumnState {
   templateUrl: './conversation-arcs.html',
   styleUrls: ['./conversation-arcs.css']
 })
-export class ConversationArcsComponent implements OnInit {
+export class ConversationArcsComponent implements OnInit, OnDestroy {
   @ViewChild('arcSvgContainer') arcSvgContainer!: ElementRef<HTMLDivElement>;
 
   // Dropdown options
@@ -90,29 +90,36 @@ export class ConversationArcsComponent implements OnInit {
   readonly COL_LEFT = 95;
   readonly COL_WIDTH = 60;
 
+  private clearCacheFn = () => {
+    let count = 0;
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('conv_arcs_refs_')) {
+        localStorage.removeItem(key);
+        count++;
+      }
+    }
+    console.log(`[Conversation Viewer] Cleared ${count} cached conversation analyses. Reload the page to re-analyze.`);
+  };
+
   constructor(
     private wildChatService: WildChatService,
     private referenceService: ReferenceService,
     private sanitizer: DomSanitizer,
     private cdr: ChangeDetectorRef
-  ) {
-    const clearFn = () => {
-      let count = 0;
-      for (let i = localStorage.length - 1; i >= 0; i--) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('conv_arcs_refs_')) {
-          localStorage.removeItem(key);
-          count++;
-        }
-      }
-      console.log(`Cleared ${count} cached conversation analyses. Reload the page to re-analyze.`);
-    };
-    (window as any).clearCache = clearFn;
-    (window as any).clearcache = clearFn;
-  }
+  ) {}
 
   ngOnInit() {
+    (window as any).clearCache = this.clearCacheFn;
+    (window as any).clearcache = this.clearCacheFn;
     this.loadConversations();
+  }
+
+  ngOnDestroy() {
+    if ((window as any).clearCache === this.clearCacheFn) {
+      delete (window as any).clearCache;
+      delete (window as any).clearcache;
+    }
   }
 
   async loadConversations() {

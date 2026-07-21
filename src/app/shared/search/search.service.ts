@@ -63,9 +63,10 @@ export class SearchService {
     return 't' + Math.abs(hash).toString(36);
   }
 
-  /** Clear all cached search results from memory and localStorage. */
-  clearCache(): void {
+  /** Clear all cached search results from memory and localStorage. Returns number of keys removed. */
+  clearCache(): number {
     this.memoryCache.clear();
+    let count = 0;
     try {
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
@@ -76,11 +77,13 @@ export class SearchService {
       }
       for (const key of keysToRemove) {
         localStorage.removeItem(key);
+        count++;
       }
-      console.log('[Search] Cache cleared successfully.');
+      console.log(`[Agent Trace] Cleared ${count} cached search results.`);
     } catch (e) {
       console.warn('[Search] Failed to clear localStorage cache:', e);
     }
+    return count;
   }
 
   /** Prunes cache entries in localStorage down to limit. */
@@ -245,7 +248,7 @@ export class SearchService {
             results: resultsObj
           };
           localStorage.setItem(cacheKey, JSON.stringify(cacheEntry));
-        } catch {}
+        } catch { }
 
         this.memoryCache.set(promptHash, resultsMap);
         return of(resultsMap);
@@ -254,12 +257,12 @@ export class SearchService {
       console.warn('[Search] Failed to read from localStorage cache:', e);
     }
 
-    console.log('[Search] Prompt sent to Gemini:\n', prompt);
+    console.log(`[Search] Sending API Request to Gemini (${prompt.length.toLocaleString()} chars):\n`, prompt);
     return from(this.callGemini(prompt, apiKey)).pipe(
       map(responseText => {
-        console.log('[Search] Raw Gemini response:', responseText);
+        console.log(`[Search] Received API Response from Gemini (${responseText.length.toLocaleString()} chars):\n`, responseText);
         const results = this.parseResults(responseText, nodes);
-        console.log('[Search] Parsed results:', Object.fromEntries(results));
+        console.log('[Search] Parsed results Map:', Object.fromEntries(results));
 
         // 3. Cache the new results
         // Keep in-memory cache pruned to limit
@@ -294,10 +297,10 @@ export class SearchService {
     referenceChips: ReferenceChip[],
     nodes: Array<{ id: string; role: string; speaker?: string; text: string }>
   ): string {
-    // Build the conversation context
+    // Build the full conversation context with complete text (including thinking calls)
     const conversation = nodes.map(n => {
       const speaker = (n as any).speaker || n.role;
-      return `[ID=${n.id}] ${speaker}: ${n.text}`;
+      return `[ID=${n.id}] ${speaker}: ${n.text || ''}`;
     }).join('\n');
 
     // Collect a few real IDs for the example
@@ -349,11 +352,37 @@ ${searchInstruction}
 
 ### Output Rules
 - Use the EXACT ID values from the conversation (e.g. "${exampleIds[0]}", "${exampleIds[1]}").
+- ONLY include turns that match the query (score >= 3). Do NOT include non-matching turns (score 1 or 2) in the JSON output, to keep output concise and avoid JSON truncation.
 - For each matching turn, provide the overall score AND an array of "spans" — the specific word(s) or phrase(s) from the turn text that support the match. Each span has a "text" (exact substring from the turn) and a "score" (1-5, how strongly that span supports the match).
 - Spans should be EXACT substrings of the turn text (copy-paste from the turn, preserving casing).
 - A span can be a single word, a phrase, or the entire turn text.
 - Return ONLY valid JSON in this exact format, with no other text:
 {"scores": {"${exampleIds[0]}": {"score": 5, "spans": [{"text": "exact phrase from the turn", "score": 5}]}, "${exampleIds[1]}": {"score": 3, "spans": [{"text": "a word", "score": 3}, {"text": "another phrase", "score": 2}]}}}`;
+  }
+
+  /** List available Gemini models for this API key and log them to console. */
+  async listModels(apiKey: string): Promise<Array<{ name: string; supportedGenerationMethods: string[] }>> {
+    if (!apiKey) return [];
+    const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+    try {
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        const models = (data.models || []).map((m: any) => ({
+          name: m.name,
+          displayName: m.displayName,
+          supportedGenerationMethods: m.supportedGenerationMethods,
+        }));
+        console.log('[Search] Available Gemini models for your API key:', models);
+        return models;
+      } else {
+        const errText = await response.text();
+        console.error(`[Search] ListModels API error (${response.status}):`, errText);
+      }
+    } catch (e) {
+      console.error('[Search] Failed to fetch ListModels:', e);
+    }
+    return [];
   }
 
   private async callGemini(prompt: string, apiKey: string): Promise<string> {
@@ -376,6 +405,8 @@ ${searchInstruction}
 
     if (!response.ok) {
       const errText = await response.text();
+      console.error(`[Search] Gemini API HTTP ${response.status} Error:`, errText);
+      await this.listModels(apiKey);
       throw new Error(`Gemini API error (${response.status}): ${errText}`);
     }
 
