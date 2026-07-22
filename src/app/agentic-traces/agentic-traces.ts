@@ -307,7 +307,13 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
 
   /** Handles changes in the selected traces. */
   onTraceSelectionChange(newSelection: Set<string>) {
-    this.selectedTraceIds.set(newSelection);
+    const tracesList = this.traces();
+    const sortedIds = [...newSelection].sort((a, b) => {
+      const idxA = tracesList.findIndex(t => t.id === a);
+      const idxB = tracesList.findIndex(t => t.id === b);
+      return idxA - idxB;
+    });
+    this.selectedTraceIds.set(new Set(sortedIds));
     this.updateActiveTraces();
     this.updateUrlParams();
   }
@@ -601,6 +607,12 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     }
 
     const selectedIds = this.urlParamService.validateAndSelectTraceIds(tracesList, targetIndices);
+    selectedIds.sort((a, b) => {
+      const idxA = tracesList.findIndex(t => t.id === a);
+      const idxB = tracesList.findIndex(t => t.id === b);
+      return idxA - idxB;
+    });
+
     this.selectedTraceIds.set(new Set(selectedIds));
     this.updateActiveTraces();
     this.updateUrlParams();
@@ -760,7 +772,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
                 trace.data = parsedTrace;
 
                 const updatedTraces = [...this.traces()];
-                updatedTraces.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
                 this.traces.set(updatedTraces);
 
                 remainingToPreload--;
@@ -824,9 +835,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
         timestamp: timestampVal
       };
     });
-
-    // Sort by timestamp descending
-    traces.sort((a: any, b: any) => (b.timestamp || 0) - (a.timestamp || 0));
 
     this.traces.set(traces);
     this.isLoading.set(false);
