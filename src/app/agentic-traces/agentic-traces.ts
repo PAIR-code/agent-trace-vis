@@ -63,6 +63,19 @@ import {
 } from "./layout-helper";
 import { groupThreadMessages } from "./thread-helper";
 import { HuggingFaceImportComponent } from "./hugging-face-import.component";
+import {
+  getRoleLabel,
+  getNodeBorderColor,
+  getSpeakerColorForViewer,
+  getSpeakerBgColorForViewer,
+  getSpeakerBorderForViewer,
+  getHighlightedTextForViewer,
+} from "./viewer-helpers";
+import {
+  calculateDropIndex,
+  getColDropIndicatorLeft,
+  getRowDropIndicatorTop,
+} from "./drag-drop-helper";
 
 interface LegendEntry {
   label: string;
@@ -324,52 +337,8 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     if (event.dataTransfer) {
       event.dataTransfer.dropEffect = 'move';
     }
-
-    const visContent = (event.currentTarget as HTMLElement).closest('.vis-scroll-area')?.querySelector('.vis-content') as HTMLElement 
-      || (event.currentTarget as HTMLElement);
-    const rect = visContent.getBoundingClientRect();
-    const count = this.selectedTraceIds().size;
-    if (count === 0) return;
-
-    if (this.layoutMode() === 'column') {
-      const axisOffset = (this.yAxisMode() === 'time' || this.yAxisMode() === 'tokens') ? 60 : 0;
-      const mouseX = event.clientX - rect.left;
-
-      let dropIdx = 0;
-      if (mouseX <= axisOffset + 70) {
-        dropIdx = 0;
-      } else if (mouseX >= axisOffset + (count - 1) * 160 + 70) {
-        dropIdx = count;
-      } else {
-        const approxIndex = Math.floor((mouseX - axisOffset) / 160);
-        const trackLeft = axisOffset + approxIndex * 160;
-        const isAfter = mouseX > trackLeft + 70;
-        dropIdx = isAfter ? approxIndex + 1 : approxIndex;
-      }
-
-      if (dropIdx < 0) dropIdx = 0;
-      if (dropIdx > count) dropIdx = count;
-      this.dropIndex.set(dropIdx);
-    } else {
-      const axisOffset = ((this.yAxisMode() === 'time' || this.yAxisMode() === 'tokens') ? 60 : 0) + 18;
-      const mouseY = event.clientY - rect.top;
-
-      let dropIdx = 0;
-      if (mouseY <= axisOffset + 70) {
-        dropIdx = 0;
-      } else if (mouseY >= axisOffset + (count - 1) * 160 + 70) {
-        dropIdx = count;
-      } else {
-        const approxIndex = Math.floor((mouseY - axisOffset) / 160);
-        const trackTop = axisOffset + approxIndex * 160;
-        const isAfter = mouseY > trackTop + 70;
-        dropIdx = isAfter ? approxIndex + 1 : approxIndex;
-      }
-
-      if (dropIdx < 0) dropIdx = 0;
-      if (dropIdx > count) dropIdx = count;
-      this.dropIndex.set(dropIdx);
-    }
+    const dropIdx = calculateDropIndex(event, this.selectedTraceIds().size, this.layoutMode(), this.yAxisMode());
+    this.dropIndex.set(dropIdx);
   }
 
   onTrackDrop(event: DragEvent) {
@@ -414,17 +383,11 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   }
 
   getColDropIndicatorLeft(): number {
-    const idx = this.dropIndex();
-    if (idx === null) return -9999;
-    const axisOffset = (this.yAxisMode() === 'time' || this.yAxisMode() === 'tokens') ? 60 : 0;
-    return axisOffset + idx * 160 - 10;
+    return getColDropIndicatorLeft(this.dropIndex(), this.yAxisMode());
   }
 
   getRowDropIndicatorTop(): number {
-    const idx = this.dropIndex();
-    if (idx === null) return -9999;
-    const axisOffset = ((this.yAxisMode() === 'time' || this.yAxisMode() === 'tokens') ? 60 : 0) + 18;
-    return axisOffset + idx * 160 - 10;
+    return getRowDropIndicatorTop(this.dropIndex(), this.yAxisMode());
   }
 
   /** Handles changes in the selected traces. */
@@ -447,126 +410,17 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   }
 
   /** Returns the speaker label for the viewer. */
-  getSpeakerLabelForViewer = (msg: any) => this.getRoleLabel(msg.type);
+  getSpeakerLabelForViewer = (msg: any) => getRoleLabel(msg.type);
   /** Returns the text color for a message type. */
-  getSpeakerColorForViewer = (msg: any) => {
-    if (msg.type === "response" || msg.type === "thinking") {
-      if (msg.color) return msg.color;
-      const traceId = msg.traceId || this.activeTraceId();
-      const trace = this.traces().find((t) => t.id === traceId);
-      const color = (trace as any)?.agentColor;
-      if (color) return color;
-    }
-    return SPEAKER_STYLES[msg.type]?.color || "#000";
-  };
+  getSpeakerColorForViewer = (msg: any) => getSpeakerColorForViewer(msg, this.activeTraceId(), this.traces());
   /** Returns the background color for a message type. */
-  getSpeakerBgColorForViewer = (msg: any) => {
-    if (msg.type === "response" || msg.type === "thinking") {
-      const color = msg.color || (this.traces().find((t) => t.id === (msg.traceId || this.activeTraceId())) as any)?.agentColor;
-      if (color) {
-        return createStyle(color).bg;
-      }
-    }
-    return SPEAKER_STYLES[msg.type]?.bg || "#ffffff";
-  };
+  getSpeakerBgColorForViewer = (msg: any) => getSpeakerBgColorForViewer(msg, this.activeTraceId(), this.traces());
   /** Returns the border style for a message type. */
-  getSpeakerBorderForViewer = (msg: any) => {
-    if (msg.type === "tool_call" || msg.type === "tool_data") {
-      const borderColor = this.getNodeBorderColor(msg);
-      if (borderColor) {
-        return `1.5px solid ${borderColor}`;
-      }
-    }
-    if (msg.type === "response" || msg.type === "thinking") {
-      const color = msg.color || (this.traces().find((t) => t.id === (msg.traceId || this.activeTraceId())) as any)?.agentColor;
-      if (color) {
-        return createStyle(color).border;
-      }
-    }
-    return SPEAKER_STYLES[msg.type]?.border || "1px solid #e5e7eb";
-  };
-
+  getSpeakerBorderForViewer = (msg: any) => getSpeakerBorderForViewer(msg, this.activeTraceId(), this.traces());
   /** Returns the highlighted text for a message. */
-  getHighlightedTextForViewer = (msg: any) => {
-    const text = msg.text || "";
+  getHighlightedTextForViewer = (msg: any) => getHighlightedTextForViewer(msg, this.layersService, this.sanitizer, this.highlightedChunkId());
 
-    // Collect all matching search spans for this node ID
-    const matchingSpans: Array<{ text: string; color: string }> = [];
-    for (const layer of this.layersService.layers()) {
-      if (layer.enabled && !layer.loading) {
-        const result = layer.results.get(msg.id);
-        if (result && result.spans) {
-          for (const span of result.spans) {
-            if (span.text.trim()) {
-              matchingSpans.push({ text: span.text, color: layer.color });
-            }
-          }
-        }
-      }
-    }
-
-    // Helper to highlight spans in a text block
-    const highlightSpans = (rawText: string): string => {
-      // Escape HTML
-      let html = rawText
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
-
-      if (matchingSpans.length === 0) return html;
-
-      // Sort longer spans first
-      const sortedSpans = [...matchingSpans].sort((a, b) => b.text.length - a.text.length);
-
-      for (const span of sortedSpans) {
-        const escapedSpan = span.text.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-        try {
-          const regex = new RegExp(`(${escapedSpan})`, 'gi');
-          html = html.replace(regex, (match) => {
-            return `___MARK_START_${span.color}___${match}___MARK_END___`;
-          });
-        } catch (e) {
-          console.warn('Regex failed:', span.text, e);
-        }
-      }
-
-      // Convert tokens back to styling
-      const startRegex = /___MARK_START_(.+?)___/g;
-      const endRegex = /___MARK_END___/g;
-      html = html
-        .replace(startRegex, (_, color) => {
-          let highlightBg = color;
-          if (highlightBg.startsWith('rgb')) {
-            highlightBg = highlightBg.replace('rgb(', 'rgba(').replace(')', ', 0.35)');
-          } else if (highlightBg.startsWith('#')) {
-            highlightBg = highlightBg + '55';
-          }
-          return `<mark class="search-span-highlight" style="background-color: ${highlightBg}; color: inherit; padding: 1px 3px; border-radius: 3px; border-bottom: 1.5px solid ${color}; font-weight: 500;">`;
-        })
-        .replace(endRegex, '</mark>');
-
-      return html;
-    };
-
-    if (msg.type === "thinking") {
-      const paragraphs = text.split("\n\n");
-      const html = paragraphs
-        .map((p: string, idx: number) => {
-          const baseId = msg.id.replace("_thinking_0", "");
-          const fullChunkId = `${baseId}_thinking_${idx}`;
-          const isHighlighted = this.highlightedChunkId() === fullChunkId;
-          const highlightedContent = highlightSpans(p);
-
-          return `<span id="chunk-${fullChunkId}" class="text-chunk ${isHighlighted ? "is-highlighted" : ""}">${highlightedContent}</span>`;
-        })
-        .join("\n\n");
-      return this.sanitizer.bypassSecurityTrustHtml(html);
-    }
-
-    const finalHtml = highlightSpans(text);
-    return this.sanitizer.bypassSecurityTrustHtml(finalHtml);
-  };
-
+  getNodeBorderColor = getNodeBorderColor;
   /** Selects a node in the visualization by its ID. */
   selectNodeById(id: string) {
     const node = this.nodes().find((n) => n.id === id);
@@ -614,43 +468,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     } else {
       this.processTraces();
     }
-  }
-
-  // Group nodes into thread messages: tool/system/error nest under agent turns
-
-  // ─── Data Loading ──────────────────────────────────────────────
-
-  /** Returns a human-readable label for a node type. */
-  getRoleLabel(type: string): string {
-    switch (type) {
-      case TraceNodeType.USER_INPUT:
-        return "User";
-      case TraceNodeType.RESPONSE:
-        return "Assistant";
-      case TraceNodeType.THINKING:
-        return "Thinking";
-      case TraceNodeType.TOOL_CALL:
-        return "Tool Call";
-      case TraceNodeType.TOOL_DATA:
-        return "Tool Data";
-      case TraceNodeType.SYSTEM:
-        return "Harness";
-      case TraceNodeType.ERROR:
-        return "Error";
-      default:
-        return type;
-    }
-  }
-
-  /** Returns the border color for a tool node based on its name. */
-  getNodeBorderColor(node: any): string {
-    if (
-      node.type !== TraceNodeType.TOOL_CALL &&
-      node.type !== TraceNodeType.TOOL_DATA
-    ) {
-      return "";
-    }
-    return COLORS.TOOL_LINE;
   }
 
   /** Returns the visual configuration for a node. */

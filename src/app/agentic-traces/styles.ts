@@ -321,6 +321,7 @@ export const AGENTIC_TRACES_STYLES: string[] = [
     }
 
     .trace-background {
+      position: relative;
       display: flex;
       width: 140px;
       margin-right: 20px;
@@ -332,6 +333,40 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       border-radius: 8px;
       box-sizing: border-box;
       transition: opacity 0.15s, outline 0.15s, box-shadow 0.15s, background 0.15s;
+    }
+
+    .track-lines-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 140px;
+      height: 100%;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .track-lines-layer path {
+      transition: d 0.3s ease;
+    }
+
+    .track-lines-layer.layer-active {
+      filter: grayscale(100%);
+      opacity: 0.3;
+      transition: filter 0.3s, opacity 0.3s;
+    }
+
+    .track-nodes-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 140px;
+      height: 100%;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .track-nodes-layer .vis-node {
+      pointer-events: auto;
     }
 
     .trace-background:active, .trace-background.is-dragging {
@@ -942,6 +977,7 @@ export const AGENTIC_TRACES_STYLES: string[] = [
     }
 
     .trace-background-row {
+      position: relative;
       display: flex;
       flex-direction: column;
       height: 140px;
@@ -952,6 +988,16 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       border-radius: 8px;
       box-sizing: border-box;
       transition: opacity 0.15s, outline 0.15s, box-shadow 0.15s;
+    }
+
+    .trace-background-row .track-lines-layer {
+      width: 100%;
+      height: 140px;
+    }
+
+    .trace-background-row .track-nodes-layer {
+      width: 100%;
+      height: 140px;
     }
 
     .trace-background-row:active, .trace-background-row.is-dragging {

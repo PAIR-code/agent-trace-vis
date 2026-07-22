@@ -194,9 +194,125 @@ export const AGENTIC_TRACES_TEMPLATE = `
                    (dragend)="onTrackDragEnd($event)"
                    title="Drag track to reorder">
                 <div class="col-lane lane-user" [style.height.px]="t.maxTraceY"></div>
-                <div class="col-lane lane-agent" [style.height.px]="t.maxTraceY">
-                </div>
+                <div class="col-lane lane-agent" [style.height.px]="t.maxTraceY"></div>
                 <div class="col-lane lane-tools" [style.height.px]="t.maxTraceY"></div>
+
+                <!-- Track SVG layer -->
+                <svg class="track-lines-layer" [attr.width]="140" [attr.height]="contentHeight()" [class.layer-active]="layersService.anyLayerEnabled()">
+                  <defs>
+                    <linearGradient [attr.id]="'grad-' + sanitizeId(t.id)" x1="0" y1="0" x2="0" [attr.y2]="contentHeight()" gradientUnits="userSpaceOnUse">
+                      <stop *ngFor="let stop of t.gradientStops" [attr.offset]="stop.offset" [attr.stop-color]="stop.color" />
+                    </linearGradient>
+                  </defs>
+                  <!-- Thinking Area SVG Nodes -->
+                  <g class="thinking-areas">
+                    <path *ngFor="let area of t.thinkingAreaNodes; trackBy: trackByNodeId"
+                          [attr.d]="area.path"
+                          [attr.fill]="area.fill"
+                          [attr.stroke]="area.stroke"
+                          [attr.stroke-width]="area.strokeWidth"
+                          [attr.opacity]="area.opacity" />
+                  </g>
+                  <!-- Agent Backbone Lines -->
+                  <g class="backbone-lines">
+                    <path *ngFor="let backbone of t.backboneLines; trackBy: trackByLineId"
+                          [attr.d]="backbone.path"
+                          [attr.stroke]="backbone.stroke"
+                          [attr.stroke-width]="backbone.strokeWidth"
+                          [attr.stroke-dasharray]="backbone.strokeDasharray || 'none'"
+                          [attr.opacity]="backbone.opacity"
+                          fill="none" />
+                  </g>
+                  <!-- Connection Lines -->
+                  <g class="connection-lines">
+                    <ng-container *ngFor="let node of t.nodes; trackBy: trackByNodeId">
+                      <path *ngIf="node.connectionLine"
+                            [attr.d]="node.connectionLine.path"
+                            [attr.stroke]="node.connectionLine.stroke"
+                            [attr.stroke-width]="(hoveredNodeId() === node.id) ? node.connectionLine.strokeWidth + 2 : node.connectionLine.strokeWidth"
+                            [attr.opacity]="(hoveredNodeId() === node.id) ? 0.8 : node.connectionLine.opacity"
+                            [attr.stroke-dasharray]="node.connectionLine.strokeDasharray || 'none'"
+                            fill="none"
+                            style="cursor: pointer;"
+                            (click)="selectNode(node)"
+                            (mouseenter)="hoveredNodeId.set(node.id)"
+                            (mouseleave)="hoveredNodeId.set(null)" />
+                      <path *ngIf="node.returnConnectionLine"
+                            [attr.d]="node.returnConnectionLine.path"
+                            [attr.stroke]="node.returnConnectionLine.stroke"
+                            [attr.stroke-width]="(hoveredNodeId() === node.id) ? node.returnConnectionLine.strokeWidth + 2 : node.returnConnectionLine.strokeWidth"
+                            [attr.opacity]="(hoveredNodeId() === node.id) ? 0.8 : node.returnConnectionLine.opacity"
+                            [attr.stroke-dasharray]="node.returnConnectionLine.strokeDasharray || 'none'"
+                            fill="none"
+                            style="cursor: pointer;"
+                            (click)="selectNode(node)"
+                            (mouseenter)="hoveredNodeId.set(node.id)"
+                            (mouseleave)="hoveredNodeId.set(null)" />
+                    </ng-container>
+                  </g>
+                </svg>
+
+                <!-- Track Nodes layer -->
+                <div class="track-nodes-layer">
+                  <ng-container *ngFor="let node of t.nodes; trackBy: trackByNodeId">
+                    <div *ngIf="node.type !== 'thinking_area'"
+                         class="vis-node"
+                         [style.left.px]="node.x"
+                         [style.top.px]="node.y"
+                         [style.width.px]="node.width"
+                         [style.height.px]="node.height"
+                         [style.border-color]="getNodeBorderColor(node)"
+                         [style.background-color]="node.color"
+                         [ngClass]="[node.type, node.type === 'thinking' ? 'units-' + (node.units || 1) : '', getNodeVisualConfig(node).shape, getNodeVisualConfig(node).type]"
+                         [class.is-waiting]="node.isWaiting"
+                         [class.is-failed]="node.isFailed"
+                         [class.hidden]="node.hidden"
+                         [class.layer-match]="layersService.isNodeMatch(node.id)"
+                         [class.layer-dim]="layersService.anyLayerEnabled() && !layersService.isNodeMatch(node.id)"
+                         [style.box-shadow]="layersService.getNodeShadow(node.id)"
+                         (click)="selectNode(node)"
+                         (mouseenter)="hoveredNodeId.set(node.id)"
+                         (mouseleave)="hoveredNodeId.set(null)"
+                         [class.selected]="selectedNode()?.id === node.id"
+                         [class.is-hovered]="hoveredNodeId() === node.id"
+                         [title]="node.label">
+                      <ng-container [ngSwitch]="getNodeVisualConfig(node).type">
+                        <div *ngSwitchCase="'diff'" class="diff-content">
+                          <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6z" />
+                            <path d="M14 2v4c0 1.1.9 2 2 2h4L14 2z" fill="#94a3b8" />
+                            <rect x="7" y="12" width="10" height="2" fill="#10b981" rx="0.5"/>
+                            <rect x="7" y="16" width="7" height="2" fill="#ef4444" rx="0.5"/>
+                          </svg>
+                        </div>
+                        <div *ngSwitchCase="'view'" class="view-content">
+                          <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6z" />
+                            <path d="M14 2v4c0 1.1.9 2 2 2h4L14 2z" fill="#94a3b8" />
+                            <rect x="7" y="12" width="10" height="2" fill="#64748b" rx="0.5"/>
+                            <rect x="7" y="16" width="7" height="2" fill="#64748b" rx="0.5"/>
+                          </svg>
+                        </div>
+                        <div *ngSwitchCase="'search'" class="search-content">
+                          <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6z" />
+                            <path d="M14 2v4c0 1.1.9 2 2 2h4L14 2z" fill="#94a3b8" />
+                            <rect x="7" y="14" width="10" height="3" fill="#f59e0b" rx="0.5"/>
+                          </svg>
+                        </div>
+                        <div *ngSwitchCase="'command'" class="command-content">
+                          {{ getNodeVisualConfig(node).content }}
+                        </div>
+                        <div *ngSwitchCase="'external-search'" class="external-search-content">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                          </svg>
+                        </div>
+                      </ng-container>
+                    </div>
+                  </ng-container>
+                </div>
               </div>
             </div>
 
@@ -216,9 +332,125 @@ export const AGENTIC_TRACES_TEMPLATE = `
                    (dragend)="onTrackDragEnd($event)"
                    title="Drag track to reorder">
                 <div class="row-lane lane-user" [style.width.px]="contentWidth()"></div>
-                <div class="row-lane lane-agent" [style.width.px]="contentWidth()">
-                </div>
+                <div class="row-lane lane-agent" [style.width.px]="contentWidth()"></div>
                 <div class="row-lane lane-tools" [style.width.px]="contentWidth()"></div>
+
+                <!-- Track SVG layer -->
+                <svg class="track-lines-layer" [attr.width]="contentWidth()" [attr.height]="140" [class.layer-active]="layersService.anyLayerEnabled()">
+                  <defs>
+                    <linearGradient [attr.id]="'grad-' + sanitizeId(t.id)" x1="0" y1="0" [attr.x2]="contentWidth()" y2="0" gradientUnits="userSpaceOnUse">
+                      <stop *ngFor="let stop of t.gradientStops" [attr.offset]="stop.offset" [attr.stop-color]="stop.color" />
+                    </linearGradient>
+                  </defs>
+                  <!-- Thinking Area SVG Nodes -->
+                  <g class="thinking-areas">
+                    <path *ngFor="let area of t.thinkingAreaNodes; trackBy: trackByNodeId"
+                          [attr.d]="area.path"
+                          [attr.fill]="area.fill"
+                          [attr.stroke]="area.stroke"
+                          [attr.stroke-width]="area.strokeWidth"
+                          [attr.opacity]="area.opacity" />
+                  </g>
+                  <!-- Agent Backbone Lines -->
+                  <g class="backbone-lines">
+                    <path *ngFor="let backbone of t.backboneLines; trackBy: trackByLineId"
+                          [attr.d]="backbone.path"
+                          [attr.stroke]="backbone.stroke"
+                          [attr.stroke-width]="backbone.strokeWidth"
+                          [attr.stroke-dasharray]="backbone.strokeDasharray || 'none'"
+                          [attr.opacity]="backbone.opacity"
+                          fill="none" />
+                  </g>
+                  <!-- Connection Lines -->
+                  <g class="connection-lines">
+                    <ng-container *ngFor="let node of t.nodes; trackBy: trackByNodeId">
+                      <path *ngIf="node.connectionLine"
+                            [attr.d]="node.connectionLine.path"
+                            [attr.stroke]="node.connectionLine.stroke"
+                            [attr.stroke-width]="(hoveredNodeId() === node.id) ? node.connectionLine.strokeWidth + 2 : node.connectionLine.strokeWidth"
+                            [attr.opacity]="(hoveredNodeId() === node.id) ? 0.8 : node.connectionLine.opacity"
+                            [attr.stroke-dasharray]="node.connectionLine.strokeDasharray || 'none'"
+                            fill="none"
+                            style="cursor: pointer;"
+                            (click)="selectNode(node)"
+                            (mouseenter)="hoveredNodeId.set(node.id)"
+                            (mouseleave)="hoveredNodeId.set(null)" />
+                      <path *ngIf="node.returnConnectionLine"
+                            [attr.d]="node.returnConnectionLine.path"
+                            [attr.stroke]="node.returnConnectionLine.stroke"
+                            [attr.stroke-width]="(hoveredNodeId() === node.id) ? node.returnConnectionLine.strokeWidth + 2 : node.returnConnectionLine.strokeWidth"
+                            [attr.opacity]="(hoveredNodeId() === node.id) ? 0.8 : node.returnConnectionLine.opacity"
+                            [attr.stroke-dasharray]="node.returnConnectionLine.strokeDasharray || 'none'"
+                            fill="none"
+                            style="cursor: pointer;"
+                            (click)="selectNode(node)"
+                            (mouseenter)="hoveredNodeId.set(node.id)"
+                            (mouseleave)="hoveredNodeId.set(null)" />
+                    </ng-container>
+                  </g>
+                </svg>
+
+                <!-- Track Nodes layer -->
+                <div class="track-nodes-layer">
+                  <ng-container *ngFor="let node of t.nodes; trackBy: trackByNodeId">
+                    <div *ngIf="node.type !== 'thinking_area'"
+                         class="vis-node"
+                         [style.left.px]="node.x"
+                         [style.top.px]="node.y"
+                         [style.width.px]="node.width"
+                         [style.height.px]="node.height"
+                         [style.border-color]="getNodeBorderColor(node)"
+                         [style.background-color]="node.color"
+                         [ngClass]="[node.type, node.type === 'thinking' ? 'units-' + (node.units || 1) : '', getNodeVisualConfig(node).shape, getNodeVisualConfig(node).type]"
+                         [class.is-waiting]="node.isWaiting"
+                         [class.is-failed]="node.isFailed"
+                         [class.hidden]="node.hidden"
+                         [class.layer-match]="layersService.isNodeMatch(node.id)"
+                         [class.layer-dim]="layersService.anyLayerEnabled() && !layersService.isNodeMatch(node.id)"
+                         [style.box-shadow]="layersService.getNodeShadow(node.id)"
+                         (click)="selectNode(node)"
+                         (mouseenter)="hoveredNodeId.set(node.id)"
+                         (mouseleave)="hoveredNodeId.set(null)"
+                         [class.selected]="selectedNode()?.id === node.id"
+                         [class.is-hovered]="hoveredNodeId() === node.id"
+                         [title]="node.label">
+                      <ng-container [ngSwitch]="getNodeVisualConfig(node).type">
+                        <div *ngSwitchCase="'diff'" class="diff-content">
+                          <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6z" />
+                            <path d="M14 2v4c0 1.1.9 2 2 2h4L14 2z" fill="#94a3b8" />
+                            <rect x="7" y="12" width="10" height="2" fill="#10b981" rx="0.5"/>
+                            <rect x="7" y="16" width="7" height="2" fill="#ef4444" rx="0.5"/>
+                          </svg>
+                        </div>
+                        <div *ngSwitchCase="'view'" class="view-content">
+                          <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6z" />
+                            <path d="M14 2v4c0 1.1.9 2 2 2h4L14 2z" fill="#94a3b8" />
+                            <rect x="7" y="12" width="10" height="2" fill="#64748b" rx="0.5"/>
+                            <rect x="7" y="16" width="7" height="2" fill="#64748b" rx="0.5"/>
+                          </svg>
+                        </div>
+                        <div *ngSwitchCase="'search'" class="search-content">
+                          <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6z" />
+                            <path d="M14 2v4c0 1.1.9 2 2 2h4L14 2z" fill="#94a3b8" />
+                            <rect x="7" y="14" width="10" height="3" fill="#f59e0b" rx="0.5"/>
+                          </svg>
+                        </div>
+                        <div *ngSwitchCase="'command'" class="command-content">
+                          {{ getNodeVisualConfig(node).content }}
+                        </div>
+                        <div *ngSwitchCase="'external-search'" class="external-search-content">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                          </svg>
+                        </div>
+                      </ng-container>
+                    </div>
+                  </ng-container>
+                </div>
               </div>
             </div>
 
@@ -243,136 +475,6 @@ export const AGENTIC_TRACES_TEMPLATE = `
                 </ng-container>
               </ng-container>
             </ng-container>
-
-            <svg class="lines-layer" [attr.width]="contentWidth()" [attr.height]="contentHeight()" [style.height.px]="contentHeight()" [class.layer-active]="layersService.anyLayerEnabled()">
-              <defs>
-                <!-- Column mode: vertical gradient -->
-                <ng-container *ngIf="layoutMode() === 'column'">
-                  <linearGradient *ngFor="let t of selectedTraces()" [attr.id]="'grad-' + sanitizeId(t.id)" x1="0" y1="0" x2="0" [attr.y2]="contentHeight()" gradientUnits="userSpaceOnUse">
-                    <stop *ngFor="let stop of t.gradientStops" [attr.offset]="stop.offset" [attr.stop-color]="stop.color" />
-                  </linearGradient>
-                </ng-container>
-                <!-- Row mode: horizontal gradient -->
-                <ng-container *ngIf="layoutMode() === 'row'">
-                  <linearGradient *ngFor="let t of selectedTraces()" [attr.id]="'grad-' + sanitizeId(t.id)" x1="0" y1="0" [attr.x2]="contentWidth()" y2="0" gradientUnits="userSpaceOnUse">
-                    <stop *ngFor="let stop of t.gradientStops" [attr.offset]="stop.offset" [attr.stop-color]="stop.color" />
-                  </linearGradient>
-                </ng-container>
-              </defs>
-              <!-- Thinking Area SVG Nodes -->
-              <g class="thinking-areas">
-                <path *ngFor="let area of thinkingAreaNodes(); trackBy: trackByNodeId"
-                      [attr.d]="area.path"
-                      [attr.fill]="area.fill"
-                      [attr.stroke]="area.stroke"
-                      [attr.stroke-width]="area.strokeWidth"
-                      [attr.opacity]="area.opacity" />
-              </g>
-
-              <!-- Agent Backbone Lines -->
-              <g class="backbone-lines">
-                <path *ngFor="let backbone of backboneLines(); trackBy: trackByLineId"
-                      [attr.d]="backbone.path"
-                      [attr.stroke]="backbone.stroke"
-                      [attr.stroke-width]="backbone.strokeWidth"
-                      [attr.stroke-dasharray]="backbone.strokeDasharray || 'none'"
-                      [attr.opacity]="backbone.opacity"
-                      fill="none" />
-              </g>
-
-              <!-- Connection Lines (from nodes) -->
-              <g class="connection-lines">
-                <ng-container *ngFor="let node of nodes(); trackBy: trackByNodeId">
-                  <path *ngIf="node.connectionLine"
-                        [attr.d]="node.connectionLine.path"
-                        [attr.stroke]="node.connectionLine.stroke"
-                        [attr.stroke-width]="(hoveredNodeId() === node.id) ? node.connectionLine.strokeWidth + 2 : node.connectionLine.strokeWidth"
-                        [attr.opacity]="(hoveredNodeId() === node.id) ? 0.8 : node.connectionLine.opacity"
-                        [attr.stroke-dasharray]="node.connectionLine.strokeDasharray || 'none'"
-                        fill="none"
-                        style="cursor: pointer;"
-                        (click)="selectNode(node)"
-                        (mouseenter)="hoveredNodeId.set(node.id)"
-                        (mouseleave)="hoveredNodeId.set(null)" />
-                  <path *ngIf="node.returnConnectionLine"
-                        [attr.d]="node.returnConnectionLine.path"
-                        [attr.stroke]="node.returnConnectionLine.stroke"
-                        [attr.stroke-width]="(hoveredNodeId() === node.id) ? node.returnConnectionLine.strokeWidth + 2 : node.returnConnectionLine.strokeWidth"
-                        [attr.opacity]="(hoveredNodeId() === node.id) ? 0.8 : node.returnConnectionLine.opacity"
-                        [attr.stroke-dasharray]="node.returnConnectionLine.strokeDasharray || 'none'"
-                        fill="none"
-                        style="cursor: pointer;"
-                        (click)="selectNode(node)"
-                        (mouseenter)="hoveredNodeId.set(node.id)"
-                        (mouseleave)="hoveredNodeId.set(null)" />
-                </ng-container>
-              </g>
-            </svg>
-
-
-
-            <div class="nodes-layer">
-              <ng-container *ngFor="let node of nodes(); trackBy: trackByNodeId">
-              <div *ngIf="node.type !== 'thinking_area'"
-                   class="vis-node"
-                   [style.left.px]="node.x"
-                   [style.top.px]="node.y"
-                   [style.width.px]="node.width"
-                   [style.height.px]="node.height"
-                   [style.border-color]="getNodeBorderColor(node)"
-                   [style.background-color]="node.color"
-                   [ngClass]="[node.type, node.type === 'thinking' ? 'units-' + (node.units || 1) : '', getNodeVisualConfig(node).shape, getNodeVisualConfig(node).type]"
-                   [class.is-waiting]="node.isWaiting"
-                   [class.is-failed]="node.isFailed"
-                   [class.hidden]="node.hidden"
-                   [class.layer-match]="layersService.isNodeMatch(node.id)"
-                   [class.layer-dim]="layersService.anyLayerEnabled() && !layersService.isNodeMatch(node.id)"
-                   [style.box-shadow]="layersService.getNodeShadow(node.id)"
-                   (click)="selectNode(node)"
-                   (mouseenter)="hoveredNodeId.set(node.id)"
-                   (mouseleave)="hoveredNodeId.set(null)"
-                   [class.selected]="selectedNode()?.id === node.id"
-                   [class.is-hovered]="hoveredNodeId() === node.id"
-                   [title]="node.label">
-                
-                <!-- Custom content based on type -->
-                <ng-container [ngSwitch]="getNodeVisualConfig(node).type">
-                  <div *ngSwitchCase="'diff'" class="diff-content">
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6z" />
-                      <path d="M14 2v4c0 1.1.9 2 2 2h4L14 2z" fill="#94a3b8" />
-                      <rect x="7" y="12" width="10" height="2" fill="#10b981" rx="0.5"/>
-                      <rect x="7" y="16" width="7" height="2" fill="#ef4444" rx="0.5"/>
-                    </svg>
-                  </div>
-                  <div *ngSwitchCase="'view'" class="view-content">
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6z" />
-                      <path d="M14 2v4c0 1.1.9 2 2 2h4L14 2z" fill="#94a3b8" />
-                      <rect x="7" y="12" width="10" height="2" fill="#64748b" rx="0.5"/>
-                      <rect x="7" y="16" width="7" height="2" fill="#64748b" rx="0.5"/>
-                    </svg>
-                  </div>
-                  <div *ngSwitchCase="'search'" class="search-content">
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6z" />
-                      <path d="M14 2v4c0 1.1.9 2 2 2h4L14 2z" fill="#94a3b8" />
-                      <rect x="7" y="14" width="10" height="3" fill="#f59e0b" rx="0.5"/>
-                    </svg>
-                  </div>
-                  <div *ngSwitchCase="'command'" class="command-content">
-                    {{ getNodeVisualConfig(node).content }}
-                  </div>
-                  <div *ngSwitchCase="'external-search'" class="external-search-content">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <circle cx="11" cy="11" r="8"></circle>
-                      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                    </svg>
-                  </div>
-                </ng-container>
-              </div>
-              </ng-container>
-            </div>
           </div>
           </div>
         </div>

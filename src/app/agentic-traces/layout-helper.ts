@@ -68,15 +68,12 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
 
     const data = trace.data;
     const waitingRects: any[] = [];
-    const rowTitlePad = layoutMode === 'row' ? 18 : 0;
-    const axisWidth = (yAxisMode === 'time' || yAxisMode === 'tokens') ? 60 : 0;
-    const xOffset = axisWidth + rowTitlePad + traceIndex * 160;
-    const traceSpecialErrorLines: any[] = [];
+    const xOffset = 0; // Local track space: local X ranges from 0 to 140
 
     const cols = {
-      user: { center: xOffset + 23.33 },
-      agent: { center: xOffset + 70 },
-      tools: { center: xOffset + 116.66 },
+      user: { center: 23.33 },
+      agent: { center: 70 },
+      tools: { center: 116.66 },
     };
 
     let currentY = BASE_OFFSET;
@@ -225,9 +222,6 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
     traceMaxY = newTraceMaxY;
     waitingRects.push(...compressedRects);
 
-    // Since we shifted connection lines, we need to rebuild them if shifts happened.
-    // However, it's easier to just shift their coordinates or rebuild them after shift.
-    // Let's re-align connection lines based on shifted nodes.
     rebuildConnectionLines(traceNodes, cols, nodeW, yAxisMode, startTime, traceScale, gapsToReduce);
 
     // Calculate gradient stops
@@ -255,13 +249,17 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
 
     // Generate area charts as ThinkingAreaNodes
     const sortedNodes = [...traceNodes].filter(n => !n.hidden).sort((a, b) => a.y - b.y);
-    allNodes.push(...buildThinkingAreaNodes(id, sortedNodes, cx));
+    const traceThinkingAreaNodes = buildThinkingAreaNodes(id, sortedNodes, cx);
+    const traceBackboneLines = buildBackboneLines(id, cx, waitingRects, traceMaxY);
 
-    // Add agent backbone line segments
-    backboneLines.push(...buildBackboneLines(id, cx, waitingRects, traceMaxY));
-
+    trace.nodes = traceNodes;
+    trace.thinkingAreaNodes = traceThinkingAreaNodes;
+    trace.backboneLines = traceBackboneLines;
     trace.maxTraceY = traceMaxY + 20;
+
+    allNodes.push(...traceThinkingAreaNodes);
     allNodes.push(...traceNodes);
+    backboneLines.push(...traceBackboneLines);
   });
 
   // Normalize node widths/heights to match actual visual dimensions for icons
