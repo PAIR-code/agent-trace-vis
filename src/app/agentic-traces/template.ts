@@ -120,11 +120,19 @@ export const AGENTIC_TRACES_TEMPLATE = `
           </div>
 
           <!-- Scrollable area for headers and SVG -->
-          <div class="vis-scroll-area">
+          <div class="vis-scroll-area" (dragover)="onContainerDragOver($event)" (drop)="onTrackDrop($event)">
           <!-- Column mode headers (at top) -->
           <div class="col-headers" *ngIf="layoutMode() === 'column'" [style.width.px]="contentWidth()" [style.min-width.px]="contentWidth()">
             <ng-container *ngFor="let t of selectedTraces(); let i = index">
-              <div class="trace-header" [style.left.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + i * 160">
+              <div class="trace-header"
+                   draggable="true"
+                   (dragstart)="onTrackDragStart($event, i)"
+                   (dragover)="onContainerDragOver($event)"
+                   (drop)="onTrackDrop($event)"
+                   (dragend)="onTrackDragEnd($event)"
+                   [style.left.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + i * 160"
+                   title="Drag track to reorder">
+                <div class="drag-handle" title="Drag track to reorder">⠿</div>
                 <div class="trace-title" [title]="t.title">{{ t.title }}</div>
                 <div class="model-list">
                   <div class="model-item" *ngFor="let m of t.models">
@@ -139,6 +147,8 @@ export const AGENTIC_TRACES_TEMPLATE = `
           </div>
 
           <div class="vis-content"
+               (dragover)="onContainerDragOver($event)"
+               (drop)="onTrackDrop($event)"
                [class.row-layout]="layoutMode() === 'row'"
                [style.width.px]="contentWidth()"
                [style.min-width.px]="contentWidth()"
@@ -170,7 +180,19 @@ export const AGENTIC_TRACES_TEMPLATE = `
 
             <!-- Column Lanes (column mode) -->
             <div class="col-lanes" *ngIf="layoutMode() === 'column'" [style.height.px]="contentHeight()" [style.padding-left.px]="(yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0">
-              <div class="trace-background" *ngFor="let t of selectedTraces()">
+              <div class="drop-indicator-col"
+                   *ngIf="draggedTrackIndex() !== null && dropIndex() !== null"
+                   [style.left.px]="getColDropIndicatorLeft()">
+              </div>
+              <div class="trace-background"
+                   *ngFor="let t of selectedTraces(); let i = index"
+                   [class.is-dragging]="draggedTrackIndex() === i"
+                   draggable="true"
+                   (dragstart)="onTrackDragStart($event, i)"
+                   (dragover)="onContainerDragOver($event)"
+                   (drop)="onTrackDrop($event)"
+                   (dragend)="onTrackDragEnd($event)"
+                   title="Drag track to reorder">
                 <div class="col-lane lane-user" [style.height.px]="t.maxTraceY"></div>
                 <div class="col-lane lane-agent" [style.height.px]="t.maxTraceY">
                 </div>
@@ -180,7 +202,19 @@ export const AGENTIC_TRACES_TEMPLATE = `
 
             <!-- Row Lanes (row mode) -->
             <div class="row-lanes" *ngIf="layoutMode() === 'row'" [style.width.px]="contentWidth()" [style.padding-top.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + 18">
-              <div class="trace-background-row" *ngFor="let t of selectedTraces()">
+              <div class="drop-indicator-row"
+                   *ngIf="draggedTrackIndex() !== null && dropIndex() !== null"
+                   [style.top.px]="getRowDropIndicatorTop()">
+              </div>
+              <div class="trace-background-row"
+                   *ngFor="let t of selectedTraces(); let i = index"
+                   [class.is-dragging]="draggedTrackIndex() === i"
+                   draggable="true"
+                   (dragstart)="onTrackDragStart($event, i)"
+                   (dragover)="onContainerDragOver($event)"
+                   (drop)="onTrackDrop($event)"
+                   (dragend)="onTrackDragEnd($event)"
+                   title="Drag track to reorder">
                 <div class="row-lane lane-user" [style.width.px]="contentWidth()"></div>
                 <div class="row-lane lane-agent" [style.width.px]="contentWidth()">
                 </div>
@@ -191,7 +225,15 @@ export const AGENTIC_TRACES_TEMPLATE = `
             <!-- Row mode: trace titles above each row + channel labels on first trace -->
             <ng-container *ngIf="layoutMode() === 'row'">
               <ng-container *ngFor="let t of selectedTraces(); let i = index">
-                <div class="row-trace-title" [style.top.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + i * 160 + 2">
+                <div class="row-trace-title"
+                     draggable="true"
+                     (dragstart)="onTrackDragStart($event, i)"
+                     (dragover)="onContainerDragOver($event)"
+                     (drop)="onTrackDrop($event)"
+                     (dragend)="onTrackDragEnd($event)"
+                     [style.top.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + i * 160 + 2"
+                     title="Drag track to reorder">
+                  <span class="drag-handle-h" title="Drag track to reorder">⠿</span>
                   <span class="row-trace-title-text" [title]="t.title">{{ t.title }}</span>
                 </div>
                 <ng-container *ngIf="i === 0">

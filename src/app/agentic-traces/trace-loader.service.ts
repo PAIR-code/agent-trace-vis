@@ -164,7 +164,8 @@ export class TraceLoaderService {
 
     const files = metadata.siblings
       .map((s: any) => s.rfilename)
-      .filter((f: string) => f.endsWith('.jsonl') || f.endsWith('.json'));
+      .filter((f: string) => f.endsWith('.jsonl') || f.endsWith('.json'))
+      .sort((a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
 
     if (files.length === 0) {
       throw new Error("No JSON or JSONL files found in this Hugging Face dataset repository.");

@@ -235,9 +235,36 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       display: flex;
       flex-direction: column;
       gap: 2px;
-      padding: 0 8px;
+      padding: 4px 8px;
       box-sizing: border-box;
-      transition: left 0.3s ease;
+      transition: left 0.3s ease, background 0.15s, outline 0.15s, opacity 0.15s;
+      cursor: grab;
+      border-radius: 6px;
+      user-select: none;
+    }
+
+    .trace-header:hover {
+      background: rgba(226, 232, 240, 0.6);
+    }
+
+    .trace-header:active, .trace-header.is-dragging {
+      cursor: grabbing;
+      opacity: 0.8;
+    }
+
+    .drag-handle {
+      position: absolute;
+      top: 2px;
+      right: 4px;
+      font-size: 0.7rem;
+      color: #94a3b8;
+      opacity: 0.5;
+      cursor: grab;
+    }
+
+    .trace-header:hover .drag-handle {
+      opacity: 1;
+      color: #3b82f6;
     }
 
     .trace-title {
@@ -252,6 +279,7 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       white-space: normal;
       line-height: 1rem;
       text-align: left;
+      padding-right: 12px;
     }
 
     .model-list {
@@ -299,6 +327,87 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       height: 100%;
       flex-shrink: 0;
       align-items: flex-start;
+      pointer-events: auto;
+      cursor: grab;
+      border-radius: 8px;
+      box-sizing: border-box;
+      transition: opacity 0.15s, outline 0.15s, box-shadow 0.15s, background 0.15s;
+    }
+
+    .trace-background:active, .trace-background.is-dragging {
+      cursor: grabbing;
+      opacity: 0.7;
+      background: #eff6ff;
+      outline: 2px solid #3b82f6;
+      box-shadow: 0 4px 20px rgba(59, 130, 246, 0.25);
+    }
+
+    .drop-indicator-col {
+      position: absolute;
+      top: 0;
+      width: 4px;
+      height: 100%;
+      background: #3b82f6;
+      border-radius: 2px;
+      z-index: 50;
+      pointer-events: none;
+      box-shadow: 0 0 10px rgba(59, 130, 246, 0.9), 0 0 2px #2563eb;
+      transform: translateX(-50%);
+      transition: left 0.08s ease-out;
+    }
+
+    .drop-indicator-col::before, .drop-indicator-col::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 10px;
+      height: 10px;
+      background: #2563eb;
+      border-radius: 50%;
+      box-shadow: 0 0 6px rgba(37, 99, 235, 0.9);
+    }
+
+    .drop-indicator-col::before {
+      top: -3px;
+    }
+
+    .drop-indicator-col::after {
+      bottom: -3px;
+    }
+
+    .drop-indicator-row {
+      position: absolute;
+      left: 0;
+      height: 4px;
+      width: 100%;
+      background: #3b82f6;
+      border-radius: 2px;
+      z-index: 50;
+      pointer-events: none;
+      box-shadow: 0 0 10px rgba(59, 130, 246, 0.9), 0 0 2px #2563eb;
+      transform: translateY(-50%);
+      transition: top 0.08s ease-out;
+    }
+
+    .drop-indicator-row::before, .drop-indicator-row::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 10px;
+      height: 10px;
+      background: #2563eb;
+      border-radius: 50%;
+      box-shadow: 0 0 6px rgba(37, 99, 235, 0.9);
+    }
+
+    .drop-indicator-row::before {
+      left: -3px;
+    }
+
+    .drop-indicator-row::after {
+      right: -3px;
     }
 
     .trace-background:last-child {
@@ -757,6 +866,42 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       position: absolute;
       left: 8px;
       z-index: 20;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      cursor: grab;
+      user-select: none;
+      transition: background 0.15s, opacity 0.15s;
+    }
+
+    .row-trace-title:hover {
+      background: rgba(226, 232, 240, 0.7);
+    }
+
+    .row-trace-title:active, .row-trace-title.is-dragging {
+      cursor: grabbing;
+      opacity: 0.4;
+      background: #e2e8f0;
+    }
+
+    .row-trace-title.drag-over {
+      background: #eff6ff;
+      outline: 2px dashed #3b82f6;
+      outline-offset: -1px;
+    }
+
+    .drag-handle-h {
+      font-size: 0.7rem;
+      color: #94a3b8;
+      cursor: grab;
+      opacity: 0.6;
+    }
+
+    .row-trace-title:hover .drag-handle-h {
+      color: #3b82f6;
+      opacity: 1;
     }
 
     .row-trace-title-text {
@@ -802,6 +947,19 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       height: 140px;
       margin-bottom: 20px;
       flex-shrink: 0;
+      pointer-events: auto;
+      cursor: grab;
+      border-radius: 8px;
+      box-sizing: border-box;
+      transition: opacity 0.15s, outline 0.15s, box-shadow 0.15s;
+    }
+
+    .trace-background-row:active, .trace-background-row.is-dragging {
+      cursor: grabbing;
+      opacity: 0.7;
+      background: #eff6ff;
+      outline: 2px solid #3b82f6;
+      box-shadow: 0 4px 20px rgba(59, 130, 246, 0.25);
     }
 
     .trace-background-row:last-child {

@@ -305,15 +305,143 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     }
   }
 
+  // Drag and drop track reordering
+  draggedTrackIndex = signal<number | null>(null);
+  dropIndex = signal<number | null>(null);
+
+  onTrackDragStart(event: DragEvent, index: number) {
+    this.draggedTrackIndex.set(index);
+    this.dropIndex.set(null);
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', String(index));
+    }
+  }
+
+  onContainerDragOver(event: DragEvent) {
+    if (this.draggedTrackIndex() === null) return;
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'move';
+    }
+
+    const visContent = (event.currentTarget as HTMLElement).closest('.vis-scroll-area')?.querySelector('.vis-content') as HTMLElement 
+      || (event.currentTarget as HTMLElement);
+    const rect = visContent.getBoundingClientRect();
+    const count = this.selectedTraceIds().size;
+    if (count === 0) return;
+
+    if (this.layoutMode() === 'column') {
+      const axisOffset = (this.yAxisMode() === 'time' || this.yAxisMode() === 'tokens') ? 60 : 0;
+      const mouseX = event.clientX - rect.left;
+
+      let dropIdx = 0;
+      if (mouseX <= axisOffset + 70) {
+        dropIdx = 0;
+      } else if (mouseX >= axisOffset + (count - 1) * 160 + 70) {
+        dropIdx = count;
+      } else {
+        const approxIndex = Math.floor((mouseX - axisOffset) / 160);
+        const trackLeft = axisOffset + approxIndex * 160;
+        const isAfter = mouseX > trackLeft + 70;
+        dropIdx = isAfter ? approxIndex + 1 : approxIndex;
+      }
+
+      if (dropIdx < 0) dropIdx = 0;
+      if (dropIdx > count) dropIdx = count;
+      this.dropIndex.set(dropIdx);
+    } else {
+      const axisOffset = ((this.yAxisMode() === 'time' || this.yAxisMode() === 'tokens') ? 60 : 0) + 18;
+      const mouseY = event.clientY - rect.top;
+
+      let dropIdx = 0;
+      if (mouseY <= axisOffset + 70) {
+        dropIdx = 0;
+      } else if (mouseY >= axisOffset + (count - 1) * 160 + 70) {
+        dropIdx = count;
+      } else {
+        const approxIndex = Math.floor((mouseY - axisOffset) / 160);
+        const trackTop = axisOffset + approxIndex * 160;
+        const isAfter = mouseY > trackTop + 70;
+        dropIdx = isAfter ? approxIndex + 1 : approxIndex;
+      }
+
+      if (dropIdx < 0) dropIdx = 0;
+      if (dropIdx > count) dropIdx = count;
+      this.dropIndex.set(dropIdx);
+    }
+  }
+
+  onTrackDrop(event: DragEvent) {
+    event.preventDefault();
+    const fromIndex = this.draggedTrackIndex();
+    const targetDropIndex = this.dropIndex();
+
+    if (fromIndex !== null && targetDropIndex !== null) {
+      this.executeDropReorder(fromIndex, targetDropIndex);
+    }
+    this.onTrackDragEnd(event);
+  }
+
+  onTrackDragEnd(event: DragEvent) {
+    this.draggedTrackIndex.set(null);
+    this.dropIndex.set(null);
+  }
+
+  executeDropReorder(fromIndex: number, targetDropIndex: number) {
+    const currentIds = Array.from(this.selectedTraceIds());
+    if (fromIndex < 0 || fromIndex >= currentIds.length) return;
+
+    let destinationIndex = targetDropIndex;
+    if (fromIndex < targetDropIndex) {
+      destinationIndex = targetDropIndex - 1;
+    }
+
+    if (destinationIndex < 0 || destinationIndex >= currentIds.length) {
+      return;
+    }
+
+    if (destinationIndex === fromIndex) {
+      return;
+    }
+
+    const [movedId] = currentIds.splice(fromIndex, 1);
+    currentIds.splice(destinationIndex, 0, movedId);
+
+    this.selectedTraceIds.set(new Set(currentIds));
+    this.processTraces();
+    this.updateUrlParams();
+  }
+
+  getColDropIndicatorLeft(): number {
+    const idx = this.dropIndex();
+    if (idx === null) return -9999;
+    const axisOffset = (this.yAxisMode() === 'time' || this.yAxisMode() === 'tokens') ? 60 : 0;
+    return axisOffset + idx * 160 - 10;
+  }
+
+  getRowDropIndicatorTop(): number {
+    const idx = this.dropIndex();
+    if (idx === null) return -9999;
+    const axisOffset = ((this.yAxisMode() === 'time' || this.yAxisMode() === 'tokens') ? 60 : 0) + 18;
+    return axisOffset + idx * 160 - 10;
+  }
+
   /** Handles changes in the selected traces. */
   onTraceSelectionChange(newSelection: Set<string>) {
-    const tracesList = this.traces();
-    const sortedIds = [...newSelection].sort((a, b) => {
-      const idxA = tracesList.findIndex(t => t.id === a);
-      const idxB = tracesList.findIndex(t => t.id === b);
-      return idxA - idxB;
-    });
-    this.selectedTraceIds.set(new Set(sortedIds));
+    const currentOrderedIds = Array.from(this.selectedTraceIds());
+
+    // Keep currently selected IDs that are still in newSelection (preserving custom order)
+    const updatedIds = currentOrderedIds.filter(id => newSelection.has(id));
+
+    // Add any newly selected IDs in the order they appear in newSelection
+    for (const id of newSelection) {
+      if (!updatedIds.includes(id)) {
+        updatedIds.push(id);
+      }
+    }
+
+    this.selectedTraceIds.set(new Set(updatedIds));
     this.updateActiveTraces();
     this.updateUrlParams();
   }
@@ -578,14 +706,11 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   private updateUrlParams() {
     const currentDataset = this.selectedDatasetFile();
     const currentTraces = this.traces();
-    const selectedIds = this.selectedTraceIds();
+    const selectedIds = Array.from(this.selectedTraceIds());
 
-    const indices: number[] = [];
-    currentTraces.forEach((t, idx) => {
-      if (selectedIds.has(t.id)) {
-        indices.push(idx);
-      }
-    });
+    const indices: number[] = selectedIds
+      .map(id => currentTraces.findIndex(t => t.id === id))
+      .filter(idx => idx !== -1);
 
     this.urlParamService.updateQueryParams(
       {
@@ -607,12 +732,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     }
 
     const selectedIds = this.urlParamService.validateAndSelectTraceIds(tracesList, targetIndices);
-    selectedIds.sort((a, b) => {
-      const idxA = tracesList.findIndex(t => t.id === a);
-      const idxB = tracesList.findIndex(t => t.id === b);
-      return idxA - idxB;
-    });
-
     this.selectedTraceIds.set(new Set(selectedIds));
     this.updateActiveTraces();
     this.updateUrlParams();
