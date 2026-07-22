@@ -37,7 +37,7 @@ import { RouterLink } from '@angular/router';
         </p>
       </div>
       <div class="card-grid">
-        <div class="vis-card primary" routerLink="/agentic-traces/sample">
+        <div class="vis-card primary" routerLink="/agentic-traces">
           <h3>Agentic traces</h3>
           <p>Explore a step-by-step reasoning trace (can include tools).</p>
         </div>

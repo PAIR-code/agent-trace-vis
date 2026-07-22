@@ -27,7 +27,7 @@ import { ConversationArcsComponent } from './conversation-arcs/conversation-arcs
 
 export const routes: Routes = [
   { path: '', component: HomeComponent },
-  { path: 'agentic-traces/:id', component: AgenticTracesComponent },
+  { path: 'agentic-traces', component: AgenticTracesComponent },
   { path: 'unstructured-reasoning-graph', component: UnstructuredReasoningGraphComponent },
   { path: 'unstructured-reasoning-linear', component: UnstructuredReasoningLinearComponent },
   { path: 'conversation-arcs', component: ConversationArcsComponent },

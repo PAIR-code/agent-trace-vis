@@ -30,6 +30,8 @@ import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { DomSanitizer } from "@angular/platform-browser";
 import { HttpClient } from "@angular/common/http";
+import { ActivatedRoute } from "@angular/router";
+import { UrlParamService } from "../shared/url-param.service";
 import { forkJoin, of } from "rxjs";
 import { catchError, map } from "rxjs/operators";
 import { AnalysisLayersService } from "./analysis-layers.service";
@@ -250,6 +252,8 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     public layersService: AnalysisLayersService,
     private traceLoaderService: TraceLoaderService,
     private sanitizer: DomSanitizer,
+    private route: ActivatedRoute,
+    private urlParamService: UrlParamService,
   ) { }
 
   @HostListener('window:keydown.escape')
@@ -305,6 +309,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   onTraceSelectionChange(newSelection: Set<string>) {
     this.selectedTraceIds.set(newSelection);
     this.updateActiveTraces();
+    this.updateUrlParams();
   }
 
   /** Returns the speaker label for the viewer. */
@@ -564,6 +569,43 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     }
   }
 
+  private updateUrlParams() {
+    const currentDataset = this.selectedDatasetFile();
+    const currentTraces = this.traces();
+    const selectedIds = this.selectedTraceIds();
+
+    const indices: number[] = [];
+    currentTraces.forEach((t, idx) => {
+      if (selectedIds.has(t.id)) {
+        indices.push(idx);
+      }
+    });
+
+    this.urlParamService.updateQueryParams(
+      {
+        dataset: currentDataset || null,
+        indices: indices.length > 0 ? indices.join(',') : null,
+      },
+      this.route
+    );
+  }
+
+
+
+  private applyTraceSelection(tracesList: any[], targetIndices?: number[] | null) {
+    if (tracesList.length === 0) {
+      this.selectedTraceIds.set(new Set());
+      this.activeTrace.set(null);
+      this.updateUrlParams();
+      return;
+    }
+
+    const selectedIds = this.urlParamService.validateAndSelectTraceIds(tracesList, targetIndices);
+    this.selectedTraceIds.set(new Set(selectedIds));
+    this.updateActiveTraces();
+    this.updateUrlParams();
+  }
+
   /** Loads the initial list of datasets. */
   loadDatasets(selectDatasetId?: string) {
     this.isLoading.set(true);
@@ -588,9 +630,13 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
         this.datasets.set(loadedDatasets);
         this.isLoading.set(false);
 
-        const targetId = selectDatasetId || (loadedDatasets.length > 0 ? loadedDatasets[0].file : '');
+        const { targetId, pendingIndices } = this.urlParamService.resolveInitialDatasetAndIndices(
+          loadedDatasets,
+          selectDatasetId,
+          this.route
+        );
         if (targetId) {
-          this.onDatasetChange(targetId);
+          this.onDatasetChange(targetId, pendingIndices);
         }
       },
       error: (err) => {
@@ -598,19 +644,24 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
         let loadedDatasets = [...HF_PRESETS];
         const imported = this.loadImportedDatasets();
         loadedDatasets = [...loadedDatasets, ...imported];
+
         this.datasets.set(loadedDatasets);
         this.isLoading.set(false);
 
-        const targetId = selectDatasetId || (loadedDatasets.length > 0 ? loadedDatasets[0].file : '');
+        const { targetId, pendingIndices } = this.urlParamService.resolveInitialDatasetAndIndices(
+          loadedDatasets,
+          selectDatasetId,
+          this.route
+        );
         if (targetId) {
-          this.onDatasetChange(targetId);
+          this.onDatasetChange(targetId, pendingIndices);
         }
       }
     });
   }
 
   /** Handles dataset selection changes. */
-  onDatasetChange(file: string) {
+  onDatasetChange(file: string, targetIndices?: number[] | null) {
     if (file === '__import_hf_dataset__') {
       this.openImportModal();
       setTimeout(() => {
@@ -635,7 +686,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
       const startLoading = (urls: string[]) => {
         this.traceLoaderService.loadRemoteDataset(urls, maxTraces)
           .then((records) => {
-            this.processLoadedRecords(records, maxTraces);
+            this.processLoadedRecords(records, maxTraces, targetIndices);
           })
           .catch((err) => {
             console.error('Failed to load remote dataset traces', err);
@@ -716,7 +767,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
                 if (remainingToPreload === 0) {
                   this.isLoading.set(false);
                   if (updatedTraces.length > 0) {
-                    this.onTraceChange(updatedTraces[0].id);
+                    this.applyTraceSelection(updatedTraces, targetIndices);
                   }
                 }
               },
@@ -727,7 +778,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
                   this.isLoading.set(false);
                   const currentTraces = this.traces();
                   if (currentTraces.length > 0) {
-                    this.onTraceChange(currentTraces[0].id);
+                    this.applyTraceSelection(currentTraces, targetIndices);
                   }
                 }
               }
@@ -742,7 +793,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     }
   }
 
-  private processLoadedRecords(records: any[], maxTraces: number) {
+  private processLoadedRecords(records: any[], maxTraces: number, targetIndices?: number[] | null) {
     if (maxTraces && maxTraces > 0) {
       records = records.slice(0, maxTraces);
     }
@@ -780,20 +831,14 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     this.traces.set(traces);
     this.isLoading.set(false);
 
-    if (traces.length > 0) {
-      const firstId = traces[0].id;
-      this.selectedTraceIds.set(new Set([firstId]));
-      this.onTraceChange(firstId);
-    } else {
-      this.selectedTraceIds.set(new Set());
-      this.activeTrace.set(null);
-    }
+    this.applyTraceSelection(traces, targetIndices);
   }
 
   /** Handles trace selection changes (single selection). */
   onTraceChange(id: string) {
     this.selectedTraceIds.set(new Set([id]));
     this.updateActiveTraces();
+    this.updateUrlParams();
   }
 
   /** Processes the active traces to generate nodes and lines for visualization. */
