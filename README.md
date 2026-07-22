@@ -57,20 +57,21 @@ parent/
 
 Building compiles the app locally to `dist/reasoning-trace-vis/browser/`. Deploying uploads those files to Netlify at [agent-trace-vis.netlify.app](https://agent-trace-vis.netlify.app).
 
-To build and deploy with a **subset** of datasets:
+To build and deploy a **Draft / Preview URL** with specific datasets:
 ```bash
-DATASETS=website_updates,rlvr_vs_base npm run build
-npx netlify deploy --dir=dist/reasoning-trace-vis/browser --prod --no-build
+DATASETS=my_custom_dataset npm run deploy:draft
+```
+Or with a custom alias name:
+```bash
+DATASETS=my_custom_dataset npm run deploy:draft -- --alias my-custom-alias
 ```
 
-To build and deploy with **all** datasets:
+To build and deploy to **Production**:
 ```bash
-npm run build
-npx netlify deploy --dir=dist/reasoning-trace-vis/browser --prod --no-build
-```
+# With specific datasets:
+DATASETS=website_updates,rlvr_vs_base npm run deploy
 
-Or deploy the default public datasets (`website_updates,rlvr_vs_base`) via the pre-configured script:
-```bash
+# Or deploy default public datasets via pre-configured script:
 npm run deploy:public
 ```
 
