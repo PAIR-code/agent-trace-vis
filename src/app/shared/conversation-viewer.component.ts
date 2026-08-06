@@ -45,7 +45,7 @@ export interface ConversationMessage {
       <!-- Static Header -->
       <div class="panel-static-header">
         <div class="header-content">
-          <h3>{{ title }}</h3>
+          <h3 [title]="title">{{ title }}</h3>
           <p>{{ subtitle }}</p>
         </div>
         <div class="header-actions">
@@ -166,6 +166,13 @@ export interface ConversationMessage {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      min-width: 0;
+    }
+
+    .header-content {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
     }
 
     .panel-static-header h3 {

@@ -116,6 +116,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   selectedNode = signal<any>(null);
   hoveredNodeId = signal<string | null>(null);
   highlightedChunkId = signal<string | null>(null);
+  manualActiveTraceId = signal<string | null>(null);
 
   selectedTraceIds = signal<Set<string>>(new Set());
   yAxisMode = signal<"default" | "time" | "tokens">("time");
@@ -216,6 +217,10 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     if (selectedNode) {
       return selectedNode.traceId;
     }
+    const manual = this.manualActiveTraceId();
+    if (manual) {
+      return manual;
+    }
     const ids = this.selectedTraceIds();
     return ids.values().next().value;
   });
@@ -223,6 +228,12 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   activeTraceStepsCount = computed(() => {
     const activeId = this.activeTraceId();
     return this.nodes().filter((n) => n.traceId === activeId).length;
+  });
+
+  activeTraceTitle = computed(() => {
+    const activeId = this.activeTraceId();
+    const trace = this.traces().find((t) => t.id === activeId);
+    return trace?.title || '';
   });
 
   // Group nodes into thread messages: tool/system/error nest under agent turns
@@ -323,6 +334,12 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   dropIndex = signal<number | null>(null);
 
   onTrackDragStart(event: DragEvent, index: number) {
+    // Don't start track drag when clicking on interactive nodes
+    const target = event.target as HTMLElement;
+    if (target.closest('.vis-node') || target.closest('.track-nodes-layer svg') || target.closest('.track-lines-layer')) {
+      event.preventDefault();
+      return;
+    }
     this.draggedTrackIndex.set(index);
     this.dropIndex.set(null);
     if (event.dataTransfer) {
@@ -816,6 +833,12 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     this.timeUnitLabel.set(layout.timeUnitLabel);
 
     this.selectedNode.set(null);
+  }
+
+  /** Selects a track (trace) without selecting a specific node. */
+  selectTrack(traceId: string) {
+    this.selectedNode.set(null);
+    this.manualActiveTraceId.set(traceId);
   }
 
   /** Selects a node. */

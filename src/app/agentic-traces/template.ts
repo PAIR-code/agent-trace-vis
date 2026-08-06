@@ -132,7 +132,6 @@ export const AGENTIC_TRACES_TEMPLATE = `
                    (dragend)="onTrackDragEnd($event)"
                    [style.left.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + i * 160"
                    title="Drag track to reorder">
-                <div class="drag-handle" title="Drag track to reorder">⠿</div>
                 <div class="trace-title" [title]="t.title">{{ t.title }}</div>
                 <div class="model-list">
                   <div class="model-item" *ngFor="let m of t.models">
@@ -187,7 +186,9 @@ export const AGENTIC_TRACES_TEMPLATE = `
               <div class="trace-background"
                    *ngFor="let t of selectedTraces(); let i = index"
                    [class.is-dragging]="draggedTrackIndex() === i"
+                   [class.is-active]="activeTraceId() === t.id"
                    draggable="true"
+                   (click)="selectTrack(t.id)"
                    (dragstart)="onTrackDragStart($event, i)"
                    (dragover)="onContainerDragOver($event)"
                    (drop)="onTrackDrop($event)"
@@ -198,7 +199,9 @@ export const AGENTIC_TRACES_TEMPLATE = `
                 <div class="col-lane lane-tools" [style.height.px]="t.maxTraceY"></div>
 
                 <!-- Track SVG layer -->
-                <svg class="track-lines-layer" [attr.width]="140" [attr.height]="contentHeight()" [class.layer-active]="layersService.anyLayerEnabled()">
+                <svg class="track-lines-layer" [attr.width]="140" [attr.height]="contentHeight()" [class.layer-active]="layersService.anyLayerEnabled()"
+                     draggable="false"
+                     (dragstart)="$event.stopPropagation(); $event.preventDefault()">
                   <defs>
                     <linearGradient [attr.id]="'grad-' + sanitizeId(t.id)" x1="0" y1="0" x2="0" [attr.y2]="contentHeight()" gradientUnits="userSpaceOnUse">
                       <stop *ngFor="let stop of t.gradientStops" [attr.offset]="stop.offset" [attr.stop-color]="stop.color" />
@@ -253,7 +256,9 @@ export const AGENTIC_TRACES_TEMPLATE = `
                 </svg>
 
                 <!-- Track Nodes layer -->
-                <div class="track-nodes-layer">
+                <div class="track-nodes-layer"
+                     draggable="false"
+                     (dragstart)="$event.stopPropagation(); $event.preventDefault()">
                   <ng-container *ngFor="let node of t.nodes; trackBy: trackByNodeId">
                     <div *ngIf="node.type !== 'thinking_area'"
                          class="vis-node"
@@ -325,18 +330,25 @@ export const AGENTIC_TRACES_TEMPLATE = `
               <div class="trace-background-row"
                    *ngFor="let t of selectedTraces(); let i = index"
                    [class.is-dragging]="draggedTrackIndex() === i"
+                   [class.is-active]="activeTraceId() === t.id"
                    draggable="true"
+                   (click)="selectTrack(t.id)"
                    (dragstart)="onTrackDragStart($event, i)"
                    (dragover)="onContainerDragOver($event)"
                    (drop)="onTrackDrop($event)"
                    (dragend)="onTrackDragEnd($event)"
                    title="Drag track to reorder">
+                <div class="row-trace-title">
+                  <span class="row-trace-title-text" [title]="t.title">{{ t.title }}</span>
+                </div>
                 <div class="row-lane lane-user" [style.width.px]="contentWidth()"></div>
                 <div class="row-lane lane-agent" [style.width.px]="contentWidth()"></div>
                 <div class="row-lane lane-tools" [style.width.px]="contentWidth()"></div>
 
                 <!-- Track SVG layer -->
-                <svg class="track-lines-layer" [attr.width]="contentWidth()" [attr.height]="140" [class.layer-active]="layersService.anyLayerEnabled()">
+                <svg class="track-lines-layer" [attr.width]="contentWidth()" [attr.height]="140" [class.layer-active]="layersService.anyLayerEnabled()"
+                     draggable="false"
+                     (dragstart)="$event.stopPropagation(); $event.preventDefault()">
                   <defs>
                     <linearGradient [attr.id]="'grad-' + sanitizeId(t.id)" x1="0" y1="0" [attr.x2]="contentWidth()" y2="0" gradientUnits="userSpaceOnUse">
                       <stop *ngFor="let stop of t.gradientStops" [attr.offset]="stop.offset" [attr.stop-color]="stop.color" />
@@ -391,7 +403,9 @@ export const AGENTIC_TRACES_TEMPLATE = `
                 </svg>
 
                 <!-- Track Nodes layer -->
-                <div class="track-nodes-layer">
+                <div class="track-nodes-layer"
+                     draggable="false"
+                     (dragstart)="$event.stopPropagation(); $event.preventDefault()">
                   <ng-container *ngFor="let node of t.nodes; trackBy: trackByNodeId">
                     <div *ngIf="node.type !== 'thinking_area'"
                          class="vis-node"
@@ -454,25 +468,12 @@ export const AGENTIC_TRACES_TEMPLATE = `
               </div>
             </div>
 
-            <!-- Row mode: trace titles above each row + channel labels on first trace -->
+            <!-- Row mode: channel labels on first trace -->
             <ng-container *ngIf="layoutMode() === 'row'">
-              <ng-container *ngFor="let t of selectedTraces(); let i = index">
-                <div class="row-trace-title"
-                     draggable="true"
-                     (dragstart)="onTrackDragStart($event, i)"
-                     (dragover)="onContainerDragOver($event)"
-                     (drop)="onTrackDrop($event)"
-                     (dragend)="onTrackDragEnd($event)"
-                     [style.top.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + i * 160 + 2"
-                     title="Drag track to reorder">
-                  <span class="drag-handle-h" title="Drag track to reorder">⠿</span>
-                  <span class="row-trace-title-text" [title]="t.title">{{ t.title }}</span>
-                </div>
-                <ng-container *ngIf="i === 0">
-                  <span class="row-channel-label" [style.top.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + 18 + 4">user / agent conversation</span>
-                  <span class="row-channel-label" [style.top.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + 18 + 46.66 + 4">agent internal processes</span>
-                  <span class="row-channel-label" [style.top.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + 18 + 93.33 + 4">tools and external world</span>
-                </ng-container>
+              <ng-container *ngIf="selectedTraces().length > 0">
+                <span class="row-channel-label" [style.top.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + 18 + 23.33">user / agent conversation</span>
+                <span class="row-channel-label" [style.top.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + 18 + 46.66 + 23.33">agent internal processes</span>
+                <span class="row-channel-label" [style.top.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + 18 + 93.33 + 23.33">tools and external world</span>
               </ng-container>
             </ng-container>
           </div>
@@ -486,7 +487,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
             [activeNodeId]="selectedNode()?.id"
             [hoveredNodeId]="hoveredNodeId()"
             [searchQuery]="layersService.anyLayerEnabled() ? ' ' : ''"
-            [title]="'Trace Conversation'"
+            [title]="activeTraceTitle() ? 'Trace: ' + activeTraceTitle() : 'Trace Conversation'"
             [subtitle]="activeTraceStepsCount() + ' steps'"
             [getSpeakerLabel]="getSpeakerLabelForViewer"
             [getSpeakerColor]="getSpeakerColorForViewer"

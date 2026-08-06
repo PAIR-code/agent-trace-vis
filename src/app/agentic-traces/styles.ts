@@ -248,7 +248,7 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       background: rgba(226, 232, 240, 0.6);
     }
 
-    .trace-header:active, .trace-header.is-dragging {
+    .trace-header.is-dragging {
       cursor: grabbing;
       opacity: 0.25;
     }
@@ -272,15 +272,11 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       font-size: 0.75rem;
       font-weight: 700;
       color: #1e293b;
+      white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      white-space: normal;
       line-height: 1rem;
       text-align: left;
-      padding-right: 12px;
     }
 
     .model-list {
@@ -370,13 +366,17 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       pointer-events: auto;
     }
 
-    .trace-background:active, .trace-background.is-dragging {
+    .trace-background.is-dragging {
       cursor: grabbing;
       opacity: 0.25;
       background: #eff6ff;
       outline: 2px solid #3b82f6;
       outline-offset: 4px;
       box-shadow: 0 4px 20px rgba(59, 130, 246, 0.25);
+    }
+
+    .trace-background.is-active {
+      border-bottom: 3px solid #3b82f6;
     }
 
     .drop-indicator-col {
@@ -438,6 +438,8 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       z-index: 10;
       border-radius: 6px;
       transition: all 0.3s ease;
+      outline: none;
+      -webkit-user-drag: none;
     }
 
     .vis-node.hidden {
@@ -856,64 +858,32 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       }
     }
 
-    /* Row mode: trace title positioned above each row */
+    /* Row mode: trace title label positioned above each track */
     .row-trace-title {
       position: absolute;
-      left: 8px;
+      top: -18px;
+      left: 0;
+      right: 12px;
       z-index: 20;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      padding: 2px 6px;
-      border-radius: 4px;
+      padding: 0;
+      overflow: hidden;
+      pointer-events: auto;
       cursor: grab;
-      user-select: none;
-      transition: background 0.15s, opacity 0.15s;
-    }
-
-    .row-trace-title:hover {
-      background: rgba(226, 232, 240, 0.7);
-    }
-
-    .row-trace-title:active, .row-trace-title.is-dragging {
-      cursor: grabbing;
-      opacity: 0.25;
-      background: #e2e8f0;
-    }
-
-    .row-trace-title.drag-over {
-      background: #eff6ff;
-      outline: 2px dashed #3b82f6;
-      outline-offset: -1px;
-    }
-
-    .drag-handle-h {
-      font-size: 0.7rem;
-      color: #94a3b8;
-      cursor: grab;
-      opacity: 0.6;
-    }
-
-    .row-trace-title:hover .drag-handle-h {
-      color: #3b82f6;
-      opacity: 1;
     }
 
     .row-trace-title-text {
       font-size: 0.7rem;
       font-weight: 700;
       color: #1e293b;
+      white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      white-space: nowrap;
-      max-width: 300px;
-      display: inline-block;
     }
 
     /* Row mode: subtle channel labels on first trace */
     .row-channel-label {
       position: absolute;
-      left: 8px;
+      right: 8px;
       z-index: 20;
       font-size: 0.55rem;
       font-weight: 500;
@@ -921,6 +891,8 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       letter-spacing: 0.02em;
       pointer-events: none;
       white-space: nowrap;
+      text-align: right;
+      transform: translateY(-50%);
     }
 
     /* Row lanes (horizontal background strips) */
@@ -960,7 +932,7 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       height: 140px;
     }
 
-    .trace-background-row:active, .trace-background-row.is-dragging {
+    .trace-background-row.is-dragging {
       cursor: grabbing;
       opacity: 0.25;
       background: #eff6ff;
@@ -971,6 +943,20 @@ export const AGENTIC_TRACES_STYLES: string[] = [
 
     .trace-background-row:last-child {
       margin-bottom: 0;
+    }
+
+    .trace-background-row.is-active::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 4px;
+      background: #3b82f6;
+      border-top-right-radius: 8px;
+      border-bottom-right-radius: 8px;
+      z-index: 25;
+      pointer-events: none;
     }
 
     .row-lane {
