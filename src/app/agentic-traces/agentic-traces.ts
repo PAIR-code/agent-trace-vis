@@ -836,7 +836,13 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   }
 
   /** Selects a track (trace) without selecting a specific node. */
-  selectTrack(traceId: string) {
+  selectTrack(traceId: string, event?: Event) {
+    if (event) {
+      const target = event.target as HTMLElement;
+      if (target.closest('.vis-node') || target.closest('.track-lines-layer') || target.closest('.track-nodes-layer')) {
+        return;
+      }
+    }
     this.selectedNode.set(null);
     this.manualActiveTraceId.set(traceId);
   }
