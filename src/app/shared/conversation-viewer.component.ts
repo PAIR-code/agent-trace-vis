@@ -68,8 +68,6 @@ export interface ConversationMessage {
 
         <!-- Scrollable Thread Area -->
         <div class="thread-scroll" #threadScrollContainer (scroll)="onScroll($event)">
-          <!-- Search Overlay -->
-          <div class="search-overlay" *ngIf="searchQuery" (click)="overlayClick.emit()"></div>
           <div class="message-list">
           <ng-container *ngFor="let msg of messages">
             <!-- Message Card -->
@@ -78,7 +76,6 @@ export interface ConversationMessage {
                  [class.is-active]="activeNodeId === msg.id || (msg.id.includes('_thinking_0') && activeNodeId && activeNodeId.startsWith(msg.id.replace('_thinking_0', '')))"
                  [class.is-hovered]="hoveredNodeId === msg.id"
                  [class.search-match]="isMatch(msg)"
-                 [class.search-dim]="isDim(msg)"
                  [style.boxShadow]="msg.glowStyle"
                  [style.borderLeftColor]="getSpeakerColor(msg)"
                  [style.background-color]="getSpeakerBgColor(msg)"
@@ -331,22 +328,6 @@ export interface ConversationMessage {
       background: rgba(255,255,255,0.08);
       border-color: rgba(255,255,255,0.2);
       box-shadow: 0 0 0 1px rgba(255,255,255,0.1);
-    }
-
-    .message-card.search-match {
-      z-index: 20;
-      position: relative;
-    }
-
-    .search-overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.25);
-      z-index: 15;
-      cursor: pointer;
     }
 
     .message-meta {

@@ -88,18 +88,6 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       transform: scale(1.05);
       z-index: 20;
     }
-
-    .vis-node.layer-dim {
-      filter: grayscale(100%);
-      opacity: 0.35;
-      transition: filter 0.3s, opacity 0.3s;
-    }
-
-    .lines-layer.layer-active {
-      filter: grayscale(100%);
-      opacity: 0.3;
-      transition: filter 0.3s, opacity 0.3s;
-    }
     ::ng-deep app-analysis-toolbar {
       position: fixed;
       top: 64px;
@@ -400,6 +388,19 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       transition: opacity 0.15s, outline 0.15s, box-shadow 0.15s, background 0.15s;
     }
 
+    .track-base-layer {
+      position: relative;
+      display: flex;
+      width: 100%;
+      height: 100%;
+      transition: filter 0.3s ease, opacity 0.3s ease;
+    }
+
+    .track-base-layer.layer-dimmed {
+      opacity: .3;
+      filter: grayscale(1);
+    }
+
     .track-lines-layer {
       position: absolute;
       top: 0;
@@ -414,12 +415,6 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       transition: d 0.3s ease;
     }
 
-    .track-lines-layer.layer-active {
-      filter: grayscale(100%);
-      opacity: 0.3;
-      transition: filter 0.3s, opacity 0.3s;
-    }
-
     .track-nodes-layer {
       position: absolute;
       top: 0;
@@ -431,6 +426,20 @@ export const AGENTIC_TRACES_STYLES: string[] = [
     }
 
     .track-nodes-layer .vis-node {
+      pointer-events: auto;
+    }
+
+    .track-highlight-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 140px;
+      height: 100%;
+      pointer-events: none;
+      z-index: 15;
+    }
+
+    .track-highlight-layer .vis-node {
       pointer-events: auto;
     }
 
@@ -794,10 +803,6 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       background: #ffffff !important;
       border-color: #3b82f6 !important;
       box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2) !important;
-    }
-
-    ::ng-deep .message-card.search-match {
-      z-index: 10;
     }
 
     ::ng-deep .message-body {
@@ -1232,12 +1237,21 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       flex-shrink: 0;
     }
 
+    .row-main-track .track-base-layer {
+      flex-direction: column;
+    }
+
     .row-main-track .track-lines-layer {
       width: 100%;
       height: 140px;
     }
 
     .row-main-track .track-nodes-layer {
+      width: 100%;
+      height: 140px;
+    }
+
+    .row-main-track .track-highlight-layer {
       width: 100%;
       height: 140px;
     }
