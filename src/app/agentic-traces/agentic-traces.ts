@@ -22,6 +22,8 @@ import {
   Component,
   OnInit,
   OnDestroy,
+  ViewChild,
+  ElementRef,
   signal,
   computed,
   HostListener,
@@ -120,7 +122,8 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   manualActiveTraceId = signal<string | null>(null);
 
   selectedTraceIds = signal<Set<string>>(new Set());
-  yAxisMode = signal<"default" | "time" | "tokens">("time");
+  yAxisMode = signal<"time" | "tokens">("time");
+  stretch = signal<boolean>(false);
   layoutMode = signal<"column" | "row">("row");
   timeTicks = signal<{ label: string; y: number; x?: number }[]>([]);
   hideGaps = signal<boolean>(false);
@@ -148,6 +151,31 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   backboneLines = signal<BackboneLine[]>([]);
   contentHeight = signal<number>(1000);
   contentWidth = signal<number>(500);
+  containerWidth = signal<number>(typeof window !== 'undefined' ? Math.max(500, window.innerWidth - 450 - 50) : 1000);
+
+  private resizeObserver?: ResizeObserver;
+  private _visScrollAreaElement?: HTMLElement;
+
+  @ViewChild('visScrollArea', { static: false })
+  set visScrollAreaRef(ref: ElementRef<HTMLElement> | undefined) {
+    const el = ref?.nativeElement;
+    if (el && el !== this._visScrollAreaElement) {
+      if (this._visScrollAreaElement && this.resizeObserver) {
+        this.resizeObserver.unobserve(this._visScrollAreaElement);
+      }
+      this._visScrollAreaElement = el;
+      if (this.resizeObserver) {
+        this.resizeObserver.observe(el);
+      }
+      const measured = Math.floor(el.clientWidth - 32);
+      if (measured > 0 && Math.abs(measured - this.containerWidth()) > 2) {
+        this.containerWidth.set(Math.max(500, measured));
+        if (this.traces().length > 0) {
+          this.processTraces();
+        }
+      }
+    }
+  }
 
   selectedTraces = computed(() => {
     const ids = this.selectedTraceIds();
@@ -208,7 +236,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   svgWidth = computed(() => {
     const count = this.selectedTraceIds().size;
     const baseWidth = count * 140 + (count > 1 ? (count - 1) * 20 : 0);
-    const axisWidth = this.yAxisMode() === "time" || this.yAxisMode() === "tokens" ? 60 : 0;
+    const axisWidth = 60;
     return Math.max(130, baseWidth + axisWidth);
   });
 
@@ -308,13 +336,48 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     console.log(`[Agent Trace] Cleared ${count} cached search results.`);
   };
 
+  @HostListener('window:resize')
+  onWindowResize() {
+    if (this._visScrollAreaElement) {
+      const width = Math.floor(this._visScrollAreaElement.clientWidth - 32);
+      if (width > 0 && Math.abs(width - this.containerWidth()) > 2) {
+        this.containerWidth.set(Math.max(500, width));
+        if (this.traces().length > 0) {
+          this.processTraces();
+        }
+      }
+    }
+  }
+
   ngOnInit() {
     (window as any).clearCache = this.clearCacheFn;
     (window as any).clearcache = this.clearCacheFn;
+
+    if (typeof ResizeObserver !== 'undefined') {
+      this.resizeObserver = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const width = Math.floor(entry.contentRect.width - 32);
+          if (width > 0 && Math.abs(width - this.containerWidth()) > 2) {
+            this.containerWidth.set(Math.max(500, width));
+            if (this.traces().length > 0) {
+              this.processTraces();
+            }
+          }
+        }
+      });
+      if (this._visScrollAreaElement) {
+        this.resizeObserver.observe(this._visScrollAreaElement);
+      }
+    }
+
     this.loadDatasets();
   }
 
   ngOnDestroy() {
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = undefined;
+    }
     if ((window as any).clearCache === this.clearCacheFn) {
       delete (window as any).clearCache;
       delete (window as any).clearcache;
@@ -357,7 +420,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     if (event.dataTransfer) {
       event.dataTransfer.dropEffect = 'move';
     }
-    const dropIdx = calculateDropIndex(event, this.selectedTraceIds().size, this.layoutMode(), this.yAxisMode());
+    const dropIdx = calculateDropIndex(event, this.selectedTraceIds().size, this.layoutMode());
     this.dropIndex.set(dropIdx);
   }
 
@@ -403,11 +466,11 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   }
 
   getColDropIndicatorLeft(): number {
-    return getColDropIndicatorLeft(this.dropIndex(), this.yAxisMode());
+    return getColDropIndicatorLeft(this.dropIndex());
   }
 
   getRowDropIndicatorTop(): number {
-    return getRowDropIndicatorTop(this.dropIndex(), this.yAxisMode());
+    return getRowDropIndicatorTop(this.dropIndex());
   }
 
   /** Handles changes in the selected traces. */
@@ -495,8 +558,8 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     return getNodeVisualConfig(node);
   }
 
-  /** Sets the Y-axis mode (default, time, or tokens). */
-  setYAxisMode(mode: "default" | "time" | "tokens") {
+  /** Sets the Y-axis mode (time or tokens). */
+  setYAxisMode(mode: "time" | "tokens") {
     this.yAxisMode.set(mode);
     this.processTraces();
   }
@@ -824,6 +887,8 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
       layoutMode: this.layoutMode(),
       hideGaps: this.hideGaps(),
       selectedTokenTypes: this.selectedTokenTypes(),
+      containerWidth: this.containerWidth(),
+      stretch: this.stretch(),
     });
 
     console.log('Nodes about to render:', layout.nodes);
@@ -849,12 +914,12 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     this.selectedNode.set(null);
   }
 
-  /** Set of trace IDs whose file gantt sub-track is collapsed. */
-  readonly collapsedFileTraceIds = signal<Set<string>>(new Set<string>());
+  /** Set of trace IDs whose file gantt sub-track is expanded. */
+  readonly expandedFileTraceIds = signal<Set<string>>(new Set<string>());
 
   /** Returns whether files for a specific trace ID are currently collapsed. */
   isFilesCollapsed(traceId: string): boolean {
-    return this.collapsedFileTraceIds().has(traceId);
+    return !this.expandedFileTraceIds().has(traceId);
   }
 
   /** Toggles collapse/expand of the files gantt sub-track for a trace. */
@@ -863,13 +928,13 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
       event.stopPropagation();
       event.preventDefault();
     }
-    const current = new Set(this.collapsedFileTraceIds());
+    const current = new Set(this.expandedFileTraceIds());
     if (current.has(traceId)) {
       current.delete(traceId);
     } else {
       current.add(traceId);
     }
-    this.collapsedFileTraceIds.set(current);
+    this.expandedFileTraceIds.set(current);
   }
 
   /** Selects a track (trace) without selecting a specific node. */

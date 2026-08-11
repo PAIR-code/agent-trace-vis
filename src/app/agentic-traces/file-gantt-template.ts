@@ -60,15 +60,6 @@ export const FILE_GANTT_TEMPLATE = `
          [attr.height]="fileRowHeight"
          style="display:block; overflow: visible;">
       <g>
-        <!-- Continuous dotted light gray track across the summary lifespan -->
-        <line
-          [attr.x1]="t.fileGanttData.summaryRow.startX"
-          [attr.x2]="t.fileGanttData.summaryRow.endX"
-          y1="14" y2="14"
-          stroke="#cbd5e1"
-          stroke-width="1.5"
-          stroke-dasharray="3,3" />
-
         <!-- All view event transparent dots on the summary line -->
         <circle
           *ngFor="let view of t.fileGanttData.summaryRow.views"

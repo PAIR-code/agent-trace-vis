@@ -31,6 +31,7 @@ export function applyRowLayout(params: {
   selectedTraceIds: Set<string>;
   layoutMode: string;
   maxContentHeight: number;
+  containerWidth?: number;
 }): {
   contentWidth: number;
   maxContentHeight: number;
@@ -43,6 +44,7 @@ export function applyRowLayout(params: {
     traces,
     selectedTraceIds,
     layoutMode,
+    containerWidth,
   } = params;
 
   let maxContentHeight = params.maxContentHeight;
@@ -95,9 +97,13 @@ export function applyRowLayout(params: {
 
     // Recompute dimensions after swap
     const visibleNodes = allNodes.filter(n => !n.hidden);
+    const targetAvail = containerWidth && containerWidth > 0 ? containerWidth : 500;
     if (visibleNodes.length > 0) {
-      contentWidth = Math.max(...visibleNodes.map(n => n.x + n.width)) + 100;
+      const calculatedWidth = Math.max(...visibleNodes.map(n => n.x + n.width)) + 140;
+      contentWidth = Math.max(calculatedWidth, targetAvail);
       maxContentHeight = Math.max(...visibleNodes.map(n => n.y + n.height));
+    } else {
+      contentWidth = targetAvail;
     }
   } else {
     // Column Mode contentWidth

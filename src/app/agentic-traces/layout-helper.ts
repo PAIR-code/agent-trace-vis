@@ -49,18 +49,24 @@ function getStepTokens(usage: any, selectedTypes?: Set<string>): number {
 }
 
 export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
-  const { traces, selectedTraceIds, yAxisMode, layoutMode, hideGaps, selectedTokenTypes } = params;
+  const { traces, selectedTraceIds, yAxisMode, layoutMode, hideGaps, selectedTokenTypes, containerWidth, stretch } = params;
 
   const allNodes: VisNode[] = [];
   const backboneLines: BackboneLine[] = [];
   const nodeW = 12;
-  const gap = yAxisMode === 'default' ? 2 : 12; // vertical gap between nodes
+  const gap = 12; // vertical gap between nodes
   let maxContentHeight = 1000;
 
   const idsArray = [...selectedTraceIds];
 
-  const timeAxis = computeTimeAxis(traces, selectedTraceIds, yAxisMode, hideGaps, selectedTokenTypes);
+  const timeAxis = computeTimeAxis(traces, selectedTraceIds, yAxisMode, hideGaps, selectedTokenTypes, layoutMode, containerWidth, !!stretch);
   const { scale, baseScale, timeTicks, intervalLabel } = timeAxis;
+
+  let targetSpan = 800;
+  if (layoutMode === 'row') {
+    const avail = containerWidth && containerWidth > 0 ? containerWidth : 1000;
+    targetSpan = Math.max(400, avail - BASE_OFFSET - 140);
+  }
 
   idsArray.forEach((id, traceIndex) => {
     const trace = traces.find(t => t.id === id);
@@ -96,16 +102,34 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
     trace.agentColor = agentColor;
     trace.darkerAgentColor = darkerAgentColor;
 
-    // Find start time for this trace
-    const firstStepWithTime = steps.find((s: ReasoningTraceStep) => s.timestamp);
-    let startTime = firstStepWithTime?.timestamp ? new Date(firstStepWithTime.timestamp).getTime() : 0;
-    if (yAxisMode === 'tokens') {
+    // Find start time and duration/tokens for this specific trace
+    let startTime = 0;
+    let traceDuration = 0;
+    if (yAxisMode === 'time') {
+      const timestamps: number[] = [];
+      steps.forEach((s: ReasoningTraceStep) => {
+        if (s.timestamp) timestamps.push(new Date(s.timestamp).getTime());
+        if (s.completedAt) timestamps.push(new Date(s.completedAt).getTime());
+      });
+      if (timestamps.length > 0) {
+        startTime = Math.min(...timestamps);
+        traceDuration = Math.max(...timestamps) - startTime;
+      }
+    } else if (yAxisMode === 'tokens') {
       startTime = 0;
+      let runningSum = 0;
+      steps.forEach((s: ReasoningTraceStep) => {
+        runningSum += getStepTokens(s.token_usage, selectedTokenTypes);
+      });
+      traceDuration = runningSum;
+    }
+
+    let traceScale = scale;
+    if (stretch) {
+      traceScale = traceDuration > 0 ? targetSpan / traceDuration : scale;
     }
 
     let cumulativeTokens = 0;
-
-    const traceScale = scale;
     const traceNodes: VisNode[] = [];
     let traceMaxY = 20;
     let maxUserY = 0;
@@ -148,7 +172,7 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
       }
 
       let stepNodeHeight = nodeW;
-      if ((yAxisMode === 'time' || yAxisMode === 'tokens') && stepDuration > 0) {
+      if (stepDuration > 0) {
         stepNodeHeight = Math.max(12, (stepDuration * traceScale) / numNodes);
       }
 
@@ -214,7 +238,7 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
     const { waitingRects: compressedRects, gapsToReduce, traceMaxY: newTraceMaxY } = compressGaps({
       traceNodes,
       yAxisMode,
-      scale,
+      scale: traceScale,
       baseScale,
       hideGaps,
       traceMaxY,
@@ -281,7 +305,8 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
     traces,
     selectedTraceIds,
     layoutMode,
-    maxContentHeight
+    maxContentHeight,
+    containerWidth,
   });
   contentWidth = layoutRes.contentWidth;
   maxContentHeight = layoutRes.maxContentHeight;

@@ -49,9 +49,12 @@ function getStepTokens(usage: any, selectedTypes?: Set<string>): number {
 export function computeTimeAxis(
   traces: any[],
   selectedTraceIds: Set<string>,
-  yAxisMode: string,
+  yAxisMode: 'time' | 'tokens',
   hideGaps: boolean,
-  selectedTokenTypes?: Set<string>
+  selectedTokenTypes?: Set<string>,
+  layoutMode: string = 'column',
+  containerWidth?: number,
+  stretch: boolean = false
 ): TimeAxisConfig {
   const idsArray = [...selectedTraceIds];
 
@@ -85,64 +88,74 @@ export function computeTimeAxis(
     });
   }
 
-  const baseScale = 800 / maxDuration;
+  let targetSpan = 800;
+  if (layoutMode === 'row') {
+    const avail = containerWidth && containerWidth > 0 ? containerWidth : 1000;
+    // Leave room for BASE_OFFSET on left (24px) and channel labels / end buffer on right (140px)
+    targetSpan = Math.max(400, avail - BASE_OFFSET - 140);
+  }
+
+  const baseScale = targetSpan / maxDuration;
   const scale = baseScale;
   const durationForInterval = maxDuration;
 
   const timeTicks: { label: string, y: number, x?: number }[] = [];
   let intervalLabel = '';
-  if (yAxisMode === 'time') {
-    const niceIntervals = [1000, 5000, 10000, 30000, 60000, 120000, 300000, 600000, 1800000, 3600000];
-    const roughInterval = durationForInterval / 6;
-    let interval = niceIntervals[0];
-    for (let i = niceIntervals.length - 1; i >= 0; i--) {
-      if (roughInterval >= niceIntervals[i]) {
-        interval = niceIntervals[i];
-        break;
+
+  if (!stretch) {
+    if (yAxisMode === 'time') {
+      const niceIntervals = [1000, 5000, 10000, 30000, 60000, 120000, 300000, 600000, 1800000, 3600000];
+      const roughInterval = durationForInterval / 6;
+      let interval = niceIntervals[0];
+      for (let i = niceIntervals.length - 1; i >= 0; i--) {
+        if (roughInterval >= niceIntervals[i]) {
+          interval = niceIntervals[i];
+          break;
+        }
       }
-    }
-    
-    const seconds = Math.floor(interval / 1000);
-    const minutes = Math.floor(seconds / 60);
-    intervalLabel = minutes > 0 ? `${minutes}m` : `${seconds}s`;
+      
+      const seconds = Math.floor(interval / 1000);
+      const minutes = Math.floor(seconds / 60);
+      intervalLabel = minutes > 0 ? `${minutes}m` : `${seconds}s`;
 
-    for (let duration = 0; duration <= durationForInterval; duration += interval) {
-      const y = BASE_OFFSET + duration * scale;
-      const label = hideGaps ? '' : formatElapsedTime(duration);
-      timeTicks.push({ label, y });
-    }
-  } else if (yAxisMode === 'tokens') {
-    const niceIntervals = [100, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000, 250000, 500000, 1000000];
-    const roughInterval = durationForInterval / 6;
-    let interval = niceIntervals[0];
-    for (let i = niceIntervals.length - 1; i >= 0; i--) {
-      if (roughInterval >= niceIntervals[i]) {
-        interval = niceIntervals[i];
-        break;
+      for (let duration = 0; duration <= durationForInterval; duration += interval) {
+        const y = BASE_OFFSET + duration * scale;
+        const label = hideGaps ? '' : formatElapsedTime(duration);
+        timeTicks.push({ label, y });
       }
-    }
+    } else if (yAxisMode === 'tokens') {
+      const niceIntervals = [100, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000, 250000, 500000, 1000000];
+      const roughInterval = durationForInterval / 6;
+      let interval = niceIntervals[0];
+      for (let i = niceIntervals.length - 1; i >= 0; i--) {
+        if (roughInterval >= niceIntervals[i]) {
+          interval = niceIntervals[i];
+          break;
+        }
+      }
 
-    if (interval >= 1000000) {
-      intervalLabel = `${(interval / 1000000).toFixed(1).replace('.0', '')}M`;
-    } else if (interval >= 1000) {
-      intervalLabel = `${(interval / 1000).toFixed(1).replace('.0', '')}k`;
-    } else {
-      intervalLabel = `${interval}`;
-    }
-
-    for (let tokens = 0; tokens <= durationForInterval; tokens += interval) {
-      const y = BASE_OFFSET + tokens * scale;
-      let label = '';
-      if (tokens === 0) {
-        label = '0';
-      } else if (tokens >= 1000000) {
-        label = `+${(tokens / 1000000).toFixed(1).replace('.0', '')}M`;
-      } else if (tokens >= 1000) {
-        label = `+${(tokens / 1000).toFixed(1).replace('.0', '')}k`;
+      if (interval >= 1000000) {
+        intervalLabel = `${(interval / 1000000).toFixed(1).replace('.0', '')}M`;
+      } else if (interval >= 1000) {
+        intervalLabel = `${(interval / 1000).toFixed(1).replace('.0', '')}k`;
       } else {
-        label = `+${tokens}`;
+        intervalLabel = `${interval}`;
       }
-      timeTicks.push({ label, y });
+
+      for (let tokens = 0; tokens <= durationForInterval; tokens += interval) {
+        const y = BASE_OFFSET + tokens * scale;
+        let label = '';
+        if (tokens === 0) {
+          label = '0';
+        } else if (tokens >= 1000000) {
+          label = `+${(tokens / 1000000).toFixed(1).replace('.0', '')}M`;
+        } else if (tokens >= 1000) {
+          label = `+${(tokens / 1000).toFixed(1).replace('.0', '')}k`;
+        } else {
+          label = `+${tokens}`;
+        }
+        timeTicks.push({ label, y });
+      }
     }
   }
 

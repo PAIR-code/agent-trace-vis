@@ -39,7 +39,7 @@ import { sanitizeId, calcHeight, truncate } from './layout-utils';
 
 export interface NodeBuildContext {
   cols: { user: { center: number }; agent: { center: number }; tools: { center: number } };
-  yAxisMode: 'default' | 'time' | 'tokens';
+  yAxisMode: 'time' | 'tokens';
   traceScale: number;
   startTime: number;
   stepAgentColor: string;
@@ -71,8 +71,8 @@ export function buildThinkingNode(
   nodeGap: number,
   an: ReasoningTraceNode
 ): NodeBuildResult {
-  const { yAxisMode, traceScale, startTime, stepAgentColor, cols, numNodes, stepDuration, currentTs, stepNodeHeight } = ctx;
-  const segmentHeight = (yAxisMode === 'time' || yAxisMode === 'tokens') ? stepNodeHeight : calcHeight(text);
+  const { traceScale, startTime, stepAgentColor, cols, numNodes, stepDuration, currentTs, stepNodeHeight } = ctx;
+  const segmentHeight = stepNodeHeight;
   const words = text.split(/\s+/).filter(w => w.length > 0).length;
   let units = 1;
   if (words <= 50) units = 1;
@@ -83,12 +83,9 @@ export function buildThinkingNode(
   const width = 40;
   const height = segmentHeight;
 
-  let y = currentY;
-  if (yAxisMode === 'time' || yAxisMode === 'tokens') {
-    const t_end = !isNaN(currentTs) ? currentTs + ((nodeIndex + 1) / numNodes) * stepDuration : currentTs;
-    const y_end = !isNaN(t_end) ? BASE_OFFSET + (t_end - startTime) * traceScale : currentY;
-    y = y_end - height;
-  }
+  const t_end = !isNaN(currentTs) ? currentTs + ((nodeIndex + 1) / numNodes) * stepDuration : currentTs;
+  const y_end = !isNaN(t_end) ? BASE_OFFSET + (t_end - startTime) * traceScale : currentY;
+  const y = y_end - height;
 
   const x = cols.agent.center;
 
@@ -113,7 +110,7 @@ export function buildThinkingNode(
     stepType: an.stepType
   };
 
-  const nextY = currentY + ((yAxisMode !== 'time' && yAxisMode !== 'tokens') ? segmentHeight : height) + nodeGap;
+  const nextY = currentY + height + nodeGap;
   return { node, nextY, nodeBottom: y + height, column: 'agent' };
 }
 
@@ -127,17 +124,14 @@ export function buildResponseNode(
   nodeGap: number,
   an: ReasoningTraceNode
 ): NodeBuildResult {
-  const { yAxisMode, traceScale, startTime, stepDarkerAgentColor, stepAgentColor, cols, nodeW, numNodes, stepDuration, currentTs, stepNodeHeight } = ctx;
-  const segmentHeight = (yAxisMode === 'time' || yAxisMode === 'tokens') ? nodeW : calcHeight(text);
+  const { traceScale, startTime, stepDarkerAgentColor, stepAgentColor, cols, nodeW, numNodes, stepDuration, currentTs } = ctx;
+  const segmentHeight = nodeW;
   const width = nodeW;
   const height = segmentHeight;
 
-  let y = currentY;
-  if (yAxisMode === 'time' || yAxisMode === 'tokens') {
-    const t_end = !isNaN(currentTs) ? currentTs + ((nodeIndex + 1) / numNodes) * stepDuration : currentTs;
-    const y_end = !isNaN(t_end) ? BASE_OFFSET + (t_end - startTime) * traceScale : currentY;
-    y = y_end - height;
-  }
+  const t_end = !isNaN(currentTs) ? currentTs + ((nodeIndex + 1) / numNodes) * stepDuration : currentTs;
+  const y_end = !isNaN(t_end) ? BASE_OFFSET + (t_end - startTime) * traceScale : currentY;
+  const y = y_end - height;
 
   const x = cols[column].center - width / 2 + 12;
   const targetY = y + height;
@@ -186,19 +180,16 @@ export function buildDefaultNode(
   nodeGap: number,
   an: ReasoningTraceNode
 ): NodeBuildResult {
-  const { yAxisMode, traceScale, startTime, stepAgentColor, cols, nodeW, numNodes, stepDuration, currentTs, stepNodeHeight } = ctx;
-  const segmentHeight = (yAxisMode === 'time' || yAxisMode === 'tokens')
-    ? ((type === TraceNodeType.USER_INPUT || type === TraceNodeType.SYSTEM || type === TraceNodeType.ERROR) ? nodeW : stepNodeHeight)
-    : calcHeight(text);
+  const { traceScale, startTime, stepAgentColor, cols, nodeW, numNodes, stepDuration, currentTs, stepNodeHeight } = ctx;
+  const segmentHeight = (type === TraceNodeType.USER_INPUT || type === TraceNodeType.SYSTEM || type === TraceNodeType.ERROR)
+    ? nodeW
+    : stepNodeHeight;
   const width = nodeW;
   const height = (type === TraceNodeType.SYSTEM || type === TraceNodeType.TOOL_DATA) ? width : segmentHeight;
 
-  let y = currentY;
-  if (yAxisMode === 'time' || yAxisMode === 'tokens') {
-    const t_end = !isNaN(currentTs) ? currentTs + ((nodeIndex + 1) / numNodes) * stepDuration : currentTs;
-    const y_end = !isNaN(t_end) ? BASE_OFFSET + (t_end - startTime) * traceScale : currentY;
-    y = y_end - height;
-  }
+  const t_end = !isNaN(currentTs) ? currentTs + ((nodeIndex + 1) / numNodes) * stepDuration : currentTs;
+  const y_end = !isNaN(t_end) ? BASE_OFFSET + (t_end - startTime) * traceScale : currentY;
+  const y = y_end - height;
 
   let x = cols[column].center - width / 2;
 
@@ -247,42 +238,29 @@ export function buildDefaultNode(
     const isFailed = !!an.data?.observation?.error;
     const stroke = isFailed ? COLORS.ERROR : lightenColor(stepAgentColor, 0.3);
 
-    if (yAxisMode === 'time' || yAxisMode === 'tokens') {
-      const callPath = `M ${tx} ${y} C ${nx} ${y}, ${nx} ${y + (ny - y) * 0.5}, ${nx} ${ny}`;
-      const returnPath = `M ${nx} ${ny} L ${tx} ${ny}`;
-      const normalStroke = lightenColor(stepAgentColor, 0.3);
-      const returnStroke = isFailed ? COLORS.ERROR : normalStroke;
-      const returnOpacity = isFailed ? 0.7 : 0.35;
+    const callPath = `M ${tx} ${y} C ${nx} ${y}, ${nx} ${y + (ny - y) * 0.5}, ${nx} ${ny}`;
+    const returnPath = `M ${nx} ${ny} L ${tx} ${ny}`;
+    const normalStroke = lightenColor(stepAgentColor, 0.3);
+    const returnStroke = isFailed ? COLORS.ERROR : normalStroke;
+    const returnOpacity = isFailed ? 0.7 : 0.35;
 
-      connectionLine = {
-        id: `${nid}_tool_call_path`,
-        path: callPath,
-        stroke: normalStroke,
-        fill: 'none',
-        strokeWidth: 1.5,
-        opacity: 0.35,
-      };
+    connectionLine = {
+      id: `${nid}_tool_call_path`,
+      path: callPath,
+      stroke: normalStroke,
+      fill: 'none',
+      strokeWidth: 1.5,
+      opacity: 0.35,
+    };
 
-      returnConnectionLine = {
-        id: `${nid}_tool_return_path`,
-        path: returnPath,
-        stroke: returnStroke,
-        fill: 'none',
-        strokeWidth: 1.5,
-        opacity: returnOpacity,
-      };
-    } else {
-      const midX = (nx + tx) / 2;
-      const path = `M ${nx} ${ny} C ${midX} ${ny}, ${midX} ${ny}, ${tx} ${ny}`;
-      connectionLine = {
-        id: `${nid}_from_tool_to_agent`,
-        path,
-        stroke,
-        fill: 'none',
-        strokeWidth: 1.5,
-        opacity: isFailed ? 0.7 : 0.35,
-      };
-    }
+    returnConnectionLine = {
+      id: `${nid}_tool_return_path`,
+      path: returnPath,
+      stroke: returnStroke,
+      fill: 'none',
+      strokeWidth: 1.5,
+      opacity: returnOpacity,
+    };
   }
 
   const isFile = isFileEventNode(an);
@@ -340,12 +318,9 @@ export function buildRateLimitNode(
   xOffset: number,
   gap: number,
 ): RateLimitResult {
-  const { yAxisMode, traceScale, startTime, currentTs, completedTs } = ctx;
-  let y = currentY;
-  if (yAxisMode === 'time' || yAxisMode === 'tokens') {
-    const t = !isNaN(completedTs) ? completedTs : currentTs;
-    y = !isNaN(t) ? BASE_OFFSET + (t - startTime) * traceScale : currentY;
-  }
+  const { traceScale, startTime, currentTs, completedTs } = ctx;
+  const t = !isNaN(completedTs) ? completedTs : currentTs;
+  const y = !isNaN(t) ? BASE_OFFSET + (t - startTime) * traceScale : currentY;
   const lineY = y;
   const path = `M ${xOffset} ${lineY} L ${xOffset + 140} ${lineY}`;
 
@@ -375,10 +350,7 @@ export function buildRateLimitNode(
     stepType: an.stepType
   };
 
-  let nextY = currentY;
-  if (yAxisMode !== 'time' && yAxisMode !== 'tokens') {
-    nextY += 10 + gap;
-  }
+  const nextY = currentY;
 
   return { node: hiddenNode, nextY };
 }

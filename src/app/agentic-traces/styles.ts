@@ -139,7 +139,7 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       overflow-x: auto;
       position: relative;
       padding-left: 16px;
-      padding-right: 32px;
+      padding-right: 16px;
     }
 
     .no-results-banner {

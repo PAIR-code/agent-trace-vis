@@ -45,7 +45,6 @@ export const AGENTIC_TRACES_TEMPLATE = `
       <div class="selector-group">
         <label class="selector-label">Y Axis</label>
         <div class="timeline-toggle">
-          <button class="timeline-btn" [class.active]="yAxisMode() === 'default'" (click)="setYAxisMode('default')">Default</button>
           <button class="timeline-btn" [class.active]="yAxisMode() === 'time'" (click)="setYAxisMode('time')">Time</button>
           <button class="timeline-btn" [class.active]="yAxisMode() === 'tokens'" (click)="setYAxisMode('tokens')">Tokens</button>
         </div>
@@ -56,6 +55,14 @@ export const AGENTIC_TRACES_TEMPLATE = `
         <label class="selector-label" style="display: flex; align-items: center; gap: 4px; color: rgba(255,255,255,0.7); font-size: 0.7rem;">
           <input type="checkbox" [ngModel]="hideGaps()" (ngModelChange)="hideGaps.set($event); processTraces()" style="margin: 0;">
           Hide Gaps
+        </label>
+      </div>
+
+      <!-- Stretch Checkbox -->
+      <div class="selector-group">
+        <label class="selector-label" style="display: flex; align-items: center; gap: 4px; color: rgba(255,255,255,0.7); font-size: 0.7rem;">
+          <input type="checkbox" [ngModel]="stretch()" (ngModelChange)="stretch.set($event); processTraces()" style="margin: 0;">
+          Fill space
         </label>
       </div>
 
@@ -122,7 +129,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
           </div>
 
           <!-- Scrollable area for headers and SVG -->
-          <div class="vis-scroll-area" (dragover)="onContainerDragOver($event)" (drop)="onTrackDrop($event)">
+          <div class="vis-scroll-area" #visScrollArea (dragover)="onContainerDragOver($event)" (drop)="onTrackDrop($event)">
           <!-- Column mode headers (at top) -->
           <div class="col-headers" *ngIf="layoutMode() === 'column'" [style.width.px]="contentWidth()" [style.min-width.px]="contentWidth()">
             <ng-container *ngFor="let t of selectedTraces(); let i = index">
@@ -132,7 +139,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
                    (dragover)="onContainerDragOver($event)"
                    (drop)="onTrackDrop($event)"
                    (dragend)="onTrackDragEnd($event)"
-                   [style.left.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + i * 160"
+                   [style.left.px]="60 + i * 160"
                    title="Drag track to reorder">
                 <div class="trace-title" [title]="t.title">{{ t.title }}</div>
                 <div class="model-list">
@@ -141,9 +148,9 @@ export const AGENTIC_TRACES_TEMPLATE = `
                   </div>
                 </div>
               </div>
-              <div class="col-header" [style.left.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + i * 160 + 23.33">U</div>
-              <div class="col-header" [style.left.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + i * 160 + 70">A</div>
-              <div class="col-header" [style.left.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + i * 160 + 116.66">T</div>
+              <div class="col-header" [style.left.px]="60 + i * 160 + 23.33">U</div>
+              <div class="col-header" [style.left.px]="60 + i * 160 + 70">A</div>
+              <div class="col-header" [style.left.px]="60 + i * 160 + 116.66">T</div>
             </ng-container>
           </div>
 
@@ -156,7 +163,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
                [style.height.px]="contentHeight()"
                [style.margin-left.px]="0">
             <!-- Time Axis (column mode: left side) -->
-            <div class="time-axis" *ngIf="(yAxisMode() === 'time' || yAxisMode() === 'tokens') && layoutMode() === 'column'">
+            <div class="time-axis" *ngIf="!stretch() && layoutMode() === 'column'">
               <div class="time-tick" *ngFor="let tick of timeTicks()" [style.top.px]="tick.y">
                 <span class="time-tick-label">{{ tick.label }}</span>
                 <div class="time-tick-line"></div>
@@ -172,7 +179,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
             </div>
 
             <!-- Time Axis (row mode: top side) -->
-            <div class="time-axis-horizontal" *ngIf="(yAxisMode() === 'time' || yAxisMode() === 'tokens') && layoutMode() === 'row'">
+            <div class="time-axis-horizontal" *ngIf="!stretch() && layoutMode() === 'row'">
               <div class="time-tick-h" *ngFor="let tick of timeTicks()" [style.left.px]="tick.x">
                 <div class="time-tick-line-h"></div>
                 <span class="time-tick-label-h">{{ tick.label }}</span>
@@ -180,7 +187,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
             </div>
 
             <!-- Column Lanes (column mode) -->
-            <div class="col-lanes" *ngIf="layoutMode() === 'column'" [style.height.px]="contentHeight()" [style.padding-left.px]="(yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0">
+            <div class="col-lanes" *ngIf="layoutMode() === 'column'" [style.height.px]="contentHeight()" [style.padding-left.px]="60">
               <div class="drop-indicator-col"
                    *ngIf="draggedTrackIndex() !== null && dropIndex() !== null"
                    [style.left.px]="getColDropIndicatorLeft()">
@@ -324,7 +331,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
             </div>
 
             <!-- Row Lanes (row mode) -->
-            <div class="row-lanes" *ngIf="layoutMode() === 'row'" [style.width.px]="contentWidth()" [style.padding-top.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + 18">
+            <div class="row-lanes" *ngIf="layoutMode() === 'row'" [style.width.px]="contentWidth()" [style.padding-top.px]="60 + 18">
               <div class="drop-indicator-row"
                    *ngIf="draggedTrackIndex() !== null && dropIndex() !== null"
                    [style.top.px]="getRowDropIndicatorTop()">
@@ -478,9 +485,9 @@ export const AGENTIC_TRACES_TEMPLATE = `
             <!-- Row mode: channel labels on first trace -->
             <ng-container *ngIf="layoutMode() === 'row'">
               <ng-container *ngIf="selectedTraces().length > 0">
-                <span class="row-channel-label" [style.top.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + 18 + 23.33">user / agent conversation</span>
-                <span class="row-channel-label" [style.top.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + 18 + 46.66 + 23.33">agent internal processes</span>
-                <span class="row-channel-label" [style.top.px]="((yAxisMode() === 'time' || yAxisMode() === 'tokens') ? 60 : 0) + 18 + 93.33 + 23.33">tools</span>
+                <span class="row-channel-label" [style.top.px]="60 + 18 + 23.33">user / agent conversation</span>
+                <span class="row-channel-label" [style.top.px]="60 + 18 + 46.66 + 23.33">agent internal processes</span>
+                <span class="row-channel-label" [style.top.px]="60 + 18 + 93.33 + 23.33">tools</span>
               </ng-container>
             </ng-container>
           </div>

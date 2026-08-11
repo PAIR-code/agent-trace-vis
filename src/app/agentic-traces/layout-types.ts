@@ -236,8 +236,10 @@ export interface LayoutOutput {
 export interface LayoutParams {
   traces: any[];
   selectedTraceIds: Set<string>;
-  yAxisMode: 'default' | 'time' | 'tokens';
+  yAxisMode: 'time' | 'tokens';
   layoutMode: 'column' | 'row';
   hideGaps: boolean;
   selectedTokenTypes?: Set<string>;
+  containerWidth?: number;
+  stretch?: boolean;
 }

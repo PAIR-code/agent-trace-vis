@@ -21,8 +21,7 @@
 export function calculateDropIndex(
   event: DragEvent,
   count: number,
-  layoutMode: 'column' | 'row',
-  yAxisMode: 'default' | 'time' | 'tokens'
+  layoutMode: 'column' | 'row'
 ): number | null {
   if (count === 0) return null;
 
@@ -32,7 +31,7 @@ export function calculateDropIndex(
   const rect = visContent.getBoundingClientRect();
 
   if (layoutMode === 'column') {
-    const axisOffset = (yAxisMode === 'time' || yAxisMode === 'tokens') ? 60 : 0;
+    const axisOffset = 60;
     const mouseX = event.clientX - rect.left;
 
     let dropIdx = 0;
@@ -51,7 +50,7 @@ export function calculateDropIndex(
     if (dropIdx > count) dropIdx = count;
     return dropIdx;
   } else {
-    const axisOffset = ((yAxisMode === 'time' || yAxisMode === 'tokens') ? 60 : 0) + 18;
+    const axisOffset = 60 + 18;
     const mouseY = event.clientY - rect.top;
 
     let dropIdx = 0;
@@ -72,14 +71,12 @@ export function calculateDropIndex(
   }
 }
 
-export function getColDropIndicatorLeft(dropIndex: number | null, yAxisMode: string): number {
+export function getColDropIndicatorLeft(dropIndex: number | null): number {
   if (dropIndex === null) return -9999;
-  const axisOffset = (yAxisMode === 'time' || yAxisMode === 'tokens') ? 60 : 0;
-  return axisOffset + dropIndex * 160 - 10;
+  return 60 + dropIndex * 160 - 10;
 }
 
-export function getRowDropIndicatorTop(dropIndex: number | null, yAxisMode: string): number {
+export function getRowDropIndicatorTop(dropIndex: number | null): number {
   if (dropIndex === null) return -9999;
-  const axisOffset = ((yAxisMode === 'time' || yAxisMode === 'tokens') ? 60 : 0) + 18;
-  return axisOffset + dropIndex * 160 - 10;
+  return 60 + 18 + dropIndex * 160 - 10;
 }
