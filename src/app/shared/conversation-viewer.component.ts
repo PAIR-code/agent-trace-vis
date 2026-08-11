@@ -263,10 +263,125 @@ export interface ConversationMessage {
 
     .message-body {
       font-size: 0.85rem;
-      line-height: 1.45;
+      line-height: 1.5;
       color: rgba(255,255,255,0.85);
-      white-space: pre-wrap;
       word-break: break-word;
+      overflow-wrap: break-word;
+    }
+
+    .message-body p {
+      margin: 0 0 0.5em 0;
+    }
+
+    .message-body p:last-child {
+      margin-bottom: 0;
+    }
+
+    .message-body h1,
+    .message-body h2,
+    .message-body h3,
+    .message-body h4,
+    .message-body h5,
+    .message-body h6 {
+      color: #fff;
+      font-weight: 600;
+      margin: 0.8em 0 0.3em 0;
+      line-height: 1.3;
+    }
+
+    .message-body h1 { font-size: 1.15rem; }
+    .message-body h2 { font-size: 1.05rem; }
+    .message-body h3 { font-size: 0.95rem; }
+    .message-body h4 { font-size: 0.9rem; }
+
+    .message-body ul,
+    .message-body ol {
+      margin: 0.4em 0;
+      padding-left: 1.4em;
+    }
+
+    .message-body li {
+      margin: 0.15em 0;
+    }
+
+    .message-body strong {
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .message-body em {
+      font-style: italic;
+    }
+
+    .message-body code {
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      font-size: 0.82em;
+      background: rgba(255, 255, 255, 0.1);
+      color: #e2e8f0;
+      padding: 0.15em 0.35em;
+      border-radius: 4px;
+      word-break: break-all;
+    }
+
+    .message-body pre {
+      background: rgba(0, 0, 0, 0.4);
+      color: #e2e8f0;
+      border-radius: 6px;
+      padding: 10px 12px;
+      overflow-x: auto;
+      margin: 0.6em 0;
+      font-size: 0.8rem;
+      line-height: 1.45;
+    }
+
+    .message-body pre code {
+      background: none;
+      padding: 0;
+      border: none;
+      color: inherit;
+      font-size: inherit;
+      white-space: pre;
+      word-break: normal;
+    }
+
+    .message-body blockquote {
+      border-left: 3px solid #3b82f6;
+      margin: 0.5em 0;
+      padding: 0.3em 0.8em;
+      background: rgba(59, 130, 246, 0.1);
+      color: #93c5fd;
+      border-radius: 0 4px 4px 0;
+    }
+
+    .message-body table {
+      border-collapse: collapse;
+      margin: 0.6em 0;
+      width: 100%;
+      font-size: 0.8rem;
+    }
+
+    .message-body th,
+    .message-body td {
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 5px 8px;
+      text-align: left;
+    }
+
+    .message-body th {
+      background: rgba(255, 255, 255, 0.08);
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .message-body a {
+      color: #60a5fa;
+      text-decoration: underline;
+    }
+
+    .message-body hr {
+      border: none;
+      border-top: 1px solid rgba(255, 255, 255, 0.15);
+      margin: 0.8em 0;
     }
 
     .message-actions {

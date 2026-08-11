@@ -151,10 +151,16 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   backboneLines = signal<BackboneLine[]>([]);
   contentHeight = signal<number>(1000);
   contentWidth = signal<number>(500);
+  sidebarWidth = signal<number>(420);
   containerWidth = signal<number>(typeof window !== 'undefined' ? Math.max(500, window.innerWidth - 450 - 50) : 1000);
 
   private resizeObserver?: ResizeObserver;
   private _visScrollAreaElement?: HTMLElement;
+  private isResizingSidebar = false;
+  private resizeStartX = 0;
+  private resizeStartWidth = 0;
+  private mouseMoveListener?: (e: MouseEvent) => void;
+  private mouseUpListener?: (e: MouseEvent) => void;
 
   @ViewChild('visScrollArea', { static: false })
   set visScrollAreaRef(ref: ElementRef<HTMLElement> | undefined) {
@@ -373,7 +379,55 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     this.loadDatasets();
   }
 
+  onSidebarResizeStart(event: MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    this.isResizingSidebar = true;
+    this.resizeStartX = event.clientX;
+    this.resizeStartWidth = this.sidebarWidth();
+
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+
+    this.mouseMoveListener = (e: MouseEvent) => {
+      if (!this.isResizingSidebar) return;
+      const deltaX = e.clientX - this.resizeStartX;
+      const minWidth = 260;
+      const maxWidth = Math.max(minWidth, Math.min(window.innerWidth - 300, 1200));
+      const newWidth = Math.max(minWidth, Math.min(maxWidth, this.resizeStartWidth - deltaX));
+      this.sidebarWidth.set(newWidth);
+    };
+
+    this.mouseUpListener = () => {
+      this.isResizingSidebar = false;
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      if (this.mouseMoveListener) {
+        window.removeEventListener('mousemove', this.mouseMoveListener);
+        this.mouseMoveListener = undefined;
+      }
+      if (this.mouseUpListener) {
+        window.removeEventListener('mouseup', this.mouseUpListener);
+        this.mouseUpListener = undefined;
+      }
+    };
+
+    window.addEventListener('mousemove', this.mouseMoveListener);
+    window.addEventListener('mouseup', this.mouseUpListener);
+  }
+
   ngOnDestroy() {
+    if (this.mouseMoveListener) {
+      window.removeEventListener('mousemove', this.mouseMoveListener);
+      this.mouseMoveListener = undefined;
+    }
+    if (this.mouseUpListener) {
+      window.removeEventListener('mouseup', this.mouseUpListener);
+      this.mouseUpListener = undefined;
+    }
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
       this.resizeObserver = undefined;

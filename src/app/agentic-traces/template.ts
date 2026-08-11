@@ -494,8 +494,15 @@ export const AGENTIC_TRACES_TEMPLATE = `
           </div>
         </div>
 
+        <!-- Resizer handle -->
+        <div class="sidebar-resizer"
+             (mousedown)="onSidebarResizeStart($event)"
+             title="Drag to resize sidebar">
+          <div class="resizer-handle-line"></div>
+        </div>
+
         <!-- Right: Conversation Panel -->
-        <div class="panel-wrapper">
+        <div class="panel-wrapper" [style.width.px]="sidebarWidth()" [style.flex]="'0 0 ' + sidebarWidth() + 'px'">
           <app-conversation-viewer
             [messages]="threadMessages()"
             [activeNodeId]="selectedNode()?.id"

@@ -589,14 +589,51 @@ export const AGENTIC_TRACES_STYLES: string[] = [
     }
 
 
+    .sidebar-resizer {
+      width: 8px;
+      margin-left: -4px;
+      margin-right: -4px;
+      cursor: col-resize;
+      z-index: 30;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      background: transparent;
+      transition: background 0.15s ease;
+      user-select: none;
+    }
+
+    .sidebar-resizer:hover,
+    .sidebar-resizer:active {
+      background: rgba(59, 130, 246, 0.08);
+    }
+
+    .sidebar-resizer .resizer-handle-line {
+      width: 3px;
+      height: 32px;
+      border-radius: 1.5px;
+      background: #cbd5e1;
+      transition: background 0.15s ease, height 0.15s ease;
+    }
+
+    .sidebar-resizer:hover .resizer-handle-line,
+    .sidebar-resizer:active .resizer-handle-line {
+      background: #3b82f6;
+      height: 48px;
+    }
+
     .panel-wrapper {
-      width: 400px !important;
-      flex: 0 0 400px !important;
       background: white;
       border-left: 1px solid #e5e7eb;
       position: relative;
       display: flex;
       flex-direction: column;
+      height: 100%;
+      min-width: 260px;
+      max-width: 85vw;
+      overflow: hidden;
     }
 
     .panel-wrapper app-conversation-viewer {
@@ -652,11 +689,161 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       z-index: 10;
     }
 
-
-
     ::ng-deep .message-body {
       color: #334155 !important;
       font-size: 0.85rem !important;
+      line-height: 1.5 !important;
+      word-break: break-word !important;
+      overflow-wrap: break-word !important;
+      white-space: normal !important;
+    }
+
+    ::ng-deep .message-body p {
+      margin: 0 0 0.5em 0;
+    }
+
+    ::ng-deep .message-body p:last-child {
+      margin-bottom: 0;
+    }
+
+    ::ng-deep .message-body h1,
+    ::ng-deep .message-body h2,
+    ::ng-deep .message-body h3,
+    ::ng-deep .message-body h4,
+    ::ng-deep .message-body h5,
+    ::ng-deep .message-body h6 {
+      color: #0f172a !important;
+      font-weight: 600 !important;
+      margin: 0.8em 0 0.3em 0 !important;
+      line-height: 1.3 !important;
+    }
+
+    ::ng-deep .message-body h1 { font-size: 1.15rem !important; }
+    ::ng-deep .message-body h2 { font-size: 1.05rem !important; }
+    ::ng-deep .message-body h3 { font-size: 0.95rem !important; }
+    ::ng-deep .message-body h4 { font-size: 0.9rem !important; }
+
+    ::ng-deep .message-body ul,
+    ::ng-deep .message-body ol {
+      margin: 0.4em 0;
+      padding-left: 1.4em;
+    }
+
+    ::ng-deep .message-body li {
+      margin: 0.15em 0;
+    }
+
+    ::ng-deep .message-body li > ul,
+    ::ng-deep .message-body li > ol {
+      margin: 0.1em 0;
+    }
+
+    ::ng-deep .message-body strong {
+      font-weight: 600;
+      color: #0f172a;
+    }
+
+    ::ng-deep .message-body em {
+      font-style: italic;
+    }
+
+    ::ng-deep .message-body code {
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      font-size: 0.82em;
+      background: #f1f5f9;
+      color: #0f172a;
+      padding: 0.15em 0.35em;
+      border-radius: 4px;
+      border: 1px solid #e2e8f0;
+      word-break: break-all;
+    }
+
+    ::ng-deep .message-body pre {
+      background: #0f172a;
+      color: #f8fafc;
+      border-radius: 6px;
+      padding: 10px 12px;
+      overflow-x: auto;
+      margin: 0.6em 0;
+      font-size: 0.8rem;
+      line-height: 1.45;
+    }
+
+    ::ng-deep .message-body pre code {
+      background: none;
+      padding: 0;
+      border: none;
+      color: inherit;
+      font-size: inherit;
+      white-space: pre;
+      word-break: normal;
+    }
+
+    ::ng-deep .message-body blockquote {
+      border-left: 3px solid #3b82f6;
+      margin: 0.5em 0;
+      padding: 0.3em 0.8em;
+      background: #eff6ff;
+      color: #1e40af;
+      border-radius: 0 4px 4px 0;
+    }
+
+    ::ng-deep .message-body table {
+      border-collapse: collapse;
+      margin: 0.6em 0;
+      width: 100%;
+      font-size: 0.8rem;
+    }
+
+    ::ng-deep .message-body th,
+    ::ng-deep .message-body td {
+      border: 1px solid #e2e8f0;
+      padding: 5px 8px;
+      text-align: left;
+    }
+
+    ::ng-deep .message-body th {
+      background: #f8fafc;
+      font-weight: 600;
+      color: #0f172a;
+    }
+
+    ::ng-deep .message-body a {
+      color: #2563eb;
+      text-decoration: underline;
+    }
+
+    ::ng-deep .message-body hr {
+      border: none;
+      border-top: 1px solid #e2e8f0;
+      margin: 0.8em 0;
+    }
+
+    ::ng-deep .message-body .think-block {
+      background: #fefce8;
+      border: 1px solid #fde68a;
+      border-left: 3px solid #f59e0b;
+      border-radius: 0 6px 6px 0;
+      padding: 10px 14px;
+      margin: 0.6em 0;
+      font-style: italic;
+      color: #92400e;
+    }
+
+    ::ng-deep .message-body .think-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #b45309;
+      margin-bottom: 4px;
+    }
+
+    ::ng-deep .message-body .katex-display {
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 4px 0;
+      margin: 0.5em 0;
     }
 
     ::ng-deep .timestamp {
