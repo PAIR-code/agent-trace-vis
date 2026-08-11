@@ -102,6 +102,17 @@ export const AGENTIC_TRACES_TEMPLATE = `
     <div class="vis-page-container" *ngIf="!isLoading() && activeTrace(); else loading" (click)="onBackgroundClick($event)">
       <div class="main-layout">
         <div class="vis-container">
+          <!-- Top Overlay on vis area -->
+          <div class="vis-jump-overlay top-vis-overlay">
+            <button class="vis-jump-pill-btn" (click)="scrollToVisStart(); $event.stopPropagation()" title="Jump to beginning of trace">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="18 15 12 9 6 15"></polyline>
+                <line x1="6" y1="6" x2="18" y2="6"></line>
+              </svg>
+              <span>Start</span>
+            </button>
+          </div>
+
           <!-- No results banner -->
           <div class="no-results-banner" *ngIf="layersService.noResultsLayers().length > 0">
             No matches found for:
@@ -492,6 +503,17 @@ export const AGENTIC_TRACES_TEMPLATE = `
             </ng-container>
           </div>
           </div>
+
+          <!-- Bottom Overlay on vis area -->
+          <div class="vis-jump-overlay bottom-vis-overlay">
+            <button class="vis-jump-pill-btn" (click)="scrollToVisEnd(); $event.stopPropagation()" title="Jump to end of trace">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+                <line x1="6" y1="18" x2="18" y2="18"></line>
+              </svg>
+              <span>End</span>
+            </button>
+          </div>
         </div>
 
         <!-- Resizer handle -->
@@ -505,6 +527,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
         <div class="panel-wrapper" [style.width.px]="sidebarWidth()" [style.flex]="'0 0 ' + sidebarWidth() + 'px'">
           <app-conversation-viewer
             [messages]="threadMessages()"
+            [showJumpButtons]="true"
             [activeNodeId]="selectedNode()?.id"
             [hoveredNodeId]="hoveredNodeId()"
             [searchQuery]="layersService.anyLayerEnabled() ? ' ' : ''"
@@ -518,6 +541,8 @@ export const AGENTIC_TRACES_TEMPLATE = `
             [scrollBehavior]="'smooth'"
             (messageClick)="selectNodeById($event)"
             (messageHover)="hoveredNodeId.set($event)"
+            (jumpToStart)="onJumpToStart()"
+            (jumpToEnd)="onJumpToEnd()"
             (overlayClick)="null">
           </app-conversation-viewer>
         </div>

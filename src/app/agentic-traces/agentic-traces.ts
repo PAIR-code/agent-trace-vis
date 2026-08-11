@@ -566,6 +566,48 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** Jumps to the beginning of the trace and selects the first node. */
+  onJumpToStart() {
+    const msgs = this.threadMessages();
+    if (msgs.length > 0) {
+      this.selectNodeById(msgs[0].id);
+    }
+  }
+
+  /** Jumps to the end of the trace and selects the last node. */
+  onJumpToEnd() {
+    const msgs = this.threadMessages();
+    if (msgs.length > 0) {
+      const lastMsg = msgs[msgs.length - 1];
+      const lastId = (lastMsg.children && lastMsg.children.length > 0)
+        ? lastMsg.children[lastMsg.children.length - 1].id
+        : lastMsg.id;
+      this.selectNodeById(lastId);
+    }
+  }
+
+  /** Jumps the visualization scroll area to the top and selects the first node. */
+  scrollToVisStart() {
+    if (this._visScrollAreaElement) {
+      this._visScrollAreaElement.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      });
+    }
+    this.onJumpToStart();
+  }
+
+  /** Jumps the visualization scroll area to the bottom and selects the last node. */
+  scrollToVisEnd() {
+    if (this._visScrollAreaElement) {
+      this._visScrollAreaElement.scrollTo({
+        top: this._visScrollAreaElement.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+    this.onJumpToEnd();
+  }
+
   /** Loads trace data for selected traces if not already loaded. */
   private updateActiveTraces() {
     const ids = this.selectedTraceIds();

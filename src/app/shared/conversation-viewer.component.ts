@@ -53,11 +53,24 @@ export interface ConversationMessage {
         </div>
       </div>
 
-      <!-- Scrollable Thread Area -->
-      <div class="thread-scroll" #threadScrollContainer (scroll)="onScroll($event)">
-        <!-- Search Overlay -->
-        <div class="search-overlay" *ngIf="searchQuery" (click)="overlayClick.emit()"></div>
-        <div class="message-list">
+      <!-- Scrollable Area with Top/Bottom Hover Overlays -->
+      <div class="thread-body-container">
+        <!-- Top Hover Overlay -->
+        <div class="trace-jump-overlay top-overlay" *ngIf="showJumpButtons">
+          <button class="trace-jump-pill-btn" (click)="scrollToTop(); $event.stopPropagation()" title="Jump to beginning of trace">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="18 15 12 9 6 15"></polyline>
+              <line x1="6" y1="6" x2="18" y2="6"></line>
+            </svg>
+            <span>Start</span>
+          </button>
+        </div>
+
+        <!-- Scrollable Thread Area -->
+        <div class="thread-scroll" #threadScrollContainer (scroll)="onScroll($event)">
+          <!-- Search Overlay -->
+          <div class="search-overlay" *ngIf="searchQuery" (click)="overlayClick.emit()"></div>
+          <div class="message-list">
           <ng-container *ngFor="let msg of messages">
             <!-- Message Card -->
             <div [id]="'msg-' + msg.id"
@@ -136,7 +149,19 @@ export interface ConversationMessage {
           </ng-container>
         </div>
       </div>
+
+      <!-- Bottom Hover Overlay -->
+      <div class="trace-jump-overlay bottom-overlay" *ngIf="showJumpButtons">
+        <button class="trace-jump-pill-btn" (click)="scrollToBottom(); $event.stopPropagation()" title="Jump to end of trace">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+            <line x1="6" y1="18" x2="18" y2="18"></line>
+          </svg>
+          <span>End</span>
+        </button>
+      </div>
     </div>
+  </div>
 
     <!-- Full Screen JSON Modal -->
     <div class="fullscreen-json-overlay" *ngIf="fullScreenJsonData" (click)="closeFullScreenJson()">
@@ -167,6 +192,88 @@ export interface ConversationMessage {
       justify-content: space-between;
       align-items: center;
       min-width: 0;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .thread-body-container {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .trace-jump-overlay {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 44px;
+      display: flex;
+      justify-content: center;
+      z-index: 50;
+      pointer-events: auto;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      opacity: 0;
+    }
+
+    .top-overlay {
+      top: 0;
+      align-items: flex-start;
+      padding-top: 6px;
+      transform: translateY(-6px);
+      background: linear-gradient(to bottom, rgba(30, 30, 30, 0.85) 0%, rgba(30, 30, 30, 0.4) 50%, transparent 100%);
+    }
+
+    .bottom-overlay {
+      bottom: 0;
+      align-items: flex-end;
+      padding-bottom: 8px;
+      transform: translateY(6px);
+      background: linear-gradient(to top, rgba(30, 30, 30, 0.85) 0%, rgba(30, 30, 30, 0.4) 50%, transparent 100%);
+    }
+
+    .top-overlay:hover,
+    .bottom-overlay:hover {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .trace-jump-pill-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 9px;
+      font-size: 0.7rem;
+      font-weight: 500;
+      color: rgba(255, 255, 255, 0.8);
+      background: rgba(35, 35, 35, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+      pointer-events: auto;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+      user-select: none;
+      line-height: 1.2;
+    }
+
+    .trace-jump-pill-btn:hover {
+      background: rgba(55, 55, 55, 0.95);
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.3);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    }
+
+    .trace-jump-pill-btn:active {
+      transform: scale(0.97);
     }
 
     .header-content {
@@ -550,6 +657,10 @@ export class ConversationViewerComponent implements OnChanges {
   @Input() betweenMessagesTemplate: any;
   @Input() scrollBehavior: 'auto' | 'smooth' | 'instant' = 'instant';
 
+  @Input() showJumpButtons: boolean = true;
+  @Output() jumpToStart = new EventEmitter<void>();
+  @Output() jumpToEnd = new EventEmitter<void>();
+
   @Output() messageClick = new EventEmitter<string>();
   @Output() panelScroll = new EventEmitter<Event>();
   @Output() overlayClick = new EventEmitter<void>();
@@ -602,6 +713,26 @@ export class ConversationViewerComponent implements OnChanges {
         });
       }
     }, 100);
+  }
+
+  scrollToTop() {
+    if (this.scrollContainer) {
+      this.scrollContainer.nativeElement.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      });
+    }
+    this.jumpToStart.emit();
+  }
+
+  scrollToBottom() {
+    if (this.scrollContainer) {
+      this.scrollContainer.nativeElement.scrollTo({
+        top: this.scrollContainer.nativeElement.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+    this.jumpToEnd.emit();
   }
 
   formatTime(timestamp?: string | number): string {

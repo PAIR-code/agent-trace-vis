@@ -131,6 +131,72 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       overflow: hidden;
     }
 
+    .vis-jump-overlay {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 44px;
+      display: flex;
+      justify-content: center;
+      z-index: 40;
+      pointer-events: auto;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      opacity: 0;
+    }
+
+    .top-vis-overlay {
+      top: 0;
+      align-items: flex-start;
+      padding-top: 6px;
+      transform: translateY(-6px);
+      background: linear-gradient(to bottom, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.4) 50%, transparent 100%);
+    }
+
+    .bottom-vis-overlay {
+      bottom: 0;
+      align-items: flex-end;
+      padding-bottom: 8px;
+      transform: translateY(6px);
+      background: linear-gradient(to top, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.4) 50%, transparent 100%);
+    }
+
+    .top-vis-overlay:hover,
+    .bottom-vis-overlay:hover {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .vis-jump-pill-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 9px;
+      font-size: 0.7rem;
+      font-weight: 500;
+      color: #475569;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+      pointer-events: auto;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+      user-select: none;
+      line-height: 1.2;
+    }
+
+    .vis-jump-pill-btn:hover {
+      background: #f8fafc;
+      color: #0f172a;
+      border-color: #cbd5e1;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+    }
+
+    .vis-jump-pill-btn:active {
+      transform: scale(0.97);
+    }
+
     .vis-scroll-area {
       flex: 1;
       display: flex;
@@ -657,17 +723,62 @@ export const AGENTIC_TRACES_STYLES: string[] = [
     ::ng-deep .panel-static-header {
       background: #ffffff !important;
       border-bottom: 1px solid #e2e8f0 !important;
-      padding: 16px 20px !important;
+      padding: 12px 16px !important;
+      display: flex !important;
+      justify-content: space-between !important;
+      align-items: center !important;
+      min-width: 0 !important;
+    }
+
+    ::ng-deep .header-content {
+      flex: 1 1 auto !important;
+      min-width: 0 !important;
+      overflow: hidden !important;
     }
 
     ::ng-deep .panel-static-header h3 {
       color: #0f172a !important;
       font-size: 1rem !important;
+      margin: 0 0 2px 0 !important;
+      white-space: nowrap !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
     }
 
     ::ng-deep .panel-static-header p {
       color: #64748b !important;
       font-size: 0.8rem !important;
+      margin: 0 !important;
+    }
+
+    ::ng-deep .top-overlay {
+      background: linear-gradient(to bottom, rgba(248, 250, 252, 0.9) 0%, rgba(248, 250, 252, 0.4) 50%, transparent 100%) !important;
+    }
+
+    ::ng-deep .bottom-overlay {
+      background: linear-gradient(to top, rgba(248, 250, 252, 0.9) 0%, rgba(248, 250, 252, 0.4) 50%, transparent 100%) !important;
+    }
+
+    ::ng-deep .trace-jump-pill-btn {
+      color: #475569 !important;
+      background: #ffffff !important;
+      border: 1px solid #e2e8f0 !important;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+      padding: 3px 9px !important;
+      font-size: 0.7rem !important;
+      font-weight: 500 !important;
+      border-radius: 12px !important;
+    }
+
+    ::ng-deep .trace-jump-pill-btn:hover {
+      background: #f8fafc !important;
+      color: #0f172a !important;
+      border-color: #cbd5e1 !important;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12) !important;
+    }
+
+    ::ng-deep .trace-jump-pill-btn:active {
+      transform: scale(0.97) !important;
     }
 
     ::ng-deep .message-card {
