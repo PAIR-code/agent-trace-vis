@@ -52,7 +52,6 @@ export function applyRowLayout(params: {
   if (layoutMode === 'row') {
     // Swap node coordinates: x↔y, width↔height
     allNodes.forEach(n => {
-      if (n.hidden) return;
       const ox = n.x, oy = n.y, ow = n.width, oh = n.height;
       n.x = oy;
       n.y = ox;

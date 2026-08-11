@@ -108,3 +108,30 @@ export function getNodeVisualConfig(node: any): NodeVisualConfig {
   // Default: circles for everything else (Group 6 and others)
   return { shape: 'circle', type: 'default' };
 }
+
+/** Checks whether a trace node represents a file operation (edit or view). */
+export function isFileEventNode(node: any): boolean {
+  if (!node) return false;
+  const text = node.text || '';
+  const textLower = text.toLowerCase();
+  const stepType = node.stepType || '';
+
+  const isFileEdit =
+    stepType === ReasoningStepType.REPLACE_FILE_CONTENT ||
+    stepType === ReasoningStepType.WRITE_TO_FILE ||
+    stepType === ReasoningStepType.MULTI_REPLACE_FILE_CONTENT ||
+    stepType === ReasoningStepType.NOTEBOOK_EDIT ||
+    stepType === ReasoningStepType.CODE_ACTION ||
+    textLower.includes('replace file content') ||
+    textLower.includes('write to file') ||
+    textLower.includes('multi replace file content') ||
+    textLower.includes('notebook edit');
+
+  const isView =
+    stepType === ReasoningStepType.VIEW_FILE ||
+    stepType === ReasoningStepType.VIEW_CONTENT_CHUNK ||
+    stepType === ReasoningStepType.VIEW_FILE_OUTLINE ||
+    textLower.startsWith('view:');
+
+  return isFileEdit || isView;
+}

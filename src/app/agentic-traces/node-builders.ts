@@ -28,7 +28,7 @@
  */
 
 import { TraceNodeType, TraceNodeColumn, ReasoningTraceNode, ReasoningTraceStep, BASE_OFFSET } from './layout-types';
-import { getNodeVisualConfig } from './node-rendering-helper';
+import { getNodeVisualConfig, isFileEventNode } from './node-rendering-helper';
 import { lightenColor, LINE_COLOR, COLORS } from './colors';
 import {
   ConnectionLine, ErrorNode, InteractiveNodeBase, ResponseNode,
@@ -285,6 +285,12 @@ export function buildDefaultNode(
     }
   }
 
+  const isFile = isFileEventNode(an);
+  if (isFile) {
+    connectionLine = undefined;
+    returnConnectionLine = undefined;
+  }
+
   const baseNode: InteractiveNodeBase = {
     id: nid,
     type,
@@ -298,6 +304,7 @@ export function buildDefaultNode(
     traceId: ctx.traceId,
     timestamp: an.timestamp,
     color: null,
+    hidden: isFile || undefined,
     isFailed: (type === TraceNodeType.TOOL_DATA && !!an.data?.observation?.error) || undefined,
     stepType: an.stepType
   };
@@ -465,7 +472,7 @@ export function rebuildConnectionLines(
   gapsToReduce: { originalY: number; originalHeight: number; shift: number }[]
 ): void {
   traceNodes.forEach(n => {
-    if (n.type === TraceNodeType.USER_INPUT || n.type === TraceNodeType.THINKING || !n.connectionLine) {
+    if (n.hidden || isFileEventNode(n) || n.type === TraceNodeType.USER_INPUT || n.type === TraceNodeType.THINKING || !n.connectionLine) {
       return;
     }
     const nx = n.x + nodeW / 2;

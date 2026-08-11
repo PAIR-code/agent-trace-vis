@@ -76,6 +76,7 @@ import {
   getColDropIndicatorLeft,
   getRowDropIndicatorTop,
 } from "./drag-drop-helper";
+import { buildFileGanttData, FILE_ROW_HEIGHT } from "./file-gantt";
 
 interface LegendEntry {
   label: string;
@@ -270,6 +271,8 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   });
 
   sanitizeId = sanitizeId;
+  /** Exposed for template use in file-gantt rendering. */
+  readonly fileRowHeight = FILE_ROW_HEIGHT;
 
   constructor(
     private http: HttpClient,
@@ -832,7 +835,41 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     this.timeTicks.set(layout.timeTicks);
     this.timeUnitLabel.set(layout.timeUnitLabel);
 
+    // Compute file gantt data for each trace (row layout only; harmless in column mode).
+    const cw = layout.contentWidth;
+    for (const id of idsArray) {
+      const trace = this.traces().find(t => t.id === id);
+      if (trace && trace.data) {
+        // Pass trace.nodes (VisNodes with post-row-layout x positions) so the
+        // gantt builder can look up each event's time-axis x coordinate.
+        trace.fileGanttData = buildFileGanttData(trace.data, trace.nodes ?? [], cw);
+      }
+    }
+
     this.selectedNode.set(null);
+  }
+
+  /** Set of trace IDs whose file gantt sub-track is collapsed. */
+  readonly collapsedFileTraceIds = signal<Set<string>>(new Set<string>());
+
+  /** Returns whether files for a specific trace ID are currently collapsed. */
+  isFilesCollapsed(traceId: string): boolean {
+    return this.collapsedFileTraceIds().has(traceId);
+  }
+
+  /** Toggles collapse/expand of the files gantt sub-track for a trace. */
+  toggleTraceFiles(traceId: string, event?: Event) {
+    if (event) {
+      event.stopPropagation();
+      event.preventDefault();
+    }
+    const current = new Set(this.collapsedFileTraceIds());
+    if (current.has(traceId)) {
+      current.delete(traceId);
+    } else {
+      current.add(traceId);
+    }
+    this.collapsedFileTraceIds.set(current);
   }
 
   /** Selects a track (trace) without selecting a specific node. */
@@ -845,6 +882,15 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     }
     this.selectedNode.set(null);
     this.manualActiveTraceId.set(traceId);
+  }
+
+  /** Selects a node from the file timeline and navigates to it in the conversation viewer. */
+  selectFileNode(node: any, event?: Event) {
+    if (event) {
+      event.stopPropagation();
+    }
+    if (!node) return;
+    this.selectNode(node);
   }
 
   /** Selects a node. */

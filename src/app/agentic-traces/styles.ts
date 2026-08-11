@@ -19,8 +19,10 @@
  */
 
 import { COLORS } from "./colors";
+import { FILE_GANTT_STYLES } from "./file-gantt-template";
 
 export const AGENTIC_TRACES_STYLES: string[] = [
+  FILE_GANTT_STYLES,
   `
     :host {
       display: block;
@@ -415,15 +417,15 @@ export const AGENTIC_TRACES_STYLES: string[] = [
     }
 
     .lane-user {
-      background: #e4e8ee;
-    }
-
-    .lane-tools {
-      background: #ffffff;
+      background: #e2e6ea;
     }
 
     .lane-agent {
-      background: #f0f2f5;
+      background: #ebf0f4;
+    }
+
+    .lane-tools {
+      background: #f4f7f9;
     }
 
 
@@ -912,8 +914,9 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       position: relative;
       display: flex;
       flex-direction: column;
-      height: 140px;
-      margin-bottom: 20px;
+      height: auto;
+      min-height: 140px;
+      margin-bottom: 28px;
       flex-shrink: 0;
       pointer-events: auto;
       cursor: grab;
@@ -922,12 +925,21 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       transition: opacity 0.15s, outline 0.15s, box-shadow 0.15s;
     }
 
-    .trace-background-row .track-lines-layer {
+    .row-main-track {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      height: 140px;
+      width: 100%;
+      flex-shrink: 0;
+    }
+
+    .row-main-track .track-lines-layer {
       width: 100%;
       height: 140px;
     }
 
-    .trace-background-row .track-nodes-layer {
+    .row-main-track .track-nodes-layer {
       width: 100%;
       height: 140px;
     }
