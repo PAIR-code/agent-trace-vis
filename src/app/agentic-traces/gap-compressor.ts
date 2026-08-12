@@ -41,15 +41,18 @@ export function compressGaps(params: {
   
   let currentMaxY = 5;
   sortedNodes.forEach(n => {
-    if (n.y > currentMaxY) {
-      const gapY = currentMaxY;
-      const gapHeight = n.y - currentMaxY;
+    // Thinking nodes provide step-level bounds to avoid false gaps.
+    const nodeTop = (n as any).timeBasedY ?? n.y;
+    const nodeBottom = (n as any).timeBasedEndY ?? n.y + n.height;
+
+    if (nodeTop > currentMaxY) {
+      const gapHeight = nodeTop - currentMaxY;
       const threshold = Math.max(20, 20 * (scale / baseScale));
       if (yAxisMode === 'time' && gapHeight > threshold) {
-        waitingRects.push({ y: gapY, height: gapHeight });
+        waitingRects.push({ y: currentMaxY, height: gapHeight });
       }
     }
-    currentMaxY = Math.max(currentMaxY, n.y + n.height);
+    currentMaxY = Math.max(currentMaxY, nodeBottom);
   });
   
   const gapsToReduce: { originalY: number, originalHeight: number, shift: number }[] = [];

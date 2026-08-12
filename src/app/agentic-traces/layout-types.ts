@@ -164,10 +164,9 @@ export interface ResponseNode extends InteractiveNodeBase {
 export interface ThinkingStepNode extends InteractiveNodeBase {
   type: TraceNodeType.THINKING;
   column: 'agent';
-  units: number; // thinking area units (1 to 4)
   isWaiting: boolean;
-  segmentHeight: number;
-  segmentY: number;
+  timeBasedY: number; // step start y position (for area block bounds)
+  timeBasedEndY: number; // step end y position (for area block bounds)
 }
 
 export interface ToolCallNode extends InteractiveNodeBase {

@@ -54,13 +54,6 @@ export function groupThreadMessages(activeTraceId: string, nodes: VisNode[]): Th
   ]);
 
   for (const node of filteredNodes) {
-    if (node.type === TraceNodeType.THINKING) {
-      const lastGroup = groups[groups.length - 1];
-      if (lastGroup && lastGroup.type === TraceNodeType.THINKING && lastGroup.data === node.data) {
-        lastGroup.text += '\n\n' + node.text;
-        continue;
-      }
-    }
 
     if (nestable.has(node.type)) {
       // Nest under the previous agent parent

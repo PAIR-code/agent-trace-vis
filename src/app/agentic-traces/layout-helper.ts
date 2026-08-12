@@ -273,7 +273,7 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
 
     // Generate area charts as ThinkingAreaNodes
     const sortedNodes = [...traceNodes].filter(n => !n.hidden).sort((a, b) => a.y - b.y);
-    const traceThinkingAreaNodes = buildThinkingAreaNodes(id, sortedNodes, cx);
+    const traceThinkingAreaNodes = buildThinkingAreaNodes(id, sortedNodes, cx, yAxisMode);
     const traceBackboneLines = buildBackboneLines(id, cx, waitingRects, traceMaxY);
 
     trace.nodes = traceNodes;

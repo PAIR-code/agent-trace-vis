@@ -73,7 +73,7 @@ export interface ConversationMessage {
             <!-- Message Card -->
             <div [id]="'msg-' + msg.id"
                  class="message-card"
-                 [class.is-active]="activeNodeId === msg.id || (msg.id.includes('_thinking_0') && activeNodeId && activeNodeId.startsWith(msg.id.replace('_thinking_0', '')))"
+                 [class.is-active]="activeNodeId === msg.id"
                  [class.is-hovered]="hoveredNodeId === msg.id"
                  [class.search-match]="isMatch(msg)"
                  [style.boxShadow]="msg.glowStyle"

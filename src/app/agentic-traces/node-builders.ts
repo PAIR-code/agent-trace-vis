@@ -71,21 +71,19 @@ export function buildThinkingNode(
   nodeGap: number,
   an: ReasoningTraceNode
 ): NodeBuildResult {
-  const { traceScale, startTime, stepAgentColor, cols, numNodes, stepDuration, currentTs, stepNodeHeight } = ctx;
-  const segmentHeight = stepNodeHeight;
-  const words = text.split(/\s+/).filter(w => w.length > 0).length;
-  let units = 1;
-  if (words <= 50) units = 1;
-  else if (words <= 100) units = 2;
-  else if (words <= 150) units = 3;
-  else units = 4;
+  const { traceScale, startTime, stepAgentColor, cols, numNodes, stepDuration, currentTs, completedTs, stepNodeHeight } = ctx;
 
   const width = 40;
-  const height = segmentHeight;
+  const height = stepNodeHeight;
 
   const t_end = !isNaN(currentTs) ? currentTs + ((nodeIndex + 1) / numNodes) * stepDuration : currentTs;
   const y_end = !isNaN(t_end) ? BASE_OFFSET + (t_end - startTime) * traceScale : currentY;
   const y = y_end - height;
+
+  // Compute step-level y positions for the thinking area block.
+  // The area block should span the full step duration, not just this node's 1/N fraction.
+  const timeBasedY = !isNaN(currentTs) ? BASE_OFFSET + (currentTs - startTime) * traceScale : y;
+  const timeBasedEndY = !isNaN(completedTs) ? BASE_OFFSET + (completedTs - startTime) * traceScale : y + height;
 
   const x = cols.agent.center;
 
@@ -97,15 +95,14 @@ export function buildThinkingNode(
     y,
     width,
     height,
-    units,
     label: truncate(text, 80),
     text,
     data: ctx.step,
     traceId: ctx.traceId,
     timestamp: an.timestamp,
     isWaiting: text.toLowerCase().includes('wait'),
-    segmentHeight,
-    segmentY: currentY,
+    timeBasedY,
+    timeBasedEndY,
     color: stepAgentColor,
     stepType: an.stepType
   };
@@ -358,7 +355,8 @@ export function buildRateLimitNode(
 export function buildThinkingAreaNodes(
   traceId: string,
   sortedNodes: VisNode[],
-  cx: number
+  cx: number,
+  yAxisMode: 'time' | 'tokens' = 'time'
 ): ThinkingAreaNode[] {
   // Find contiguous blocks of thinking nodes
   const thinkingBlocks: ThinkingStepNode[][] = [];
@@ -378,38 +376,69 @@ export function buildThinkingAreaNodes(
     thinkingBlocks.push(currentBlock);
   }
 
+  // Compute output tokens per block for proportional sizing
+  const blockTokens: number[] = thinkingBlocks.map(block => {
+    const uniqueSteps = new Set<any>();
+    block.forEach(n => {
+      if (n.data) uniqueSteps.add(n.data);
+    });
+    let totalTokens = 0;
+    uniqueSteps.forEach(step => {
+      totalTokens += step.token_usage?.output_tokens || 0;
+    });
+    // Fallback to word count if no token data available
+    if (totalTokens === 0) {
+      totalTokens = block.reduce(
+        (sum, n) => sum + n.text.split(/\s+/).filter((w: string) => w.length > 0).length,
+        0
+      );
+    }
+    return totalTokens;
+  });
+
+  const maxTokens = Math.max(...blockTokens, 1);
+  const MAX_BLOCK_WIDTH = 40;
+  const MIN_BLOCK_WIDTH = 8;
+  const CONSTANT_WIDTH = 30; // Used in tokens mode
+  const CORNER_RADIUS = 3;
+
   const result: ThinkingAreaNode[] = [];
 
-  // Generate area charts as ThinkingAreaNodes
+  // Generate rectangular blocks as ThinkingAreaNodes
   thinkingBlocks.forEach((block, blockIndex) => {
     if (block.length === 0) return;
 
-    const minY = Math.min(...block.map(n => n.y));
-    const maxY = Math.max(...block.map(n => n.y + n.height));
+    // Use step-level time positions for block bounds.
+    // timeBasedY = step start, timeBasedEndY = step end.
+    // This ensures the block spans the full step duration.
+    const minY = Math.min(...block.map(n => n.timeBasedY));
+    const maxY = Math.max(...block.map(n => n.timeBasedEndY));
+    const blockHeight = Math.max(1, maxY - minY);
 
-    const points: { y: number, halfW: number }[] = [];
-    points.push({ y: minY, halfW: 0 });
-
-    block.forEach(n => {
-      points.push({
-        y: n.y + n.height / 2,
-        halfW: Math.max(5, Math.min(40, n.text.length / 20))
-      });
-    });
-
-    points.push({ y: maxY, halfW: 0 });
-
-    let path = '';
-    path += `M ${cx + points[0].halfW} ${points[0].y} `;
-    for (let i = 1; i < points.length; i++) {
-      const p0 = points[i - 1];
-      const p1 = points[i];
-      const dy = p1.y - p0.y;
-      path += `C ${cx + p0.halfW} ${p0.y + dy / 2} ${cx + p1.halfW} ${p1.y - dy / 2} ${cx + p1.halfW} ${p1.y} `;
+    let blockWidth: number;
+    if (yAxisMode === 'tokens') {
+      blockWidth = CONSTANT_WIDTH;
+    } else {
+      // Proportional to output_tokens, normalized against max across all blocks
+      blockWidth = MIN_BLOCK_WIDTH +
+        (MAX_BLOCK_WIDTH - MIN_BLOCK_WIDTH) * (blockTokens[blockIndex] / maxTokens);
     }
-    path += `L ${cx} ${points[points.length - 1].y} `;
-    path += `L ${cx} ${points[0].y} `;
-    path += 'Z';
+
+    // Clamp corner radius to avoid degenerate paths
+    const r = Math.min(CORNER_RADIUS, blockWidth, blockHeight / 2);
+
+    // Rectangular path with rounded corners on the right side only (away from
+    // backbone at cx). After the x↔y swap in row layout, these become the
+    // bottom corners — the edge away from the horizontal backbone.
+    const path = [
+      `M ${cx} ${minY}`,
+      `L ${cx + blockWidth - r} ${minY}`,
+      `Q ${cx + blockWidth} ${minY} ${cx + blockWidth} ${minY + r}`,
+      `L ${cx + blockWidth} ${maxY - r}`,
+      `Q ${cx + blockWidth} ${maxY} ${cx + blockWidth - r} ${maxY}`,
+      `L ${cx} ${maxY}`,
+      'Z'
+    ].join(' ');
 
     result.push({
       id: `${traceId}_area_chart_${blockIndex}`,
@@ -417,8 +446,8 @@ export function buildThinkingAreaNodes(
       type: TraceNodeType.THINKING_AREA,
       x: cx,
       y: minY,
-      width: Math.max(...points.map(p => p.halfW)),
-      height: maxY - minY,
+      width: blockWidth,
+      height: blockHeight,
       label: '',
       text: '',
       data: null,

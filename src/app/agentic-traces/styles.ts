@@ -541,25 +541,6 @@ export const AGENTIC_TRACES_STYLES: string[] = [
     .vis-node.thinking.is-waiting { background: ${COLORS.THINKING_WAITING}; }
     .vis-node.error { background: ${COLORS.ERROR_LIGHT}; }
 
-    /* ── Units classes for area encoding ── */
-    .vis-node.units-1 { border-radius: 50%; }
-    .vis-node.units-2 { border-radius: 6px; }
-    .vis-node.units-4 { border-radius: 6px; }
-
-    .vis-node.units-3 {
-      border-radius: 6px;
-      position: relative;
-    }
-    .vis-node.units-3::after {
-      content: '';
-      position: absolute;
-      top: 12px;
-      left: 0;
-      width: 12px;
-      height: 12px;
-      background: inherit;
-      border-radius: 50%;
-    }
 
     /* Override for thinking nodes to have flat left edge */
     .vis-node.thinking {

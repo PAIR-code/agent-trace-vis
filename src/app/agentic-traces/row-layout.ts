@@ -105,6 +105,23 @@ export function applyRowLayout(params: {
     } else {
       contentWidth = targetAvail;
     }
+
+    // Rescale gradient stop offsets for row mode.
+    // Stops were computed as y / (columnMaxHeight + 100), but in row mode
+    // the gradient spans contentWidth on the x-axis. Rescale so stops
+    // align with the actual node x-positions after the x↔y swap.
+    const columnMaxHeight = params.maxContentHeight;
+    if (columnMaxHeight > 0 && contentWidth > 0) {
+      const scale = (columnMaxHeight + 100) / contentWidth;
+      traces.forEach(t => {
+        if (t.gradientStops) {
+          t.gradientStops = t.gradientStops.map((s: any) => ({
+            ...s,
+            offset: `${Math.min(1, parseFloat(s.offset) * scale)}`
+          }));
+        }
+      });
+    }
   } else {
     // Column Mode contentWidth
     const count = selectedTraceIds.size;

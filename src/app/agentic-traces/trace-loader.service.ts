@@ -246,10 +246,7 @@ export class TraceLoaderService {
     } else if (step.role === 'agent') {
       // 1. Thinking Content
       if (step.reasoning_content) {
-        const paragraphs = step.reasoning_content.split('\n').map(p => p.trim()).filter(p => p.length > 0);
-        paragraphs.forEach((para, idx) => {
-          nodes.push(createNode(`${stepId}_thinking_${idx}`, TraceNodeType.THINKING, TraceNodeColumn.AGENT, para, ReasoningStepType.PLANNER_RESPONSE, step));
-        });
+        nodes.push(createNode(`${stepId}_thinking`, TraceNodeType.THINKING, TraceNodeColumn.AGENT, step.reasoning_content, ReasoningStepType.PLANNER_RESPONSE, step));
       }
 
       // 2. Tool Calls & Observations

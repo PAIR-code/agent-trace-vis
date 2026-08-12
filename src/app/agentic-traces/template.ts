@@ -479,7 +479,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
            [style.height.px]="node.height"
            [style.border-color]="getNodeBorderColor(node)"
            [style.background-color]="node.color"
-           [ngClass]="[node.type, node.type === 'thinking' ? 'units-' + (node.units || 1) : '', getNodeVisualConfig(node).shape, getNodeVisualConfig(node).type]"
+           [ngClass]="[node.type, getNodeVisualConfig(node).shape, getNodeVisualConfig(node).type]"
            [class.is-waiting]="node.isWaiting"
            [class.is-failed]="node.isFailed"
            [class.hidden]="node.hidden"

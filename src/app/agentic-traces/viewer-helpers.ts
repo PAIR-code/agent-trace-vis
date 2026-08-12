@@ -239,8 +239,7 @@ export function getHighlightedTextForViewer(
     const paragraphs = text.split('\n\n');
     const html = paragraphs
       .map((p: string, idx: number) => {
-        const baseId = msg.id.replace('_thinking_0', '');
-        const fullChunkId = `${baseId}_thinking_${idx}`;
+        const fullChunkId = `${msg.id}_chunk_${idx}`;
         const isHighlighted = highlightedChunkId === fullChunkId;
         const rendered = renderMarkdownWithHighlights(p, matchingSpans);
 
