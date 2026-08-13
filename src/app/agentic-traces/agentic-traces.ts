@@ -115,11 +115,17 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   showImportModal = signal<boolean>(false);
   traces = signal<any[]>([]);
   selectedTraceId = signal<string>("");
-  activeTrace = signal<any>(null);
   selectedNode = signal<any>(null);
   hoveredNodeId = signal<string | null>(null);
   highlightedChunkId = signal<string | null>(null);
   manualActiveTraceId = signal<string | null>(null);
+
+  activeTrace = computed(() => {
+    const activeId = this.activeTraceId();
+    if (!activeId) return null;
+    const trace = this.traces().find((t) => t.id === activeId);
+    return trace?.data || null;
+  });
 
   selectedTraceIds = signal<Set<string>>(new Set());
   yAxisMode = signal<"time" | "tokens">("time");
@@ -722,7 +728,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   private applyTraceSelection(tracesList: any[], targetIndices?: number[] | null) {
     if (tracesList.length === 0) {
       this.selectedTraceIds.set(new Set());
-      this.activeTrace.set(null);
       this.updateUrlParams();
       return;
     }
@@ -806,7 +811,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
       // Remote Hugging Face Dataset Ingestion
       this.isLoading.set(true);
       this.traces.set([]);
-      this.activeTrace.set(null);
 
       const maxTraces = ds.maxTraces || (ds.isRemote ? 5 : 50);
 
@@ -840,7 +844,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
       // Local Dataset Loading
       this.isLoading.set(true);
       this.traces.set([]);
-      this.activeTrace.set(null);
 
       this.http.get<any>('assets/data/traces/manifest.json').subscribe({
         next: (manifest) => {
@@ -969,11 +972,8 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     const selectedIds = this.selectedTraceIds();
     const idsArray = [...selectedIds];
 
-    if (idsArray.length > 0) {
-      const firstTrace = this.traces().find((t) => t.id === idsArray[0]);
-      if (firstTrace && firstTrace.data) {
-        this.activeTrace.set(firstTrace.data);
-      }
+    if (idsArray.length === 1) {
+      this.manualActiveTraceId.set(idsArray[0]);
     }
 
     const layout = calculateTraceLayout({
