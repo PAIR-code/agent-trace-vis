@@ -211,7 +211,7 @@ export interface ConversationMessage {
       position: absolute;
       left: 0;
       right: 0;
-      height: 44px;
+      height: 54px;
       display: flex;
       justify-content: center;
       z-index: 50;
@@ -231,7 +231,7 @@ export interface ConversationMessage {
     .bottom-overlay {
       bottom: 0;
       align-items: flex-end;
-      padding-bottom: 8px;
+      padding-bottom: 22px;
       transform: translateY(6px);
       background: linear-gradient(to top, rgba(30, 30, 30, 0.85) 0%, rgba(30, 30, 30, 0.4) 50%, transparent 100%);
     }

@@ -134,6 +134,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   timeTicks = signal<{ label: string; x: number; y?: number }[]>([]);
   hideGaps = signal<boolean>(false);
   timeUnitLabel = signal<string>("");
+  isLegendCollapsed = signal<boolean>(false);
   selectedTokenTypes = signal<Set<string>>(new Set(['input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens']));
   tokenMetricOptions = signal<Array<{ id: string; label: string }>>([
     { id: 'input_tokens', label: 'Input Tokens' },
@@ -592,28 +593,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** Jumps the visualization scroll area to the top and selects the first node. */
-  scrollToVisStart() {
-    if (this._visScrollAreaElement) {
-      this._visScrollAreaElement.scrollTo({
-        top: 0,
-        behavior: 'smooth'
-      });
-    }
-    this.onJumpToStart();
-  }
-
-  /** Jumps the visualization scroll area to the bottom and selects the last node. */
-  scrollToVisEnd() {
-    if (this._visScrollAreaElement) {
-      this._visScrollAreaElement.scrollTo({
-        top: this._visScrollAreaElement.scrollHeight,
-        behavior: 'smooth'
-      });
-    }
-    this.onJumpToEnd();
-  }
-
   /** Loads trace data for selected traces if not already loaded. */
   private updateActiveTraces() {
     const ids = this.selectedTraceIds();
@@ -1031,6 +1010,15 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
       current.add(traceId);
     }
     this.expandedFileTraceIds.set(current);
+  }
+
+  /** Toggles collapse/minimize state of the legend overlay. */
+  toggleLegend(event?: Event) {
+    if (event) {
+      event.stopPropagation();
+      event.preventDefault();
+    }
+    this.isLegendCollapsed.update((val) => !val);
   }
 
   /** Selects a track (trace) without selecting a specific node. */

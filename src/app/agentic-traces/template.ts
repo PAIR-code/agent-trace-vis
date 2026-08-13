@@ -102,17 +102,6 @@ export const AGENTIC_TRACES_TEMPLATE = `
     <div class="vis-page-container" *ngIf="!isLoading() && activeTrace(); else loading" (click)="onBackgroundClick($event)">
       <div class="main-layout">
         <div class="vis-container">
-          <!-- Top Overlay on vis area -->
-          <div class="vis-jump-overlay top-vis-overlay">
-            <button class="vis-jump-pill-btn" (click)="scrollToVisStart(); $event.stopPropagation()" title="Jump to beginning of trace">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="18 15 12 9 6 15"></polyline>
-                <line x1="6" y1="6" x2="18" y2="6"></line>
-              </svg>
-              <span>Start</span>
-            </button>
-          </div>
-
           <!-- No results banner -->
           <div class="no-results-banner" *ngIf="layersService.noResultsLayers().length > 0">
             No matches found for:
@@ -122,20 +111,39 @@ export const AGENTIC_TRACES_TEMPLATE = `
           </div>
 
           <!-- Legend -->
-          <div class="legend-bar trace-legend" *ngIf="legendEntries().length > 0">
-            <div class="legend-item" *ngFor="let entry of legendEntries()">
-              <div class="legend-color" 
-                   [style.background-color]="entry.color" 
-                   [style.border]="entry.border ? entry.border : (entry.isDiamond ? '1.5px solid #c4c9d0' : ((entry.isAI || entry.color === '#ffffff') ? '1px solid #9ca3af' : 'none'))"
-                   [style.border-radius]="entry.isDiamond ? '0' : '50%'"
-                   [style.transform]="entry.isDiamond ? 'rotate(45deg)' : 'none'"></div>
-              <span class="legend-label">
-                <ng-container *ngIf="entry.subLabel; else simpleLabel">
-                  <span class="legend-main-label">{{ entry.label }}</span>
-                  <span class="legend-sub-label">{{ entry.subLabel }}</span>
-                </ng-container>
-                <ng-template #simpleLabel>{{ entry.label }}</ng-template>
-              </span>
+          <div class="legend-bar trace-legend" 
+               *ngIf="legendEntries().length > 0"
+               [class.collapsed]="isLegendCollapsed()"
+               (click)="$event.stopPropagation()">
+            <div class="legend-header" (click)="toggleLegend($event)" [title]="isLegendCollapsed() ? 'Expand legend' : 'Minimize legend'">
+              <span class="legend-title">Legend</span>
+              <button class="legend-toggle-btn" 
+                      type="button" 
+                      (click)="toggleLegend($event)" 
+                      [title]="isLegendCollapsed() ? 'Expand legend' : 'Minimize legend'">
+                <svg *ngIf="!isLegendCollapsed()" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+                <svg *ngIf="isLegendCollapsed()" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="18 15 12 9 6 15"></polyline>
+                </svg>
+              </button>
+            </div>
+            <div class="legend-items-list" *ngIf="!isLegendCollapsed()">
+              <div class="legend-item" *ngFor="let entry of legendEntries()">
+                <div class="legend-color" 
+                     [style.background-color]="entry.color" 
+                     [style.border]="entry.border ? entry.border : (entry.isDiamond ? '1.5px solid #c4c9d0' : ((entry.isAI || entry.color === '#ffffff') ? '1px solid #9ca3af' : 'none'))"
+                     [style.border-radius]="entry.isDiamond ? '0' : '50%'"
+                     [style.transform]="entry.isDiamond ? 'rotate(45deg)' : 'none'"></div>
+                <span class="legend-label">
+                  <ng-container *ngIf="entry.subLabel; else simpleLabel">
+                    <span class="legend-main-label">{{ entry.label }}</span>
+                    <span class="legend-sub-label">{{ entry.subLabel }}</span>
+                  </ng-container>
+                  <ng-template #simpleLabel>{{ entry.label }}</ng-template>
+                </span>
+              </div>
             </div>
           </div>
 
@@ -420,17 +428,6 @@ export const AGENTIC_TRACES_TEMPLATE = `
               </ng-container>
             </ng-container>
           </div>
-          </div>
-
-          <!-- Bottom Overlay on vis area -->
-          <div class="vis-jump-overlay bottom-vis-overlay">
-            <button class="vis-jump-pill-btn" (click)="scrollToVisEnd(); $event.stopPropagation()" title="Jump to end of trace">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="6 9 12 15 18 9"></polyline>
-                <line x1="6" y1="18" x2="18" y2="18"></line>
-              </svg>
-              <span>End</span>
-            </button>
           </div>
         </div>
 
