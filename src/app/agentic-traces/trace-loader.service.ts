@@ -325,61 +325,235 @@ export class TraceLoaderService {
   }
 }
 
+function extractFilePathFromInput(input: Record<string, any> | string | undefined): string | null {
+  if (!input) return null;
+  let obj: Record<string, any> = {};
+  if (typeof input === 'string') {
+    try {
+      obj = JSON.parse(input);
+    } catch {
+      return null;
+    }
+  } else if (typeof input === 'object' && input !== null) {
+    obj = input;
+  } else {
+    return null;
+  }
+
+  const val =
+    obj['TargetFile'] ??
+    obj['AbsolutePath'] ??
+    obj['NotebookPath'] ??
+    obj['file_path'] ??
+    obj['filePath'] ??
+    obj['filepath'] ??
+    obj['path'] ??
+    obj['file'] ??
+    obj['filename'] ??
+    obj['file_name'] ??
+    obj['target_file'] ??
+    obj['absolute_path'] ??
+    obj['notebook_path'] ??
+    obj['uri'] ??
+    obj['document'] ??
+    obj['src'] ??
+    obj['dest'] ??
+    null;
+
+  if (typeof val !== 'string') return null;
+  let clean = val.trim();
+  clean = clean.replace(/^['"`\s]+|['"`\s]+$/g, '');
+  return clean || null;
+}
+
 function mapToolNameToStepType(toolName: string): ReasoningStepType {
   const name = toolName.toLowerCase();
-  if (name.includes('view_file') || name.includes('viewfile')) return ReasoningStepType.VIEW_FILE;
-  if (name.includes('grep_search') || name.includes('grep') || name.includes('ripgrep')) return ReasoningStepType.GREP_SEARCH;
-  if (name.includes('run_command') || name.includes('runcommand') || name.includes('execute') || name.includes('terminal')) return ReasoningStepType.RUN_COMMAND;
-  if (name.includes('list_directory') || name.includes('listdir') || name.includes('ls')) return ReasoningStepType.LIST_DIRECTORY;
-  if (name.includes('write_to_file') || name.includes('writefile')) return ReasoningStepType.WRITE_TO_FILE;
-  if (name.includes('multi_replace') || name.includes('multireplace')) return ReasoningStepType.MULTI_REPLACE_FILE_CONTENT;
-  if (name.includes('replace_file') || name.includes('replacefile') || name.includes('editfile')) return ReasoningStepType.REPLACE_FILE_CONTENT;
-  if (name.includes('notebook_edit') || name.includes('notebook')) return ReasoningStepType.NOTEBOOK_EDIT;
+
+  // View file
+  if (
+    name.includes('view_file') || name.includes('viewfile') ||
+    name.includes('read_file') || name.includes('readfile') ||
+    name.includes('fileread') || name.includes('file_read') ||
+    name === 'view' || name === 'read' || name === 'cat' || name === 'open' ||
+    name.includes('view_content') || name.includes('read_content')
+  ) {
+    return ReasoningStepType.VIEW_FILE;
+  }
+
+  // Multi-replace file content
+  if (name.includes('multi_replace') || name.includes('multireplace')) {
+    return ReasoningStepType.MULTI_REPLACE_FILE_CONTENT;
+  }
+
+  // Edit / Replace file
+  if (
+    name.includes('replace_file') || name.includes('replacefile') ||
+    name.includes('edit_file') || name.includes('editfile') ||
+    name.includes('file_edit') || name.includes('fileedit') ||
+    name.includes('str_replace') || name === 'edit' || name === 'replace' ||
+    name.includes('apply_diff') || name.includes('patch') || name.includes('modify_file')
+  ) {
+    return ReasoningStepType.REPLACE_FILE_CONTENT;
+  }
+
+  // Write file
+  if (
+    name.includes('write_to_file') || name.includes('writefile') ||
+    name.includes('write_file') || name.includes('file_write') ||
+    name.includes('filewrite') || name === 'write' || name === 'create_file' ||
+    name.includes('save_file')
+  ) {
+    return ReasoningStepType.WRITE_TO_FILE;
+  }
+
+  // Notebook edit
+  if (name.includes('notebook_edit') || name.includes('notebook')) {
+    return ReasoningStepType.NOTEBOOK_EDIT;
+  }
+
+  // Grep / Search
+  if (name.includes('grep_search') || name.includes('grep') || name.includes('ripgrep') || name === 'rg') {
+    return ReasoningStepType.GREP_SEARCH;
+  }
+
+  // Find / Glob / File search
+  if (name.includes('find_by_name') || name.includes('find_files') || name.includes('file_search') || name === 'glob' || name.includes('find')) {
+    return ReasoningStepType.FIND_BY_NAME;
+  }
+
+  // List directory
+  if (name.includes('list_directory') || name.includes('listdir') || name.includes('list_dir') || name === 'ls' || name === 'dir') {
+    return ReasoningStepType.LIST_DIRECTORY;
+  }
+
+  // Run command / Bash
+  if (
+    name.includes('run_command') || name.includes('runcommand') ||
+    name.includes('execute') || name.includes('terminal') ||
+    name === 'bash' || name === 'sh' || name === 'cmd' || name === 'run'
+  ) {
+    return ReasoningStepType.RUN_COMMAND;
+  }
+
+  // URL / Web
   if (name.includes('read_url') || name.includes('fetch')) return ReasoningStepType.READ_URL_CONTENT;
   if (name.includes('search_web') || name.includes('websearch') || name.includes('google')) return ReasoningStepType.SEARCH_WEB;
   if (name.includes('code_search')) return ReasoningStepType.CODE_SEARCH;
-  if (name.includes('find')) return ReasoningStepType.FIND;
+
+  // Chart Artifact tools
+  if (name.includes('chart')) {
+    if (name.startsWith('get_')) {
+      return ReasoningStepType.VIEW_FILE;
+    }
+    return ReasoningStepType.REPLACE_FILE_CONTENT;
+  }
+
   return ReasoningStepType.GENERIC;
 }
 
 function getToolLabel(tc: ToolCall): string {
   const input = tc.input || {};
   const name = tc.tool_name.toLowerCase();
+  const filePath = extractFilePathFromInput(input);
+  const fileName = filePath ? filePath.split('/').pop() : null;
 
-  if (name.includes('view_file') || name.includes('viewfile')) {
-    const file = input['AbsolutePath'] || input['TargetFile'] || input['file_path'] || 'file';
-    return `View: ${file.split('/').pop()}`;
+  if (name.includes('view_file') || name.includes('viewfile') || name.includes('read_file') || name === 'view' || name === 'read' || name.includes('fileread')) {
+    return `View: ${fileName || 'file'}`;
   }
-  if (name.includes('grep_search') || name.includes('grep') || name.includes('ripgrep')) {
-    return `Grep: ${input['Query'] || input['query'] || 'search'}`;
+  if (name.includes('grep_search') || name.includes('grep') || name.includes('ripgrep') || name === 'rg') {
+    let q = '';
+    if (typeof input === 'object' && input !== null) {
+      q = input['Query'] || input['query'] || input['pattern'] || 'search';
+    }
+    return `Grep: ${q}`;
   }
-  if (name.includes('run_command') || name.includes('runcommand')) {
-    return `Run: ${input['CommandLine'] || input['command'] || 'command'}`;
+  if (name.includes('run_command') || name.includes('runcommand') || name === 'bash' || name === 'sh' || name === 'cmd') {
+    let cmd = '';
+    if (typeof input === 'object' && input !== null) {
+      cmd = input['CommandLine'] || input['command'] || input['cmd'] || 'command';
+    }
+    return `Run: ${cmd}`;
   }
-  if (name.includes('list_directory') || name.includes('listdir') || name.includes('ls')) {
-    const dir = input['DirectoryPath'] || input['directory'] || 'dir';
-    return `List: ${dir.split('/').pop()}`;
+  if (name.includes('list_directory') || name.includes('listdir') || name.includes('list_dir') || name === 'ls' || name === 'dir') {
+    let dir = 'dir';
+    if (typeof input === 'object' && input !== null) {
+      const rawDir = input['DirectoryPath'] || input['directory'] || input['path'] || 'dir';
+      dir = rawDir.split('/').pop() || rawDir;
+    }
+    return `List: ${dir}`;
   }
-  if (name.includes('write_to_file') || name.includes('writefile')) {
-    const file = input['TargetFile'] || input['file_path'] || 'file';
-    return `Write: ${file.split('/').pop()}`;
+  if (name.includes('write_to_file') || name.includes('writefile') || name.includes('write_file') || name === 'write' || name.includes('filewrite')) {
+    return `Write: ${fileName || 'file'}`;
   }
-  if (name.includes('replace_file') || name.includes('replacefile') || name.includes('editfile') || name.includes('multi_replace')) {
-    const file = input['TargetFile'] || input['file_path'] || 'file';
-    return `Edit: ${file.split('/').pop()}`;
+  if (name.includes('replace_file') || name.includes('replacefile') || name.includes('editfile') || name.includes('edit_file') || name === 'edit' || name.includes('multi_replace') || name.includes('str_replace')) {
+    return `Edit: ${fileName || 'file'}`;
   }
   if (name.includes('notebook_edit') || name.includes('notebook')) {
-    const file = input['NotebookPath'] || input['file_path'] || 'notebook';
-    return `Notebook: ${file.split('/').pop()}`;
+    return `Notebook: ${fileName || 'notebook'}`;
   }
   if (name.includes('read_url') || name.includes('fetch')) {
-    return `URL: ${input['Url'] || input['url'] || 'fetch'}`;
+    let u = 'fetch';
+    if (typeof input === 'object' && input !== null) {
+      u = input['Url'] || input['url'] || 'fetch';
+    }
+    return `URL: ${u}`;
   }
   if (name.includes('search_web') || name.includes('websearch') || name.includes('google')) {
-    return `Web: ${input['Query'] || input['query'] || 'web search'}`;
+    let q = 'web search';
+    if (typeof input === 'object' && input !== null) {
+      q = input['Query'] || input['query'] || 'web search';
+    }
+    return `Web: ${q}`;
   }
 
-  return tc.tool_name;
+  // Dashboard tools
+  if (name.includes('chart')) {
+    let title = '';
+    if (typeof input === 'object' && input !== null) {
+      const charts = input['charts'];
+      if (Array.isArray(charts) && charts.length > 0 && charts[0]?.title) {
+        title = charts[0].title;
+      }
+    }
+    return title ? `Chart: ${title}` : `Chart (${tc.tool_name})`;
+  }
+  if (name.includes('metric')) {
+    let title = '';
+    if (typeof input === 'object' && input !== null) {
+      const metrics = input['metrics'];
+      if (Array.isArray(metrics) && metrics.length > 0 && metrics[0]?.title) {
+        title = metrics[0].title;
+      }
+    }
+    return title ? `Metric: ${title}` : `Metric (${tc.tool_name})`;
+  }
+  if (name.includes('filter')) {
+    return `Filter (${tc.tool_name})`;
+  }
+  if (name === 'set_header') {
+    let title = '';
+    if (typeof input === 'object' && input !== null && input['title']) {
+      title = input['title'];
+    }
+    return title ? `Header: ${title}` : `Header`;
+  }
+  if (name === 'set_layout') {
+    return `Layout`;
+  }
+  if (name === 'profile_data') {
+    return `SQL Profile`;
+  }
+  if (name === 'ask_user') {
+    return `Ask User`;
+  }
+  if (name === 'upsert_memories') {
+    return `Save Memory`;
+  }
+  if (name === 'transition_phase') {
+    return `Phase Transition`;
+  }
+
+  return fileName ? `${tc.tool_name}: ${fileName}` : tc.tool_name;
 }
 
 function getObservationLabel(tc: ToolCall, obs: Observation): string {

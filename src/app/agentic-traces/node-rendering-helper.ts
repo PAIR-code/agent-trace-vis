@@ -49,7 +49,9 @@ export function getNodeVisualConfig(node: any): NodeVisualConfig {
                      textLower.includes('replace file content') ||
                      textLower.includes('write to file') ||
                      textLower.includes('multi replace file content') ||
-                     textLower.includes('notebook edit');
+                     textLower.includes('notebook edit') ||
+                     textLower.startsWith('edit:') ||
+                     textLower.startsWith('write:');
 
   if (isFileEdit) {
     return { shape: 'rect', type: 'diff', shouldShift: true };
@@ -68,7 +70,8 @@ export function getNodeVisualConfig(node: any): NodeVisualConfig {
   // Group 3: Local Search
   const isLocalSearch = stepType === ReasoningStepType.GREP_SEARCH ||
                         stepType === ReasoningStepType.FIND_BY_NAME ||
-                        textLower.startsWith('grep:');
+                        textLower.startsWith('grep:') ||
+                        textLower.startsWith('find:');
 
   if (isLocalSearch) {
     return { shape: 'rect', type: 'search', shouldShift: true };
@@ -125,7 +128,10 @@ export function isFileEventNode(node: any): boolean {
     textLower.includes('replace file content') ||
     textLower.includes('write to file') ||
     textLower.includes('multi replace file content') ||
-    textLower.includes('notebook edit');
+    textLower.includes('notebook edit') ||
+    textLower.startsWith('edit:') ||
+    textLower.startsWith('write:') ||
+    textLower.startsWith('chart:');
 
   const isView =
     stepType === ReasoningStepType.VIEW_FILE ||

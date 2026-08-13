@@ -132,22 +132,83 @@ const VIEW_STEP_TYPES = new Set<ReasoningStepType>([
   ReasoningStepType.VIEW_FILE_OUTLINE,
 ]);
 
-/** Extract a file path from a tool call input object (handles multiple key conventions). */
-function extractFilePath(input: Record<string, any> | undefined): string | null {
-  if (!input) return null;
-  const val =
-    input['TargetFile'] ??
-    input['AbsolutePath'] ??
-    input['NotebookPath'] ??
-    input['file_path'] ??
-    input['filePath'] ??
-    input['path'] ??
-    null;
-  if (typeof val !== 'string') return null;
-  let clean = val.trim();
-  // Strip surrounding quotes and whitespace e.g. "search.service.ts" or 'file.ts'
-  clean = clean.replace(/^['"`\s]+|['"`\s]+$/g, '');
-  return clean || null;
+/** Extract file or chart artifact paths from a tool call input object. */
+export function extractFilePaths(input: Record<string, any> | string | undefined, toolName?: string): string[] {
+  if (!input) return [];
+  let obj: Record<string, any> = {};
+  if (typeof input === 'string') {
+    try {
+      obj = JSON.parse(input);
+    } catch {
+      return [];
+    }
+  } else if (typeof input === 'object' && input !== null) {
+    obj = input;
+  } else {
+    return [];
+  }
+
+  const paths: string[] = [];
+
+  // 1. Standard file path keys (for coding agents)
+  const standardKeys = [
+    'TargetFile', 'AbsolutePath', 'NotebookPath', 'file_path', 'filePath',
+    'filepath', 'path', 'file', 'filename', 'file_name', 'target_file',
+    'absolute_path', 'notebook_path', 'uri', 'document', 'src', 'dest'
+  ];
+  for (const k of standardKeys) {
+    const val = obj[k];
+    if (typeof val === 'string' && val.trim()) {
+      let clean = val.trim().replace(/^['"`\s]+|['"`\s]+$/g, '');
+      if (clean) {
+        paths.push(clean);
+        return paths;
+      }
+    }
+  }
+
+  // 2. Chart artifact extraction (for dashboard agents)
+  const tName = (toolName || '').toLowerCase();
+
+  if (tName.includes('chart')) {
+    const charts = obj['charts'];
+    if (Array.isArray(charts)) {
+      for (const c of charts) {
+        if (typeof c === 'object' && c !== null) {
+          const cName = c['name'] || c['title'] || c['id'];
+          if (typeof cName === 'string' && cName.trim()) {
+            paths.push(`charts/${cName.trim()}`);
+          }
+        }
+      }
+    } else if (typeof charts === 'object' && charts !== null) {
+      const cName = charts['name'] || charts['title'] || charts['id'];
+      if (typeof cName === 'string' && cName.trim()) {
+        paths.push(`charts/${cName.trim()}`);
+      }
+    }
+
+    const cId = obj['name'] || obj['chart'] || obj['chart_name'] || obj['id'];
+    if (typeof cId === 'string' && cId.trim() && !paths.length) {
+      paths.push(`charts/${cId.trim()}`);
+    }
+
+    const names = obj['names'];
+    if (Array.isArray(names)) {
+      for (const n of names) {
+        if (typeof n === 'string' && n.trim()) {
+          paths.push(`charts/${n.trim()}`);
+        }
+      }
+    }
+  }
+
+  return Array.from(new Set(paths));
+}
+
+export function extractFilePath(input: Record<string, any> | string | undefined, toolName?: string): string | null {
+  const paths = extractFilePaths(input, toolName);
+  return paths.length > 0 ? paths[0] : null;
 }
 
 /** Normalize file path for canonical matching. */
@@ -159,18 +220,32 @@ export function normalizeFilePath(rawPath: string): string {
 }
 
 /** Calculate lines written / modified in an edit tool call. */
-function computeEditLines(stepType: ReasoningStepType, input: Record<string, any> | undefined): number {
+function computeEditLines(stepType: ReasoningStepType, input: Record<string, any> | string | undefined): number {
   if (!input) return 5;
-  if (stepType === ReasoningStepType.WRITE_TO_FILE) {
-    const content: string = input['CodeContent'] ?? '';
-    return Math.max(1, content.split('\n').length);
+  let obj: Record<string, any> = {};
+  if (typeof input === 'string') {
+    try {
+      obj = JSON.parse(input);
+    } catch {
+      return 5;
+    }
+  } else if (typeof input === 'object' && input !== null) {
+    obj = input;
+  } else {
+    return 5;
   }
-  if (stepType === ReasoningStepType.REPLACE_FILE_CONTENT || stepType === ReasoningStepType.MULTI_REPLACE_FILE_CONTENT) {
-    const repl: string = input['ReplacementContent'] ?? '';
-    return Math.max(1, repl.split('\n').length);
-  }
-  if (stepType === ReasoningStepType.NOTEBOOK_EDIT || stepType === ReasoningStepType.CODE_ACTION) {
-    const content: string = input['Content'] ?? input['CodeContent'] ?? '';
+
+  const content: string =
+    obj['CodeContent'] ??
+    obj['ReplacementContent'] ??
+    obj['Content'] ??
+    obj['content'] ??
+    obj['text'] ??
+    obj['new_str'] ??
+    obj['code'] ??
+    '';
+
+  if (typeof content === 'string' && content.length > 0) {
     return Math.max(1, content.split('\n').length);
   }
   return 5;
@@ -248,31 +323,34 @@ export function buildFileGanttData(
 
       const input: Record<string, any> | undefined =
         data?.toolCall?.input ?? data?.input ?? undefined;
-      const filePath = extractFilePath(input);
-      if (!filePath) continue;
+      const toolName: string = data?.toolCall?.tool_name ?? node.text ?? '';
+      const filePaths = extractFilePaths(input, toolName);
+      if (filePaths.length === 0) continue;
 
-      const basename = filePath.split('/').pop() ?? filePath;
-      const nodeX = nodeXMap.get(node.id) ?? 0;
-      const visNode = nodeMap.get(node.id) ?? node;
+      for (const filePath of filePaths) {
+        const basename = filePath.split('/').pop() ?? filePath;
+        const nodeX = nodeXMap.get(node.id) ?? 0;
+        const visNode = nodeMap.get(node.id) ?? node;
 
-      let kind: FileAccessKind;
-      let linesCount = 0;
+        let kind: FileAccessKind;
+        let linesCount = 0;
 
-      if (isView) {
-        kind = 'view';
-        linesCount = 0;
-      } else {
-        linesCount = computeEditLines(stepType, input);
-        if (stepType === ReasoningStepType.WRITE_TO_FILE) {
-          kind = 'rewrite';
+        if (isView) {
+          kind = 'view';
+          linesCount = 0;
         } else {
-          kind = 'add';
+          linesCount = computeEditLines(stepType, input);
+          if (stepType === ReasoningStepType.WRITE_TO_FILE) {
+            kind = 'rewrite';
+          } else {
+            kind = 'add';
+          }
         }
+
+        const isPlan = isPlanPath(filePath, input);
+
+        allEvents.push({ filePath, basename, kind, isPlan, linesCount, x: nodeX, node: visNode });
       }
-
-      const isPlan = isPlanPath(filePath, input);
-
-      allEvents.push({ filePath, basename, kind, isPlan, linesCount, x: nodeX, node: visNode });
     }
   }
 
