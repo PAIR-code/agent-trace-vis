@@ -11,29 +11,29 @@ As AI systems increasingly rely on multi-step reasoning and tool use, understand
 ### Agentic Traces
 A timeline-based visualization for structured agent traces (e.g., from coding agents, tool-using LLMs). Shows the interplay between user messages, model thinking, tool calls, and observations in a multi-column layout. Supports search, model highlighting, and gap compression for long traces.
 
-- **Demo**: [Demo](https://agent-trace-vis.netlify.app/agentic-traces/sample)
-- **Route**: `/agentic-traces/:id`
+- **Demo**: [Demo](https://agent-trace-vis.netlify.app/#/agentic-traces)
+- **Route**: `/#/agentic-traces`
 - **Data format**: JSON files following the [OpenTraces](https://www.opentraces.ai) schema
 
 ### Unstructured Reasoning (Graph)
 A force-directed graph visualization for comparing multiple rollouts of unstructured chain-of-thought reasoning (e.g., RLVR-trained models solving math problems). Segments reasoning into chunks, embeds them, and visualizes structural patterns across traces.
 
-- **Demo**: [Demo](https://agent-trace-vis.netlify.app/unstructured-reasoning-graph)
-- **Route**: `/unstructured-reasoning-graph`
+- **Demo**: [Demo](https://agent-trace-vis.netlify.app/#/unstructured-reasoning-graph)
+- **Route**: `/#/unstructured-reasoning-graph`
 - **Data format**: JSON arrays of reasoning samples with `reasoning_content` and `score` fields
 
 ### Unstructured Reasoning (Linear)
 A linear token-level visualization for comparing reasoning traces across datasets. Highlights token frequency and overlap across rollouts with multiple coloring schemes (chromogram, dataset, score-based).
 
-- **Demo**: [Demo](https://agent-trace-vis.netlify.app/unstructured-reasoning-linear)
-- **Route**: `/unstructured-reasoning-linear`
+- **Demo**: [Demo](https://agent-trace-vis.netlify.app/#/unstructured-reasoning-linear)
+- **Route**: `/#/unstructured-reasoning-linear`
 - **Data format**: Same as the graph view
 
 ### Conversational Arcs
 A sentence-level visualization for analyzing how messages in multi-turn conversations reference and build upon previous turns.
 
-- **Demo**: [Demo](https://agent-trace-vis.netlify.app/conversation-arcs)
-- **Route**: `/conversation-arcs`
+- **Demo**: [Demo](https://agent-trace-vis.netlify.app/#/conversation-arcs)
+- **Route**: `/#/conversation-arcs`
 
 ## Getting Started
 
@@ -68,11 +68,14 @@ DATASETS=my_custom_dataset npm run deploy:draft -- --alias my-custom-alias
 
 To build and deploy to **Production**:
 ```bash
+# Deploy default public datasets:
+npm run deploy
+
+# Deploy all datasets (including private/internal ones):
+npm run deploy:all
+
 # With specific datasets:
 DATASETS=website_updates,rlvr_vs_base npm run deploy
-
-# Or deploy default public datasets via pre-configured script:
-npm run deploy:public
 ```
 
 Each trace file should follow this structure:
