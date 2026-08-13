@@ -15,7 +15,7 @@
  */
 
 /**
- * @fileoverview Computes the main track (the backbone) drawn behind the agent column.
+ * @fileoverview Computes the main track (the backbone) drawn behind the agent row.
  * 
  * Shows the progress of execution over time:
  * - Solid lines: active execution or thinking.
@@ -28,37 +28,39 @@ import { sanitizeId } from './layout-utils';
 
 export function buildBackboneLines(
   traceId: string,
-  cx: number,
+  cy: number,
   waitingRects: any[],
-  traceMaxY: number
+  traceMaxX: number
 ): BackboneLine[] {
   const lines: BackboneLine[] = [];
 
   // Add agent backbone line segments
   const backboneSegments: any[] = [];
-  let lastY = BASE_OFFSET;
+  let lastX = BASE_OFFSET;
 
   waitingRects.forEach((rect: any) => {
-    if (rect.y > lastY) {
-      backboneSegments.push({ y1: lastY, y2: rect.y, type: 'solid' });
+    const rx = rect.x ?? rect.y ?? 0;
+    const rw = rect.width ?? rect.height ?? 0;
+    if (rx > lastX) {
+      backboneSegments.push({ x1: lastX, x2: rx, type: 'solid' });
     }
-    backboneSegments.push({ y1: rect.y, y2: rect.y + rect.height, type: rect.isSquiggle ? 'squiggle' : 'dotted' });
-    lastY = rect.y + rect.height;
+    backboneSegments.push({ x1: rx, x2: rx + rw, type: rect.isSquiggle ? 'squiggle' : 'dotted' });
+    lastX = rx + rw;
   });
 
-  if (lastY < traceMaxY) {
-    backboneSegments.push({ y1: lastY, y2: traceMaxY, type: 'solid' });
+  if (lastX < traceMaxX) {
+    backboneSegments.push({ x1: lastX, x2: traceMaxX, type: 'solid' });
   }
 
   backboneSegments.forEach((seg, segIndex) => {
     if (seg.type === 'squiggle') {
-      const y1 = seg.y1;
-      const y2 = seg.y2;
+      const x1 = seg.x1;
+      const x2 = seg.x2;
 
       lines.push({
         id: `${traceId}_agent_backbone_line_${segIndex}_p1`,
         traceId,
-        path: `M ${cx} ${y1} L ${cx} ${y1 + 10}`,
+        path: `M ${x1} ${cy} L ${x1 + 10} ${cy}`,
         stroke: `url(#grad-${sanitizeId(traceId)})`,
         strokeWidth: 1.5,
         opacity: 0.7,
@@ -68,7 +70,7 @@ export function buildBackboneLines(
       lines.push({
         id: `${traceId}_agent_backbone_line_${segIndex}_p2`,
         traceId,
-        path: `M ${cx} ${y1 + 10} q -5 2.5 0 5 q 5 2.5 0 5`,
+        path: `M ${x1 + 10} ${cy} q 2.5 -5 5 0 q 2.5 5 5 0`,
         stroke: `url(#grad-${sanitizeId(traceId)})`,
         strokeWidth: 3,
         opacity: 0.7,
@@ -77,14 +79,14 @@ export function buildBackboneLines(
       lines.push({
         id: `${traceId}_agent_backbone_line_${segIndex}_p3`,
         traceId,
-        path: `M ${cx} ${y1 + 20} L ${cx} ${y2}`,
+        path: `M ${x1 + 20} ${cy} L ${x2} ${cy}`,
         stroke: `url(#grad-${sanitizeId(traceId)})`,
         strokeWidth: 1.5,
         opacity: 0.7,
         strokeDasharray: '4,6'
       });
     } else {
-      const path = `M ${cx} ${seg.y1} L ${cx} ${seg.y2}`;
+      const path = `M ${seg.x1} ${cy} L ${seg.x2} ${cy}`;
       const strokeDasharray = seg.type === 'dotted' ? '4,6' : undefined;
 
       lines.push({

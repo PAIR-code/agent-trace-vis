@@ -15,12 +15,11 @@
  */
 
 /**
- * @fileoverview Detects and compresses idle gaps in time-axis mode.
+ * @fileoverview Detects and compresses idle gaps in time-axis mode along the horizontal timeline.
  */
 
 import { VisNode } from './layout-types';
 import { TraceNodeType } from './layout-types';
-import { swapPathCoords } from './layout-utils';
 
 export function compressGaps(params: {
   traceNodes: VisNode[];
@@ -28,53 +27,58 @@ export function compressGaps(params: {
   scale: number;
   baseScale: number;
   hideGaps: boolean;
-  traceMaxY: number;
+  traceMaxX?: number;
+  traceMaxY?: number;
 }): {
   waitingRects: any[];
-  gapsToReduce: { originalY: number; originalHeight: number; shift: number }[];
-  traceMaxY: number;
+  gapsToReduce: { originalX: number; originalWidth: number; shift: number; originalY?: number; originalHeight?: number }[];
+  traceMaxX: number;
+  traceMaxY?: number;
 } {
   const { traceNodes, yAxisMode, scale, baseScale, hideGaps } = params;
-  let traceMaxY = params.traceMaxY;
+  let traceMaxX = params.traceMaxX ?? params.traceMaxY ?? 20;
   const waitingRects: any[] = [];
-  const sortedNodes = [...traceNodes].filter(n => !n.hidden).sort((a, b) => a.y - b.y);
+  const sortedNodes = [...traceNodes].filter(n => !n.hidden).sort((a, b) => a.x - b.x);
   
-  let currentMaxY = 5;
+  let currentMaxX = 5;
   sortedNodes.forEach(n => {
     // Thinking nodes provide step-level bounds to avoid false gaps.
-    const nodeTop = (n as any).timeBasedY ?? n.y;
-    const nodeBottom = (n as any).timeBasedEndY ?? n.y + n.height;
+    const nodeLeft = (n as any).timeBasedX ?? n.x;
+    const nodeRight = (n as any).timeBasedEndX ?? n.x + n.width;
 
-    if (nodeTop > currentMaxY) {
-      const gapHeight = nodeTop - currentMaxY;
+    if (nodeLeft > currentMaxX) {
+      const gapWidth = nodeLeft - currentMaxX;
       const threshold = Math.max(20, 20 * (scale / baseScale));
-      if (yAxisMode === 'time' && gapHeight > threshold) {
-        waitingRects.push({ y: currentMaxY, height: gapHeight });
+      if (yAxisMode === 'time' && gapWidth > threshold) {
+        waitingRects.push({ x: currentMaxX, width: gapWidth, y: currentMaxX, height: gapWidth });
       }
     }
-    currentMaxY = Math.max(currentMaxY, nodeBottom);
+    currentMaxX = Math.max(currentMaxX, nodeRight);
   });
   
-  const gapsToReduce: { originalY: number, originalHeight: number, shift: number }[] = [];
+  const gapsToReduce: { originalX: number; originalWidth: number; shift: number; originalY?: number; originalHeight?: number }[] = [];
   if (hideGaps && yAxisMode === 'time') {
-    const reducedHeight = 30;
+    const reducedWidth = 30;
     let currentTotalShift = 0;
 
     waitingRects.forEach((rect: any) => {
-      const originalY = rect.y;
-      const originalHeight = rect.height;
+      const originalX = rect.x;
+      const originalWidth = rect.width;
 
-      if (originalHeight > reducedHeight) {
-        const shift = originalHeight - reducedHeight;
-        gapsToReduce.push({ originalY, originalHeight, shift });
+      if (originalWidth > reducedWidth) {
+        const shift = originalWidth - reducedWidth;
+        gapsToReduce.push({ originalX, originalWidth, shift, originalY: originalX, originalHeight: originalWidth });
 
-        rect.y -= currentTotalShift;
-        rect.height = reducedHeight;
+        rect.x -= currentTotalShift;
+        rect.width = reducedWidth;
+        rect.y = rect.x;
+        rect.height = rect.width;
         rect.isSquiggle = true;
 
         currentTotalShift += shift;
       } else {
-        rect.y -= currentTotalShift;
+        rect.x -= currentTotalShift;
+        rect.y = rect.x;
       }
     });
 
@@ -82,19 +86,15 @@ export function compressGaps(params: {
     traceNodes.forEach(n => {
       let nodeShift = 0;
       gapsToReduce.forEach(g => {
-        if (n.y >= g.originalY + g.originalHeight) {
+        if (n.x >= g.originalX + g.originalWidth) {
           nodeShift += g.shift;
         }
       });
-      n.y -= nodeShift;
-      // Shift internal connection lines
-      if (n.type !== TraceNodeType.USER_INPUT && n.type !== TraceNodeType.THINKING && n.connectionLine) {
-        n.connectionLine.path = swapPathCoords(n.connectionLine.path); // temporarily swap back and recalculate later
-      }
+      n.x -= nodeShift;
     });
 
-    traceMaxY -= currentTotalShift;
+    traceMaxX -= currentTotalShift;
   }
 
-  return { waitingRects, gapsToReduce, traceMaxY };
+  return { waitingRects, gapsToReduce, traceMaxX, traceMaxY: traceMaxX };
 }

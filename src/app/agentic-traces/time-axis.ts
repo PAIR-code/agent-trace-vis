@@ -29,7 +29,7 @@ export interface TimeAxisConfig {
   scale: number;
   baseScale: number;
   maxDuration: number; // represents maxDuration in 'time' mode, maxCumulativeTokens in 'tokens' mode
-  timeTicks: { label: string; y: number; x?: number }[];
+  timeTicks: { label: string; x: number; y?: number }[];
   intervalLabel: string;
 }
 
@@ -99,7 +99,7 @@ export function computeTimeAxis(
   const scale = baseScale;
   const durationForInterval = maxDuration;
 
-  const timeTicks: { label: string, y: number, x?: number }[] = [];
+  const timeTicks: { label: string; x: number; y?: number }[] = [];
   let intervalLabel = '';
 
   if (!stretch) {
@@ -119,9 +119,9 @@ export function computeTimeAxis(
       intervalLabel = minutes > 0 ? `${minutes}m` : `${seconds}s`;
 
       for (let duration = 0; duration <= durationForInterval; duration += interval) {
-        const y = BASE_OFFSET + duration * scale;
+        const x = BASE_OFFSET + duration * scale;
         const label = hideGaps ? '' : formatElapsedTime(duration);
-        timeTicks.push({ label, y });
+        timeTicks.push({ label, x });
       }
     } else if (yAxisMode === 'tokens') {
       const niceIntervals = [100, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000, 250000, 500000, 1000000];
@@ -143,7 +143,7 @@ export function computeTimeAxis(
       }
 
       for (let tokens = 0; tokens <= durationForInterval; tokens += interval) {
-        const y = BASE_OFFSET + tokens * scale;
+        const x = BASE_OFFSET + tokens * scale;
         let label = '';
         if (tokens === 0) {
           label = '0';
@@ -154,7 +154,7 @@ export function computeTimeAxis(
         } else {
           label = `+${tokens}`;
         }
-        timeTicks.push({ label, y });
+        timeTicks.push({ label, x });
       }
     }
   }

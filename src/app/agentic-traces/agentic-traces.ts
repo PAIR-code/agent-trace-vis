@@ -125,7 +125,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   yAxisMode = signal<"time" | "tokens">("time");
   stretch = signal<boolean>(false);
   layoutMode = signal<"column" | "row">("row");
-  timeTicks = signal<{ label: string; y: number; x?: number }[]>([]);
+  timeTicks = signal<{ label: string; x: number; y?: number }[]>([]);
   hideGaps = signal<boolean>(false);
   timeUnitLabel = signal<string>("");
   selectedTokenTypes = signal<Set<string>>(new Set(['input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens']));

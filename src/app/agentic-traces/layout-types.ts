@@ -228,7 +228,7 @@ export interface LayoutOutput {
   backboneLines: BackboneLine[];
   contentWidth: number;
   contentHeight: number;
-  timeTicks: Array<{ label: string, y: number, x?: number }>;
+  timeTicks: Array<{ label: string, x: number, y?: number }>;
   timeUnitLabel: string;
 }
 

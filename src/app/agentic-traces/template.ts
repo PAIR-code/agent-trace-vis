@@ -180,8 +180,8 @@ export const AGENTIC_TRACES_TEMPLATE = `
                 <div class="time-tick-line"></div>
               </div>
               <div class="unit-bracket" *ngIf="hideGaps() && timeTicks().length > 1" 
-                   [style.top.px]="timeTicks()[0].y" 
-                   [style.height.px]="timeTicks()[1].y - timeTicks()[0].y" 
+                   [style.top.px]="timeTicks()[0].y!" 
+                   [style.height.px]="(timeTicks()[1].y! - timeTicks()[0].y!)" 
                    style="position: absolute; left: 50px; width: 5px; border: 1px solid #cbd5e1; border-right: none; pointer-events: none;">
                 <span style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 10px; color: #6b7280; font-weight: 600; white-space: nowrap;">
                   {{ timeUnitLabel() }}

@@ -15,8 +15,8 @@
  */
 
 /**
- * @fileoverview Top-level layout orchestrator — computes node positions,
- * backbone lines, and SVG dimensions for the trace visualization.
+ * @fileoverview Top-level layout orchestrator — computes node positions natively
+ * in horizontal (row) layout, backbone lines, and SVG dimensions for the trace visualization.
  */
 
 import { TraceNodeType, TraceNodeColumn, ReasoningTrace, ReasoningTraceStep, ReasoningTraceNode, BASE_OFFSET } from './layout-types';
@@ -54,8 +54,8 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
   const allNodes: VisNode[] = [];
   const backboneLines: BackboneLine[] = [];
   const nodeW = 12;
-  const gap = 12; // vertical gap between nodes
-  let maxContentHeight = 1000;
+  const gap = 12; // horizontal gap between nodes
+  let maxContentWidth = 1000;
 
   const idsArray = [...selectedTraceIds];
 
@@ -74,7 +74,7 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
 
     const data = trace.data;
     const waitingRects: any[] = [];
-    const xOffset = 0; // Local track space: local X ranges from 0 to 140
+    const xOffset = 0; // Channel offset in Y space
 
     const cols = {
       user: { center: 23.33 },
@@ -82,9 +82,9 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
       tools: { center: 116.66 },
     };
 
-    let currentY = BASE_OFFSET;
+    let currentY = BASE_OFFSET; // current position along timeline X axis
     const steps = (data as ReasoningTrace).steps || [];
-    const rawStops: { y: number, color: string }[] = [];
+    const rawStops: { x: number, color: string }[] = [];
 
     // Find a model family/name in the steps to assign fallback trace colors
     let traceModel = 'Agent';
@@ -131,17 +131,17 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
 
     let cumulativeTokens = 0;
     const traceNodes: VisNode[] = [];
-    let traceMaxY = 20;
-    let maxUserY = 0;
-    let maxAgentY = 0;
-    let maxToolsY = 0;
+    let traceMaxX = 20;
+    let maxUserX = 0;
+    let maxAgentX = 0;
+    let maxToolsX = 0;
 
-    const updateMaxHeights = (nodeBottom: number, column: string) => {
-      if (nodeBottom > traceMaxY) traceMaxY = nodeBottom;
-      if (nodeBottom > maxContentHeight) maxContentHeight = nodeBottom;
-      if (column === 'user' && nodeBottom > maxUserY) maxUserY = nodeBottom;
-      if (column === 'agent' && nodeBottom > maxAgentY) maxAgentY = nodeBottom;
-      if (column === 'tools' && nodeBottom > maxToolsY) maxToolsY = nodeBottom;
+    const updateMaxHeights = (nodeRight: number, column: string) => {
+      if (nodeRight > traceMaxX) traceMaxX = nodeRight;
+      if (nodeRight > maxContentWidth) maxContentWidth = nodeRight;
+      if (column === 'user' && nodeRight > maxUserX) maxUserX = nodeRight;
+      if (column === 'agent' && nodeRight > maxAgentX) maxAgentX = nodeRight;
+      if (column === 'tools' && nodeRight > maxToolsX) maxToolsX = nodeRight;
     };
 
     steps.forEach((step: ReasoningTraceStep, index: number) => {
@@ -178,6 +178,7 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
 
       const ctx: NodeBuildContext = {
         cols,
+        rows: cols,
         yAxisMode,
         traceScale,
         startTime,
@@ -225,9 +226,9 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
 
       const stepNodes = traceNodes.filter(n => n.data === step);
       if (stepNodes.length > 0) {
-        const minY = Math.min(...stepNodes.map(n => n.y));
+        const minX = Math.min(...stepNodes.map(n => n.x));
         const color = step.color || getModelColor(step.modelFamily || traceModel);
-        rawStops.push({ y: minY, color: color });
+        rawStops.push({ x: minX, color: color });
       }
 
       if (yAxisMode === 'tokens') {
@@ -235,15 +236,15 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
       }
     });
 
-    const { waitingRects: compressedRects, gapsToReduce, traceMaxY: newTraceMaxY } = compressGaps({
+    const { waitingRects: compressedRects, gapsToReduce, traceMaxX: newTraceMaxX } = compressGaps({
       traceNodes,
       yAxisMode,
       scale: traceScale,
       baseScale,
       hideGaps,
-      traceMaxY,
+      traceMaxX,
     });
-    traceMaxY = newTraceMaxY;
+    traceMaxX = newTraceMaxX;
     waitingRects.push(...compressedRects);
 
     rebuildConnectionLines(traceNodes, cols, nodeW, yAxisMode, startTime, traceScale, gapsToReduce);
@@ -252,7 +253,7 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
     const gradientStops: { offset: string, color: string }[] = [];
     let prevColor = '';
     rawStops.forEach(rs => {
-      const offset = `${rs.y / (maxContentHeight + 100)}`;
+      const offset = `${rs.x / (maxContentWidth + 100)}`;
       if (rs.color !== prevColor) {
         if (prevColor) {
           gradientStops.push({ offset: offset, color: prevColor });
@@ -272,14 +273,15 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
     const cx = cols.agent.center;
 
     // Generate area charts as ThinkingAreaNodes
-    const sortedNodes = [...traceNodes].filter(n => !n.hidden).sort((a, b) => a.y - b.y);
+    const sortedNodes = [...traceNodes].filter(n => !n.hidden).sort((a, b) => a.x - b.x);
     const traceThinkingAreaNodes = buildThinkingAreaNodes(id, sortedNodes, cx, yAxisMode);
-    const traceBackboneLines = buildBackboneLines(id, cx, waitingRects, traceMaxY);
+    const traceBackboneLines = buildBackboneLines(id, cx, waitingRects, traceMaxX);
 
     trace.nodes = traceNodes;
     trace.thinkingAreaNodes = traceThinkingAreaNodes;
     trace.backboneLines = traceBackboneLines;
-    trace.maxTraceY = traceMaxY + 20;
+    trace.maxTraceX = traceMaxX + 20;
+    trace.maxTraceY = 140;
 
     allNodes.push(...traceThinkingAreaNodes);
     allNodes.push(...traceNodes);
@@ -297,6 +299,7 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
   });
 
   let contentWidth = 500;
+  let maxContentHeight = 140;
   const layoutRes = applyRowLayout({
     allNodes,
     backboneLines,
@@ -305,7 +308,7 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
     traces,
     selectedTraceIds,
     layoutMode,
-    maxContentHeight,
+    maxContentHeight: maxContentWidth,
     containerWidth,
   });
   contentWidth = layoutRes.contentWidth;

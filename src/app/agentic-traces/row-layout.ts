@@ -15,7 +15,7 @@
  */
 
 /**
- * @fileoverview Transforms column layout into row layout by swapping x↔y axes.
+ * @fileoverview Transforms native horizontal (row) layout into vertical (column) layout when layoutMode === 'column'.
  */
 
 import { VisNode, BackboneLine, ThinkingAreaNode } from './layout-types';
@@ -25,7 +25,7 @@ import { swapPathCoords } from './layout-utils';
 export function applyRowLayout(params: {
   allNodes: VisNode[];
   backboneLines: BackboneLine[];
-  timeTicks: { label: string; y: number; x?: number }[];
+  timeTicks: { label: string; x?: number; y?: number }[];
   yAxisMode: string;
   traces: any[];
   selectedTraceIds: Set<string>;
@@ -47,12 +47,12 @@ export function applyRowLayout(params: {
     containerWidth,
   } = params;
 
-  let maxContentHeight = params.maxContentHeight;
+  let maxContentHeight = 140;
   let contentWidth = 500;
   const idsArray = [...selectedTraceIds];
 
-  if (layoutMode === 'row') {
-    // Swap node coordinates: x↔y, width↔height
+  if (layoutMode === 'column') {
+    // Swap node coordinates: x↔y, width↔height to transform horizontal layout into vertical (column) layout
     allNodes.forEach(n => {
       const ox = n.x, oy = n.y, ow = n.width, oh = n.height;
       n.x = oy;
@@ -75,15 +75,15 @@ export function applyRowLayout(params: {
       l.path = swapPathCoords(l.path);
     });
 
-    // Swap horizontal ticks
+    // Swap horizontal ticks to vertical
     if (yAxisMode === 'time' || yAxisMode === 'tokens') {
       timeTicks.forEach(tick => {
-        tick.x = tick.y;
-        tick.y = 0;
+        tick.y = tick.x ?? (tick as any).y;
+        tick.x = undefined;
       });
     }
 
-    // Update per-trace dimension metadata for row mode
+    // Update per-trace dimension metadata for column mode
     idsArray.forEach(id => {
       const trace = traces.find(t => t.id === id);
       if (trace) {
@@ -97,22 +97,20 @@ export function applyRowLayout(params: {
 
     // Recompute dimensions after swap
     const visibleNodes = allNodes.filter(n => !n.hidden);
-    const targetAvail = containerWidth && containerWidth > 0 ? containerWidth : 500;
     if (visibleNodes.length > 0) {
-      const calculatedWidth = Math.max(...visibleNodes.map(n => n.x + n.width)) + 140;
-      contentWidth = Math.max(calculatedWidth, targetAvail);
       maxContentHeight = Math.max(...visibleNodes.map(n => n.y + n.height));
-    } else {
-      contentWidth = targetAvail;
     }
+    const count = selectedTraceIds.size;
+    const baseWidth = count * 140 + (count > 1 ? (count - 1) * 20 : 0);
+    const axisWidth = (yAxisMode === 'time' || yAxisMode === 'tokens') ? 60 : 0;
+    contentWidth = Math.max(130, baseWidth + axisWidth);
 
-    // Rescale gradient stop offsets for row mode.
-    // Stops were computed as y / (columnMaxHeight + 100), but in row mode
-    // the gradient spans contentWidth on the x-axis. Rescale so stops
-    // align with the actual node x-positions after the x↔y swap.
-    const columnMaxHeight = params.maxContentHeight;
-    if (columnMaxHeight > 0 && contentWidth > 0) {
-      const scale = (columnMaxHeight + 100) / contentWidth;
+    // Rescale gradient stop offsets for column mode.
+    // Stops were computed as x / (maxContentWidth + 100), but in column mode
+    // the gradient spans maxContentHeight on the y-axis.
+    const maxContentWidth = params.maxContentHeight; // passed as maxContentWidth from layout-helper
+    if (maxContentWidth > 0 && maxContentHeight > 0) {
+      const scale = (maxContentWidth + 100) / maxContentHeight;
       traces.forEach(t => {
         if (t.gradientStops) {
           t.gradientStops = t.gradientStops.map((s: any) => ({
@@ -123,11 +121,28 @@ export function applyRowLayout(params: {
       });
     }
   } else {
-    // Column Mode contentWidth
-    const count = selectedTraceIds.size;
-    const baseWidth = count * 140 + (count > 1 ? (count - 1) * 20 : 0);
-    const axisWidth = (yAxisMode === 'time' || yAxisMode === 'tokens') ? 60 : 0;
-    contentWidth = Math.max(130, baseWidth + axisWidth);
+    // Row Mode: calculation is already natively horizontal!
+    idsArray.forEach(id => {
+      const trace = traces.find(t => t.id === id);
+      if (trace) {
+        const tn = allNodes.filter(n => n.traceId === id && !n.hidden);
+        if (tn.length > 0) {
+          trace.maxTraceX = Math.max(...tn.map(n => n.x + n.width)) + 20;
+          trace.maxTraceY = 140;
+        }
+      }
+    });
+
+    const visibleNodes = allNodes.filter(n => !n.hidden);
+    const targetAvail = containerWidth && containerWidth > 0 ? containerWidth : 500;
+    if (visibleNodes.length > 0) {
+      const calculatedWidth = Math.max(...visibleNodes.map(n => n.x + n.width)) + 140;
+      contentWidth = Math.max(calculatedWidth, targetAvail);
+      maxContentHeight = Math.max(140, Math.max(...visibleNodes.map(n => n.y + n.height)));
+    } else {
+      contentWidth = targetAvail;
+      maxContentHeight = 140;
+    }
   }
 
   return { contentWidth, maxContentHeight };
