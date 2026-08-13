@@ -33,7 +33,7 @@ export class AnalysisLayersService {
 
   // ─── Search input state (for the toolbar search bar) ──────────────
   currentQuery = signal<string>('');
-  currentMode = signal<'fuzzy' | 'semantic'>('fuzzy');
+  currentMode = signal<'fuzzy' | 'semantic'>('semantic');
   searchFocused = signal<boolean>(false);
 
   // ─── API key ──────────────────────────────────────────────────────
@@ -73,10 +73,23 @@ export class AnalysisLayersService {
 
   // ─── Public API ───────────────────────────────────────────────────
 
+  /** Ensure Gemini API key is available for AI semantic operations. Prompt user if missing. */
+  ensureApiKey(): boolean {
+    if (this.apiKey()) return true;
+    const key = prompt('Enter your Gemini API key for AI search:');
+    if (!key) return false;
+    this.apiKey.set(key);
+    localStorage.setItem('reasoning_vis_api_key', key);
+    return true;
+  }
+
   /** Submit the current toolbar query as a new layer. */
   submitSearch(nodes: any[]): void {
     const query = this.currentQuery().trim();
     if (!query) return;
+    if (this.currentMode() === 'semantic' && !this.ensureApiKey()) {
+      return;
+    }
     this.addLayer(query, this.currentMode(), nodes);
     this.currentQuery.set('');
   }
@@ -169,13 +182,10 @@ export class AnalysisLayersService {
     this.runSearch(id, nodes);
   }
 
-  /** Set the search mode, prompting for API key if switching to semantic. */
+  /** Set the search mode, prompting for API key if selecting semantic mode. */
   setSearchMode(mode: 'fuzzy' | 'semantic'): void {
-    if (mode === 'semantic' && !this.apiKey()) {
-      const key = prompt('Enter your Gemini API key for AI search:');
-      if (!key) return;
-      this.apiKey.set(key);
-      localStorage.setItem('reasoning_vis_api_key', key);
+    if (mode === 'semantic') {
+      if (!this.ensureApiKey()) return;
     }
     this.currentMode.set(mode);
   }
@@ -239,6 +249,13 @@ export class AnalysisLayersService {
   private runSearch(layerId: string, nodes: any[]): void {
     const layer = this.layers().find(l => l.id === layerId);
     if (!layer) return;
+
+    if (layer.mode === 'semantic' && !this.apiKey()) {
+      if (!this.ensureApiKey()) {
+        this.updateLayer(layerId, { enabled: false, loading: false });
+        return;
+      }
+    }
 
     this.subscriptions.get(layerId)?.unsubscribe();
     this.updateLayer(layerId, { loading: true });

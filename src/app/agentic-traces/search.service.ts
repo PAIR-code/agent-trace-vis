@@ -24,7 +24,7 @@ import { SearchService, SearchResult } from '../shared/search/search.service';
 @Injectable()
 export class AgenticTracesSearchService {
   searchQuery = signal<string>('');
-  searchMode = signal<'fuzzy' | 'semantic'>('fuzzy');
+  searchMode = signal<'fuzzy' | 'semantic'>('semantic');
   searchScores = signal<Map<string, SearchResult>>(new Map());
   searchLoading = signal<boolean>(false);
   searchFocused = signal<boolean>(false);

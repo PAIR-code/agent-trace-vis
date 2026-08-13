@@ -32,7 +32,7 @@ import { ReferenceChip } from './search.service';
     <div class="search-bar" [class.has-focus]="searchFocused">
       <div class="search-mode-toggle">
         <button class="mode-btn" [class.active]="searchMode === 'fuzzy'" (click)="setSearchMode('fuzzy')" title="Keyword match">Text</button>
-        <button class="mode-btn mode-ai" [class.active]="searchMode === 'semantic'" [class.needs-key]="aiDisabled && searchMode !== 'semantic'" (click)="setSearchMode('semantic')" title="AI semantic search ({{aiDisabled ? 'click to enter API key' : 'ready'}})">✦ AI</button>
+        <button class="mode-btn mode-ai" [class.active]="searchMode === 'semantic'" [class.needs-key]="aiDisabled" (click)="setSearchMode('semantic')" title="AI semantic search ({{aiDisabled ? 'click to enter API key' : 'ready'}})">✦ AI</button>
       </div>
       <div class="search-chips-and-input">
         <span class="reference-chip" *ngFor="let chip of referenceChips; let i = index">
@@ -220,7 +220,7 @@ import { ReferenceChip } from './search.service';
   `]
 })
 export class SearchBarComponent {
-  @Input() searchMode: 'fuzzy' | 'semantic' = 'fuzzy';
+  @Input() searchMode: 'fuzzy' | 'semantic' = 'semantic';
   @Input() searchQuery: string = '';
   @Input() searchLoading: boolean = false;
   @Input() searchFocused: boolean = false;
