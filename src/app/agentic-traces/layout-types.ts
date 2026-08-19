@@ -193,6 +193,7 @@ export interface ThinkingAreaNode extends InteractiveNodeBase {
   stroke: string;
   strokeWidth: number;
   opacity: number;
+  nodeIds?: string[];
 }
 
 export interface BackboneLine {

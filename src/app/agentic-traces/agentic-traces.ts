@@ -1077,24 +1077,27 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** Returns true if a file node is currently hovered (directly or via parent turn). */
+  /** Returns true if a file node is currently hovered. */
   isFileNodeHovered(targetNode: any): boolean {
     const hId = this.hoveredNodeId();
     if (!hId || !targetNode?.id) return false;
-    if (hId === targetNode.id) return true;
-    const hPrefix = hId.replace(/_(thinking|response|tc_\d+|obs_\d+)$/, '');
-    const nodePrefix = targetNode.id.replace(/_(thinking|response|tc_\d+|obs_\d+)$/, '');
-    return hPrefix === nodePrefix;
+    return hId === targetNode.id;
   }
 
-  /** Returns true if a file node is currently selected (directly or via parent turn). */
+  /** Returns true if a file node is currently selected. */
   isFileNodeSelected(targetNode: any): boolean {
     const sNode = this.selectedNode();
     if (!sNode || !targetNode?.id) return false;
-    if (sNode.id === targetNode.id) return true;
-    const sPrefix = sNode.id.replace(/_(thinking|response|tc_\d+|obs_\d+)$/, '');
-    const nodePrefix = targetNode.id.replace(/_(thinking|response|tc_\d+|obs_\d+)$/, '');
-    return sPrefix === nodePrefix;
+    return sNode.id === targetNode.id;
+  }
+
+  /** Returns true if a thinking area node or any of its contained thinking steps is hovered. */
+  isThinkingAreaHovered(area: any): boolean {
+    const hId = this.hoveredNodeId();
+    if (!hId || !area) return false;
+    if (hId === area.id) return true;
+    if (area.nodeIds && Array.isArray(area.nodeIds) && area.nodeIds.includes(hId)) return true;
+    return false;
   }
 
   /** Returns true if any view or edit node in a row is currently hovered or selected. */

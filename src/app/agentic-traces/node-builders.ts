@@ -423,7 +423,8 @@ export function buildThinkingAreaNodes(
       fill: blockColor,
       stroke: 'none',
       strokeWidth: 0,
-      opacity: 1
+      opacity: 0.65,
+      nodeIds: block.map(n => n.id)
     });
   });
 

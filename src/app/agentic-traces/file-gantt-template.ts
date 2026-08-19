@@ -89,7 +89,7 @@ export const FILE_GANTT_TEMPLATE = `
           [attr.stroke]="isRowHoveredOrSelected(row) ? '#475569' : '#cbd5e1'"
           [attr.stroke-width]="isRowHoveredOrSelected(row) ? 2 : 1.5"
           stroke-dasharray="3,3"
-          [style.opacity]="isFilesCollapsed(t.id) ? 0 : 1" />
+          [style.opacity]="isFilesCollapsed(t.id) ? 0 : (isRowHoveredOrSelected(row) ? 1 : 0.65)" />
 
         <!-- View/Grep event dots on the line -->
         <circle
@@ -100,6 +100,7 @@ export const FILE_GANTT_TEMPLATE = `
           fill="#ffffff"
           [attr.stroke]="(isFileNodeSelected(view.node) || isFileNodeHovered(view.node)) ? '#0f172a' : (view.isSearch ? '#94a3b8' : '#334155')"
           [attr.stroke-width]="isFileNodeSelected(view.node) ? 3 : (isFileNodeHovered(view.node) ? 2.5 : (view.isSearch ? 1.2 : 1.5))"
+          [attr.opacity]="(isFileNodeSelected(view.node) || isFileNodeHovered(view.node)) ? 1 : 0.65"
           class="file-marker-clickable"
           [class.is-hovered]="isFileNodeHovered(view.node)"
           [class.selected]="isFileNodeSelected(view.node)"
@@ -110,14 +111,6 @@ export const FILE_GANTT_TEMPLATE = `
 
         <!-- Individual edit segments on top of the line -->
         <ng-container *ngFor="let edit of row.edits; trackBy: trackByFileEdit">
-          <!-- Solid baseline segment under the edit -->
-          <line
-            [attr.x1]="edit.x"
-            [attr.x2]="edit.x + edit.width"
-            y1="14" y2="14"
-            [attr.stroke]="(isFileNodeSelected(edit.node) || isFileNodeHovered(edit.node)) ? '#0f172a' : (row.isPlan ? '#94a3b8' : '#334155')"
-            [attr.stroke-width]="(isFileNodeSelected(edit.node) || isFileNodeHovered(edit.node)) ? 3 : 2" />
-
           <!-- Downward-hanging edit bar proportional in height to lines written -->
           <rect
             [attr.x]="edit.x"
@@ -125,7 +118,7 @@ export const FILE_GANTT_TEMPLATE = `
             [attr.width]="edit.width"
             [attr.height]="edit.barHeight"
             [attr.fill]="(isFileNodeSelected(edit.node) || isFileNodeHovered(edit.node)) ? '#0f172a' : (row.isPlan ? '#94a3b8' : '#334155')"
-            [attr.opacity]="(isFileNodeSelected(edit.node) || isFileNodeHovered(edit.node)) ? 1 : (row.isPlan ? 0.75 : 0.85)"
+            [attr.opacity]="(isFileNodeSelected(edit.node) || isFileNodeHovered(edit.node)) ? 1 : (row.isPlan ? 0.6 : 0.65)"
             rx="1.5"
             class="file-marker-clickable"
             [class.is-hovered]="isFileNodeHovered(edit.node)"

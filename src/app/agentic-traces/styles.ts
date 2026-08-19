@@ -510,24 +510,35 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       cursor: pointer;
       z-index: 10;
       border-radius: 6px;
-      transition: all 0.3s ease;
+      transition: opacity 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
       outline: none;
       -webkit-user-drag: none;
+      opacity: 0.65;
     }
 
     .vis-node.hidden {
       display: none;
     }
 
-
-
-    .vis-node:hover, .vis-node.is-hovered {
+    .vis-node:hover, .vis-node.is-hovered, .vis-node.selected {
       z-index: 20;
-      filter: brightness(0.9);
+      opacity: 1 !important;
+      filter: brightness(0.95);
     }
 
     .vis-node.selected {
       box-shadow: 0 0 0 3px #3b82f6;
+    }
+
+    /* Thinking area SVG blocks */
+    .thinking-areas path {
+      cursor: pointer;
+      transition: opacity 0.2s ease, filter 0.2s ease;
+    }
+    .thinking-areas path:hover,
+    .thinking-areas path.is-hovered {
+      opacity: 1 !important;
+      filter: brightness(0.95);
     }
 
     /* ── Filled types ── */
@@ -573,11 +584,6 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       height: 100%;
       display: block;
       color: #cbd5e1; /* Gray for file body */
-    }
-    
-    /* Apply 0.5 opacity to all tool icons */
-    .vis-node.diff, .vis-node.view, .vis-node.search, .vis-node.command, .vis-node.external-search {
-      opacity: 0.5;
     }
     
     /* Command nodes: gray background with white text */
@@ -757,9 +763,14 @@ export const AGENTIC_TRACES_STYLES: string[] = [
     ::ng-deep .message-card {
       color: #1e293b !important;
       padding: 12px 16px !important;
+      opacity: 0.65;
+      transition: opacity 0.2s ease, background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
     }
 
-    ::ng-deep .message-card:hover {
+    ::ng-deep .message-card:hover,
+    ::ng-deep .message-card.is-hovered,
+    ::ng-deep .message-card.is-active {
+      opacity: 1 !important;
       background: #f1f5f9 !important;
     }
 
@@ -939,15 +950,19 @@ export const AGENTIC_TRACES_STYLES: string[] = [
     ::ng-deep .child-msg {
       color: #1e293b !important;
       padding: 8px 10px !important;
+      opacity: 0.65;
+      transition: opacity 0.2s ease, background 0.2s ease, border-color 0.2s ease;
     }
 
     ::ng-deep .child-msg.is-active {
       background: #f8fafc !important;
       border-color: #3b82f6 !important;
+      opacity: 1 !important;
     }
 
     ::ng-deep .child-msg:hover, ::ng-deep .child-msg.is-hovered {
       background: #f1f5f9 !important;
+      opacity: 1 !important;
     }
 
     ::ng-deep .raw-json-btn {

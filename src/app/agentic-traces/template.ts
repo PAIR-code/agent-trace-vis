@@ -245,11 +245,15 @@ export const AGENTIC_TRACES_TEMPLATE = `
                     <!-- Thinking Area SVG Nodes -->
                     <g class="thinking-areas">
                       <path *ngFor="let area of t.thinkingAreaNodes; trackBy: trackByNodeId"
+                            class="thinking-area-path"
                             [attr.d]="area.path"
                             [attr.fill]="area.fill"
                             [attr.stroke]="area.stroke"
                             [attr.stroke-width]="area.strokeWidth"
-                            [attr.opacity]="area.opacity" />
+                            [attr.opacity]="isThinkingAreaHovered(area) ? 1 : (area.opacity || 0.65)"
+                            [class.is-hovered]="isThinkingAreaHovered(area)"
+                            (mouseenter)="hoveredNodeId.set(area.id)"
+                            (mouseleave)="hoveredNodeId.set(null)" />
                     </g>
                   </svg>
 
@@ -321,11 +325,15 @@ export const AGENTIC_TRACES_TEMPLATE = `
                       <!-- Thinking Area SVG Nodes -->
                       <g class="thinking-areas">
                         <path *ngFor="let area of t.thinkingAreaNodes; trackBy: trackByNodeId"
+                              class="thinking-area-path"
                               [attr.d]="area.path"
                               [attr.fill]="area.fill"
                               [attr.stroke]="area.stroke"
                               [attr.stroke-width]="area.strokeWidth"
-                              [attr.opacity]="area.opacity" />
+                              [attr.opacity]="isThinkingAreaHovered(area) ? 1 : (area.opacity || 0.65)"
+                              [class.is-hovered]="isThinkingAreaHovered(area)"
+                              (mouseenter)="hoveredNodeId.set(area.id)"
+                              (mouseleave)="hoveredNodeId.set(null)" />
                       </g>
                     </svg>
 
