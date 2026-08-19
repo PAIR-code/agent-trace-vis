@@ -48,226 +48,290 @@ function getStepTokens(usage: any, selectedTypes?: Set<string>): number {
   return sum;
 }
 
+function getTraceMetadata(trace: any, yAxisMode: string, selectedTokenTypes?: Set<string>) {
+  const data = (trace.data as ReasoningTrace) || {};
+  const steps = data.steps || [];
+
+  const agentName = (data as any)?.agent?.name || 'Agent';
+  const model = (data as any)?.agent?.model || steps.find(s => s.model)?.model;
+  const agentColor = steps.find(s => s.color)?.color || getAgentColor(agentName, model);
+
+  let startTime = 0;
+  let duration = 0;
+
+  if (yAxisMode === 'time') {
+    const timestamps: number[] = [];
+    steps.forEach((s: ReasoningTraceStep) => {
+      if (s.timestamp) timestamps.push(new Date(s.timestamp).getTime());
+      if (s.completedAt) timestamps.push(new Date(s.completedAt).getTime());
+    });
+    if (timestamps.length > 0) {
+      startTime = Math.min(...timestamps);
+      duration = Math.max(...timestamps) - startTime;
+    }
+  } else if (yAxisMode === 'tokens') {
+    let runningSum = 0;
+    steps.forEach((s: ReasoningTraceStep) => {
+      let tok = getStepTokens(s.token_usage, selectedTokenTypes);
+      if (tok === 0) {
+        const text = s.nodes?.map(n => n.text).join(' ') || (s as any).content || (s as any).reasoning_content || '';
+        tok = text.split(/\s+/).filter((w: string) => w.length > 0).length;
+      }
+      runningSum += tok;
+    });
+    duration = runningSum;
+  }
+
+  const stepTokensList = steps.map((s: ReasoningTraceStep) => {
+    let tok = (s.token_usage?.output_tokens || 0) + (s.token_usage?.input_tokens || 0);
+    if (tok === 0) {
+      const text = s.nodes?.map(n => n.text).join(' ') || (s as any).content || (s as any).reasoning_content || '';
+      tok = text.split(/\s+/).filter((w: string) => w.length > 0).length;
+    }
+    return tok;
+  });
+  const maxTokens = Math.max(...stepTokensList, 1);
+
+  return { steps, agentName, model, agentColor, startTime, duration, maxTokens };
+}
+
+function layoutSingleTrace(
+  trace: any,
+  meta: ReturnType<typeof getTraceMetadata>,
+  scale: number,
+  baseScale: number,
+  yAxisMode: 'time' | 'tokens',
+  hideGaps: boolean,
+  selectedTokenTypes?: Set<string>
+) {
+  const { steps, agentName, model, agentColor, startTime, maxTokens } = meta;
+  const cols = { user: { center: 23.33 }, agent: { center: 70 }, tools: { center: 116.66 } };
+  const traceNodes: VisNode[] = [];
+  let currentY = BASE_OFFSET;
+  let cumulativeTokens = 0;
+  let traceMaxX = 20;
+
+  steps.forEach((step: ReasoningTraceStep, index: number) => {
+    const numNodes = step.nodes.length;
+    const stepAgentColor = step.color || getAgentColor(step.agentName || agentName, step.model || model);
+
+    let currentTs = step.timestamp ? new Date(step.timestamp).getTime() : NaN;
+    let completedTs = step.completedAt ? new Date(step.completedAt).getTime() : NaN;
+
+    if (isNaN(completedTs) && index < steps.length - 1) {
+      const nextStep = steps[index + 1];
+      if (nextStep.stepType !== ReasoningStepType.USER_INPUT && step.stepType !== ReasoningStepType.USER_INPUT) {
+        completedTs = nextStep.timestamp ? new Date(nextStep.timestamp).getTime() : NaN;
+      }
+    }
+
+    const stepDuration = (!isNaN(currentTs) && !isNaN(completedTs)) ? completedTs - currentTs : 0;
+
+    let stepTokens = getStepTokens(step.token_usage, selectedTokenTypes);
+    if (stepTokens === 0) {
+      const text = step.nodes?.map(n => n.text).join(' ') || (step as any).content || (step as any).reasoning_content || '';
+      stepTokens = text.split(/\s+/).filter((w: string) => w.length > 0).length;
+    }
+
+    if (yAxisMode === 'tokens') {
+      currentTs = cumulativeTokens;
+      completedTs = cumulativeTokens + stepTokens;
+    }
+
+    const stepNodeHeight = stepDuration > 0 ? Math.max(12, (stepDuration * scale) / numNodes) : 12;
+
+    const ctx: NodeBuildContext = {
+      cols,
+      rows: cols,
+      yAxisMode,
+      traceScale: scale,
+      startTime,
+      stepAgentColor,
+      traceId: trace.id,
+      nodeW: 12,
+      maxTokens,
+      step,
+      numNodes,
+      stepDuration: yAxisMode === 'tokens' ? stepTokens : stepDuration,
+      currentTs,
+      completedTs,
+      stepNodeHeight,
+    };
+
+    step.nodes.forEach((an: ReasoningTraceNode, nodeIndex: number) => {
+      if (an.text?.includes("servers are experiencing high traffic") ||
+          an.text?.includes("retryable error from model provider")) {
+        if (traceNodes.length > 0) {
+          (traceNodes[traceNodes.length - 1] as any).followedByRateLimit = true;
+        }
+        const result = buildRateLimitNode(ctx, currentY, an);
+        traceNodes.push(result.node);
+        currentY = result.nextY;
+      } else {
+        const col = (an.type === TraceNodeType.SYSTEM || an.type === TraceNodeType.TOOL_CALL)
+          ? TraceNodeColumn.AGENT
+          : an.column;
+        const nodeGap = nodeIndex > 0 ? 0 : 12;
+
+        let result;
+        if (an.type === TraceNodeType.THINKING) {
+          result = buildThinkingNode(ctx, currentY, an.id, an.text, nodeIndex, nodeGap, an);
+        } else if (an.type === TraceNodeType.RESPONSE) {
+          result = buildResponseNode(ctx, currentY, an.id, 'user', an.text, nodeIndex, nodeGap, an);
+        } else {
+          result = buildDefaultNode(ctx, currentY, an.id, an.type, col, an.text, nodeIndex, nodeGap, an);
+        }
+        traceNodes.push(result.node);
+        currentY = result.nextY;
+        if (result.nodeBottom > traceMaxX) traceMaxX = result.nodeBottom;
+      }
+    });
+
+    if (yAxisMode === 'tokens') {
+      cumulativeTokens += stepTokens;
+    }
+  });
+
+  const { waitingRects, traceMaxX: compressedMaxX } = compressGaps({
+    traceNodes,
+    yAxisMode,
+    scale,
+    baseScale,
+    hideGaps,
+    traceMaxX,
+  });
+
+  const cx = cols.agent.center;
+  const sortedNodes = [...traceNodes].filter(n => !n.hidden).sort((a, b) => a.x - b.x);
+  const thinkingAreaNodes = buildThinkingAreaNodes(trace.id, sortedNodes, cx, yAxisMode);
+  const backboneLines = buildBackboneLines(trace.id, cx, waitingRects, compressedMaxX, agentColor, sortedNodes);
+
+  return {
+    traceNodes,
+    thinkingAreaNodes,
+    backboneLines,
+    traceMaxX: compressedMaxX,
+    waitingRects,
+  };
+}
+
 export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
   const { traces, selectedTraceIds, yAxisMode, layoutMode, hideGaps, selectedTokenTypes, containerWidth, stretch } = params;
 
   const allNodes: VisNode[] = [];
   const backboneLines: BackboneLine[] = [];
-  const nodeW = 12;
-  const gap = 12; // horizontal gap between nodes
-  let maxContentWidth = 1000;
-
   const idsArray = [...selectedTraceIds];
 
   const timeAxis = computeTimeAxis(traces, selectedTraceIds, yAxisMode, hideGaps, selectedTokenTypes, layoutMode, containerWidth, !!stretch);
-  const { scale, baseScale, timeTicks, intervalLabel } = timeAxis;
+  const { scale, baseScale } = timeAxis;
+  let { timeTicks, intervalLabel } = timeAxis;
 
-  let targetSpan = 800;
-  if (layoutMode === 'row') {
-    const avail = containerWidth && containerWidth > 0 ? containerWidth : 1000;
-    targetSpan = Math.max(400, avail - BASE_OFFSET - 140);
+  const avail = containerWidth && containerWidth > 0 ? containerWidth : 1000;
+  const targetSpan = layoutMode === 'row' ? Math.max(400, avail - BASE_OFFSET - 140) : 800;
+
+  // 1. Gather metadata and initial scales for each trace
+  const traceItems = idsArray.map(id => {
+    const trace = traces.find(t => t.id === id);
+    if (!trace || !trace.data) return null;
+    const meta = getTraceMetadata(trace, yAxisMode, selectedTokenTypes);
+    trace.agentColor = meta.agentColor;
+    const initialScale = stretch ? (meta.duration > 0 ? targetSpan / meta.duration : scale) : scale;
+    return { trace, id, meta, initialScale };
+  }).filter(Boolean) as { trace: any; id: string; meta: ReturnType<typeof getTraceMetadata>; initialScale: number }[];
+
+  // 2. Compute scale multipliers when hiding gaps in time mode
+  const scaleMultipliers = new Map<string, number>();
+  const initialLayouts = new Map<string, ReturnType<typeof layoutSingleTrace>>();
+
+  if (hideGaps && yAxisMode === 'time') {
+    traceItems.forEach(item => {
+      let currentScale = item.initialScale;
+      let layout = layoutSingleTrace(item.trace, item.meta, currentScale, baseScale, yAxisMode, hideGaps, selectedTokenTypes);
+
+      // Refine scale so active segments fill available span
+      for (let iter = 0; iter < 2; iter++) {
+        const squiggles = layout.waitingRects.filter(r => r.isSquiggle).length;
+        const squigglesWidth = squiggles * 30;
+        const activeWidth = layout.traceMaxX - BASE_OFFSET - squigglesWidth;
+        const targetActiveWidth = Math.max(50, targetSpan - BASE_OFFSET - squigglesWidth);
+
+        if (activeWidth > 0) {
+          const mult = targetActiveWidth / activeWidth;
+          if (Math.abs(mult - 1) > 0.02) {
+            currentScale *= mult;
+            layout = layoutSingleTrace(item.trace, item.meta, currentScale, baseScale, yAxisMode, hideGaps, selectedTokenTypes);
+          } else {
+            break;
+          }
+        }
+      }
+
+      scaleMultipliers.set(item.id, currentScale / item.initialScale);
+      initialLayouts.set(item.id, layout);
+    });
   }
 
-  idsArray.forEach((id, traceIndex) => {
-    const trace = traces.find(t => t.id === id);
-    if (!trace || !trace.data) return;
+  const sharedMultiplier = scaleMultipliers.size > 0 ? Math.min(...scaleMultipliers.values()) : 1;
 
-    const data = trace.data;
-    const waitingRects: any[] = [];
+  // 3. Perform final layout for each trace
+  let maxContentWidth = 1000;
 
-    const cols = {
-      user: { center: 23.33 },
-      agent: { center: 70 },
-      tools: { center: 116.66 },
-    };
+  traceItems.forEach(item => {
+    let result: ReturnType<typeof layoutSingleTrace>;
 
-    let currentY = BASE_OFFSET; // current position along timeline X axis
-    const steps = (data as ReasoningTrace).steps || [];
+    if (hideGaps && yAxisMode === 'time') {
+      const mult = (stretch || traceItems.length === 1) ? scaleMultipliers.get(item.id)! : sharedMultiplier;
+      const initial = initialLayouts.get(item.id)!;
+      const currentScaleMult = scaleMultipliers.get(item.id)!;
 
-    // Resolve trace-level agent colors
-    const traceAgentName = (data as any)?.agent?.name || 'Agent';
-    const traceModel = (data as any)?.agent?.model || steps.find(s => s.model)?.model;
-    const agentColor = steps.find(s => s.color)?.color || getAgentColor(traceAgentName, traceModel);
-    trace.agentColor = agentColor;
-
-    // Find start time and duration/tokens for this specific trace
-    let startTime = 0;
-    let traceDuration = 0;
-    if (yAxisMode === 'time') {
-      const timestamps: number[] = [];
-      steps.forEach((s: ReasoningTraceStep) => {
-        if (s.timestamp) timestamps.push(new Date(s.timestamp).getTime());
-        if (s.completedAt) timestamps.push(new Date(s.completedAt).getTime());
-      });
-      if (timestamps.length > 0) {
-        startTime = Math.min(...timestamps);
-        traceDuration = Math.max(...timestamps) - startTime;
+      if (Math.abs(mult - currentScaleMult) > 0.01) {
+        result = layoutSingleTrace(item.trace, item.meta, item.initialScale * mult, baseScale, yAxisMode, hideGaps, selectedTokenTypes);
+      } else {
+        result = initial;
       }
-    } else if (yAxisMode === 'tokens') {
-      startTime = 0;
-      let runningSum = 0;
-      steps.forEach((s: ReasoningTraceStep) => {
-        let tok = getStepTokens(s.token_usage, selectedTokenTypes);
-        if (tok === 0) {
-          const text = s.nodes?.map(n => n.text).join(' ') || (s as any).content || (s as any).reasoning_content || '';
-          tok = text.split(/\s+/).filter((w: string) => w.length > 0).length;
-        }
-        runningSum += tok;
-      });
-      traceDuration = runningSum;
+    } else {
+      result = layoutSingleTrace(item.trace, item.meta, item.initialScale, baseScale, yAxisMode, hideGaps, selectedTokenTypes);
     }
 
-    // Compute max tokens across all steps for proportional height scaling
-    const stepTokensList = steps.map((s: ReasoningTraceStep) => {
-      let tok = (s.token_usage?.output_tokens || 0) + (s.token_usage?.input_tokens || 0);
-      if (tok === 0) {
-        const text = s.nodes?.map(n => n.text).join(' ') || (s as any).content || (s as any).reasoning_content || '';
-        tok = text.split(/\s+/).filter((w: string) => w.length > 0).length;
-      }
-      return tok;
-    });
-    const maxTokens = Math.max(...stepTokensList, 1);
-
-    let traceScale = scale;
-    if (stretch) {
-      traceScale = traceDuration > 0 ? targetSpan / traceDuration : scale;
+    if (result.traceMaxX > maxContentWidth) {
+      maxContentWidth = result.traceMaxX;
     }
 
-    let cumulativeTokens = 0;
-    const traceNodes: VisNode[] = [];
-    let traceMaxX = 20;
-    let maxUserX = 0;
-    let maxAgentX = 0;
-    let maxToolsX = 0;
+    item.trace.nodes = result.traceNodes;
+    item.trace.thinkingAreaNodes = result.thinkingAreaNodes;
+    item.trace.backboneLines = result.backboneLines;
+    item.trace.maxTraceX = result.traceMaxX + 20;
+    item.trace.maxTraceY = 140;
 
-    const updateMaxHeights = (nodeRight: number, column: string) => {
-      if (nodeRight > traceMaxX) traceMaxX = nodeRight;
-      if (nodeRight > maxContentWidth) maxContentWidth = nodeRight;
-      if (column === 'user' && nodeRight > maxUserX) maxUserX = nodeRight;
-      if (column === 'agent' && nodeRight > maxAgentX) maxAgentX = nodeRight;
-      if (column === 'tools' && nodeRight > maxToolsX) maxToolsX = nodeRight;
-    };
-
-    steps.forEach((step: ReasoningTraceStep, index: number) => {
-      const numNodes = step.nodes.length;
-
-      const stepAgentColor = step.color || getAgentColor(step.agentName || traceAgentName, step.model || traceModel);
-
-      let currentTs = step.timestamp ? new Date(step.timestamp).getTime() : NaN;
-      let completedTs = step.completedAt ? new Date(step.completedAt).getTime() : NaN;
-
-      if (isNaN(completedTs) && index < steps.length - 1) {
-        const nextStep = steps[index + 1];
-        if (nextStep.stepType !== ReasoningStepType.USER_INPUT && step.stepType !== ReasoningStepType.USER_INPUT) {
-          completedTs = nextStep.timestamp ? new Date(nextStep.timestamp).getTime() : NaN;
-        }
-      }
-
-      let stepDuration = 0;
-      if (!isNaN(currentTs) && !isNaN(completedTs)) {
-        stepDuration = completedTs - currentTs;
-      }
-
-      let stepTokens = getStepTokens(step.token_usage, selectedTokenTypes);
-      if (stepTokens === 0) {
-        const text = step.nodes?.map(n => n.text).join(' ') || (step as any).content || (step as any).reasoning_content || '';
-        stepTokens = text.split(/\s+/).filter((w: string) => w.length > 0).length;
-      }
-
-      if (yAxisMode === 'tokens') {
-        currentTs = cumulativeTokens;
-        stepDuration = stepTokens;
-        completedTs = cumulativeTokens + stepTokens;
-      }
-
-      let stepNodeHeight = nodeW;
-      if (stepDuration > 0) {
-        stepNodeHeight = Math.max(12, (stepDuration * traceScale) / numNodes);
-      }
-
-      const ctx: NodeBuildContext = {
-        cols,
-        rows: cols,
-        yAxisMode,
-        traceScale,
-        startTime,
-        stepAgentColor,
-        traceId: id,
-        nodeW,
-        maxTokens,
-        step,
-        numNodes,
-        stepDuration,
-        currentTs,
-        completedTs,
-        stepNodeHeight,
-      };
-
-      step.nodes.forEach((an: ReasoningTraceNode, nodeIndex: number) => {
-        if (an.text === "Our servers are experiencing high traffic right now, please try again in a minute." ||
-          an.text === "Encountered retryable error from model provider: Our servers are experiencing high traffic right now, please try again in a minute.") {
-          if (traceNodes.length > 0) {
-            (traceNodes[traceNodes.length - 1] as any).followedByRateLimit = true;
-          }
-          const result = buildRateLimitNode(ctx, currentY, an);
-          traceNodes.push(result.node);
-          currentY = result.nextY;
-        } else {
-          let col = an.column;
-          if (an.type === TraceNodeType.SYSTEM || an.type === TraceNodeType.TOOL_CALL) {
-            col = TraceNodeColumn.AGENT;
-          }
-          const nodeGap = nodeIndex > 0 ? 0 : gap;
-
-          let result;
-          if (an.type === TraceNodeType.THINKING) {
-            result = buildThinkingNode(ctx, currentY, an.id, an.text, nodeIndex, nodeGap, an);
-          } else if (an.type === TraceNodeType.RESPONSE) {
-            result = buildResponseNode(ctx, currentY, an.id, 'user', an.text, nodeIndex, nodeGap, an);
-          } else {
-            result = buildDefaultNode(ctx, currentY, an.id, an.type, col, an.text, nodeIndex, nodeGap, an);
-          }
-          traceNodes.push(result.node);
-          currentY = result.nextY;
-          updateMaxHeights(result.nodeBottom, result.column);
-        }
-      });
-
-      if (yAxisMode === 'tokens') {
-        cumulativeTokens += stepTokens;
-      }
-    });
-
-    const { waitingRects: compressedRects, traceMaxX: newTraceMaxX } = compressGaps({
-      traceNodes,
-      yAxisMode,
-      scale: traceScale,
-      baseScale,
-      hideGaps,
-      traceMaxX,
-    });
-    traceMaxX = newTraceMaxX;
-    waitingRects.push(...compressedRects);
-
-    const cx = cols.agent.center;
-
-    // Generate area charts as ThinkingAreaNodes
-    const sortedNodes = [...traceNodes].filter(n => !n.hidden).sort((a, b) => a.x - b.x);
-    const traceThinkingAreaNodes = buildThinkingAreaNodes(id, sortedNodes, cx, yAxisMode);
-    const traceBackboneLines = buildBackboneLines(id, cx, waitingRects, traceMaxX, agentColor, sortedNodes);
-
-    trace.nodes = traceNodes;
-    trace.thinkingAreaNodes = traceThinkingAreaNodes;
-    trace.backboneLines = traceBackboneLines;
-    trace.maxTraceX = traceMaxX + 20;
-    trace.maxTraceY = 140;
-
-    allNodes.push(...traceThinkingAreaNodes);
-    allNodes.push(...traceNodes);
-    backboneLines.push(...traceBackboneLines);
+    allNodes.push(...result.thinkingAreaNodes, ...result.traceNodes);
+    backboneLines.push(...result.backboneLines);
   });
 
-  // Normalize node widths/heights to match actual visual dimensions for icons
+  // 4. Update time ticks for active scale when hiding gaps without stretch
+  if (hideGaps && yAxisMode === 'time' && !stretch && traceItems.length > 0) {
+    const effectiveScale = scale * sharedMultiplier;
+    const maxActiveDuration = targetSpan / Math.max(0.000001, effectiveScale);
+    const niceIntervals = [1000, 5000, 10000, 30000, 60000, 120000, 300000, 600000, 1800000, 3600000];
+    const roughInterval = maxActiveDuration / 6;
+    let interval = niceIntervals[0];
+    for (let i = niceIntervals.length - 1; i >= 0; i--) {
+      if (roughInterval >= niceIntervals[i]) {
+        interval = niceIntervals[i];
+        break;
+      }
+    }
+
+    const seconds = Math.floor(interval / 1000);
+    const minutes = Math.floor(seconds / 60);
+    intervalLabel = minutes > 0 ? `${minutes}m` : `${seconds}s`;
+
+    timeTicks = [];
+    for (let d = 0; d <= maxActiveDuration; d += interval) {
+      timeTicks.push({ label: '', x: BASE_OFFSET + d * effectiveScale });
+    }
+  }
+
+  // 5. Normalize icon dimensions and apply row/column mode transformations
   allNodes.forEach(n => {
     if (n.hidden) return;
     const vc = getNodeVisualConfig(n);
@@ -277,9 +341,7 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
     }
   });
 
-  let contentWidth = 500;
-  let maxContentHeight = 140;
-  const layoutRes = applyRowLayout({
+  const { contentWidth, maxContentHeight } = applyRowLayout({
     allNodes,
     backboneLines,
     timeTicks,
@@ -290,8 +352,6 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
     maxContentHeight: maxContentWidth,
     containerWidth,
   });
-  contentWidth = layoutRes.contentWidth;
-  maxContentHeight = layoutRes.maxContentHeight;
 
   return {
     nodes: allNodes,
