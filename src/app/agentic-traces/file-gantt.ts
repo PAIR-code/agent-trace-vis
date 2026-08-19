@@ -33,7 +33,7 @@ import { ReasoningTrace, ReasoningStepType } from './layout-types';
 // ---------------------------------------------------------------------------
 
 /** What kind of access this event represents. */
-export type FileAccessKind = 'view' | 'add' | 'remove' | 'rewrite';
+export type FileAccessKind = 'view' | 'search' | 'add' | 'remove' | 'rewrite';
 
 /** A single file-access event extracted from a trace step. */
 export interface FileEvent {
@@ -54,10 +54,12 @@ export interface FileEvent {
   node: any;
 }
 
-/** Discrete view marker on the continuous file track. */
+/** Discrete view/search marker on the continuous file track. */
 export interface FileViewMarker {
   x: number;
   label: string;
+  /** True if this is a grep/search event rather than a direct view/read. */
+  isSearch?: boolean;
   /** The corresponding layout VisNode for click navigation. */
   node: any;
 }
@@ -130,44 +132,96 @@ const VIEW_STEP_TYPES = new Set<ReasoningStepType>([
   ReasoningStepType.VIEW_FILE,
   ReasoningStepType.VIEW_CONTENT_CHUNK,
   ReasoningStepType.VIEW_FILE_OUTLINE,
+  ReasoningStepType.GREP_SEARCH,
+  ReasoningStepType.FIND_BY_NAME,
+  ReasoningStepType.FIND,
 ]);
 
-/** Extract file or chart artifact paths from a tool call input object. */
-export function extractFilePaths(input: Record<string, any> | string | undefined, toolName?: string): string[] {
-  if (!input) return [];
+/** Extract file or chart artifact paths from a tool call input object and observation. */
+export function extractFilePaths(
+  input: Record<string, any> | string | undefined,
+  toolName?: string,
+  observation?: Record<string, any> | string | undefined
+): string[] {
+  const paths: string[] = [];
+
   let obj: Record<string, any> = {};
   if (typeof input === 'string') {
     try {
       obj = JSON.parse(input);
     } catch {
-      return [];
+      obj = {};
     }
   } else if (typeof input === 'object' && input !== null) {
     obj = input;
-  } else {
-    return [];
   }
 
-  const paths: string[] = [];
+  // 1. Check observation output for matching file paths (e.g. grep results across single or multiple files)
+  let obsContent = '';
+  if (typeof observation === 'string') {
+    obsContent = observation;
+  } else if (typeof observation === 'object' && observation !== null) {
+    obsContent = observation['content'] || '';
+  }
 
-  // 1. Standard file path keys (for coding agents)
+  const obsFilePaths: string[] = [];
+  if (obsContent) {
+    const lines = obsContent.split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          const f = parsed.File || parsed.file || parsed.filename || parsed.path || parsed.data?.path?.text;
+          if (typeof f === 'string' && f.trim()) {
+            obsFilePaths.push(f.trim().replace(/^['"`\s]+|['"`\s]+$/g, ''));
+          }
+        } catch {}
+      } else {
+        const filePathMatch = trimmed.match(/File Path:\s*`?(?:file:\/\/)?([^`\n]+)`?/i);
+        if (filePathMatch && filePathMatch[1]) {
+          obsFilePaths.push(filePathMatch[1].trim());
+        }
+      }
+    }
+  }
+
+  if (obsFilePaths.length > 0) {
+    paths.push(...obsFilePaths);
+  }
+
+  // 2. Standard file path keys (for coding agents)
   const standardKeys = [
     'TargetFile', 'AbsolutePath', 'NotebookPath', 'file_path', 'filePath',
     'filepath', 'path', 'file', 'filename', 'file_name', 'target_file',
-    'absolute_path', 'notebook_path', 'uri', 'document', 'src', 'dest'
+    'absolute_path', 'notebook_path', 'uri', 'document', 'src', 'dest',
+    'SearchPath', 'search_path', 'searchPath'
   ];
   for (const k of standardKeys) {
     const val = obj[k];
     if (typeof val === 'string' && val.trim()) {
       let clean = val.trim().replace(/^['"`\s]+|['"`\s]+$/g, '');
       if (clean) {
-        paths.push(clean);
-        return paths;
+        if (obsFilePaths.length === 0 || (k !== 'SearchPath' && k !== 'search_path' && k !== 'searchPath')) {
+          paths.push(clean);
+        } else if (obsFilePaths.length > 0 && /\.[a-zA-Z0-9]+$/.test(clean)) {
+          paths.push(clean);
+        }
       }
     }
   }
 
-  // 2. Chart artifact extraction (for dashboard agents)
+  // Check Includes list if present
+  const includes = obj['Includes'] || obj['includes'];
+  if (Array.isArray(includes)) {
+    for (const inc of includes) {
+      if (typeof inc === 'string' && inc.trim() && !inc.includes('*')) {
+        paths.push(inc.trim().replace(/^['"`\s]+|['"`\s]+$/g, ''));
+      }
+    }
+  }
+
+  // 3. Chart artifact extraction (for dashboard agents)
   const tName = (toolName || '').toLowerCase();
 
   if (tName.includes('chart')) {
@@ -203,7 +257,7 @@ export function extractFilePaths(input: Record<string, any> | string | undefined
     }
   }
 
-  return Array.from(new Set(paths));
+  return Array.from(new Set(paths.filter(p => p.length > 0)));
 }
 
 export function extractFilePath(input: Record<string, any> | string | undefined, toolName?: string): string | null {
@@ -324,7 +378,8 @@ export function buildFileGanttData(
       const input: Record<string, any> | undefined =
         data?.toolCall?.input ?? data?.input ?? undefined;
       const toolName: string = data?.toolCall?.tool_name ?? node.text ?? '';
-      const filePaths = extractFilePaths(input, toolName);
+      const observation = data?.observation ?? undefined;
+      const filePaths = extractFilePaths(input, toolName, observation);
       if (filePaths.length === 0) continue;
 
       for (const filePath of filePaths) {
@@ -336,7 +391,12 @@ export function buildFileGanttData(
         let linesCount = 0;
 
         if (isView) {
-          kind = 'view';
+          const isGrep = stepType === ReasoningStepType.GREP_SEARCH ||
+                         stepType === ReasoningStepType.FIND_BY_NAME ||
+                         stepType === ReasoningStepType.FIND ||
+                         node.text?.toLowerCase().includes('grep') ||
+                         node.text?.toLowerCase().startsWith('find:');
+          kind = isGrep ? 'search' : 'view';
           linesCount = 0;
         } else {
           linesCount = computeEditLines(stepType, input);
@@ -394,8 +454,8 @@ export function buildFileGanttData(
   const sortedPaths = [...fileMap.keys()].sort((a, b) => {
     const aEvents = fileMap.get(a)!;
     const bEvents = fileMap.get(b)!;
-    const aEdited = aEvents.some(e => e.kind !== 'view');
-    const bEdited = bEvents.some(e => e.kind !== 'view');
+    const aEdited = aEvents.some(e => e.kind !== 'view' && e.kind !== 'search');
+    const bEdited = bEvents.some(e => e.kind !== 'view' && e.kind !== 'search');
 
     if (aEdited !== bEdited) {
       return aEdited ? -1 : 1;
@@ -427,7 +487,7 @@ export function buildFileGanttData(
   for (const key of sortedPaths) {
     const events = fileMap.get(key)!;
     const displayInfo = fileDisplayInfo.get(key) ?? { filePath: key, basename: key.split('/').pop() ?? key };
-    const viewOnly = events.every(e => e.kind === 'view');
+    const viewOnly = events.every(e => e.kind === 'view' || e.kind === 'search');
     const isPlan = events.some(e => e.isPlan);
     const startX = events[0].x;
     const endX = traceEndX;
@@ -436,10 +496,21 @@ export function buildFileGanttData(
     const views: FileViewMarker[] = [];
 
     for (const ev of events) {
-      if (ev.kind === 'view') {
+      if (ev.kind === 'view' || ev.kind === 'search') {
+        const nodeStepType = ev.node?.stepType;
+        const nodeText = ev.node?.text || '';
+        const isSearch = ev.kind === 'search' ||
+                         nodeStepType === ReasoningStepType.GREP_SEARCH ||
+                         nodeText.toLowerCase().includes('grep') ||
+                         nodeText.toLowerCase().startsWith('find:');
+        const label = isSearch
+          ? `${displayInfo.basename}: ${nodeText || 'grep search'}`
+          : `${displayInfo.basename}: viewed`;
+
         views.push({
           x: ev.x,
-          label: `${displayInfo.basename}: viewed`,
+          label,
+          isSearch,
           node: ev.node,
         });
       } else {

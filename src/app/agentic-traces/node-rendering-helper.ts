@@ -112,7 +112,7 @@ export function getNodeVisualConfig(node: any): NodeVisualConfig {
   return { shape: 'circle', type: 'default' };
 }
 
-/** Checks whether a trace node represents a file operation (edit or view). */
+/** Checks whether a trace node represents a file operation (edit, view, or grep/search). */
 export function isFileEventNode(node: any): boolean {
   if (!node) return false;
   const text = node.text || '';
@@ -139,5 +139,12 @@ export function isFileEventNode(node: any): boolean {
     stepType === ReasoningStepType.VIEW_FILE_OUTLINE ||
     textLower.startsWith('view:');
 
-  return isFileEdit || isView;
+  const isGrepSearch =
+    stepType === ReasoningStepType.GREP_SEARCH ||
+    stepType === ReasoningStepType.FIND_BY_NAME ||
+    stepType === ReasoningStepType.FIND ||
+    textLower.startsWith('grep:') ||
+    textLower.startsWith('find:');
+
+  return isFileEdit || isView || isGrepSearch;
 }

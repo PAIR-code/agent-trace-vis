@@ -1054,6 +1054,38 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** Returns true if a file node is currently hovered (directly or via parent turn). */
+  isFileNodeHovered(targetNode: any): boolean {
+    const hId = this.hoveredNodeId();
+    if (!hId || !targetNode?.id) return false;
+    if (hId === targetNode.id) return true;
+    const hPrefix = hId.replace(/_(thinking|response|tc_\d+|obs_\d+)$/, '');
+    const nodePrefix = targetNode.id.replace(/_(thinking|response|tc_\d+|obs_\d+)$/, '');
+    return hPrefix === nodePrefix;
+  }
+
+  /** Returns true if a file node is currently selected (directly or via parent turn). */
+  isFileNodeSelected(targetNode: any): boolean {
+    const sNode = this.selectedNode();
+    if (!sNode || !targetNode?.id) return false;
+    if (sNode.id === targetNode.id) return true;
+    const sPrefix = sNode.id.replace(/_(thinking|response|tc_\d+|obs_\d+)$/, '');
+    const nodePrefix = targetNode.id.replace(/_(thinking|response|tc_\d+|obs_\d+)$/, '');
+    return sPrefix === nodePrefix;
+  }
+
+  /** Returns true if any view or edit node in a row is currently hovered or selected. */
+  isRowHoveredOrSelected(row: any): boolean {
+    if (!row) return false;
+    for (const v of row.views || []) {
+      if (this.isFileNodeHovered(v.node) || this.isFileNodeSelected(v.node)) return true;
+    }
+    for (const e of row.edits || []) {
+      if (this.isFileNodeHovered(e.node) || this.isFileNodeSelected(e.node)) return true;
+    }
+    return false;
+  }
+
   openImportModal() {
     this.showImportModal.set(true);
   }

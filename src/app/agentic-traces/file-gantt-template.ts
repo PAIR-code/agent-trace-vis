@@ -61,16 +61,18 @@ export const FILE_GANTT_TEMPLATE = `
          [attr.height]="fileRowHeight"
          style="display:block; overflow: visible;">
       <g>
-        <!-- All view event transparent dots on the summary line -->
+        <!-- All view/grep event dots on the summary line -->
         <circle
           *ngFor="let view of t.fileGanttData.summaryRow.views"
           [attr.cx]="view.x"
           cy="14"
-          r="3"
+          [attr.r]="isFileNodeSelected(view.node) ? 5 : (isFileNodeHovered(view.node) ? 4.5 : 3)"
           fill="#ffffff"
-          stroke="#94a3b8"
-          stroke-width="1.2"
+          [attr.stroke]="(isFileNodeSelected(view.node) || isFileNodeHovered(view.node)) ? '#0f172a' : (view.isSearch ? '#94a3b8' : '#334155')"
+          [attr.stroke-width]="isFileNodeSelected(view.node) ? 3 : (isFileNodeHovered(view.node) ? 2.5 : (view.isSearch ? 1.2 : 1.5))"
           class="file-marker-clickable"
+          [class.is-hovered]="isFileNodeHovered(view.node)"
+          [class.selected]="isFileNodeSelected(view.node)"
           (click)="selectFileNode(view.node, $event)"
           (mouseenter)="hoveredNodeId.set(view.node?.id)"
           (mouseleave)="hoveredNodeId.set(null)"
@@ -82,18 +84,20 @@ export const FILE_GANTT_TEMPLATE = `
             [attr.x1]="edit.x"
             [attr.x2]="edit.x + edit.width"
             y1="14" y2="14"
-            [attr.stroke]="edit.isPlan ? '#94a3b8' : '#334155'"
-            stroke-width="2" />
+            [attr.stroke]="(isFileNodeSelected(edit.node) || isFileNodeHovered(edit.node)) ? '#0f172a' : (edit.isPlan ? '#94a3b8' : '#334155')"
+            [attr.stroke-width]="(isFileNodeSelected(edit.node) || isFileNodeHovered(edit.node)) ? 3 : 2" />
 
           <rect
             [attr.x]="edit.x"
             y="14"
             [attr.width]="edit.width"
             [attr.height]="edit.barHeight"
-            [attr.fill]="edit.isPlan ? '#94a3b8' : '#334155'"
-            [attr.opacity]="edit.isPlan ? 0.75 : 0.85"
+            [attr.fill]="(isFileNodeSelected(edit.node) || isFileNodeHovered(edit.node)) ? '#0f172a' : (edit.isPlan ? '#94a3b8' : '#334155')"
+            [attr.opacity]="(isFileNodeSelected(edit.node) || isFileNodeHovered(edit.node)) ? 1 : (edit.isPlan ? 0.75 : 0.85)"
             rx="1.5"
             class="file-marker-clickable"
+            [class.is-hovered]="isFileNodeHovered(edit.node)"
+            [class.selected]="isFileNodeSelected(edit.node)"
             (click)="selectFileNode(edit.node, $event)"
             (mouseenter)="hoveredNodeId.set(edit.node?.id)"
             (mouseleave)="hoveredNodeId.set(null)"
@@ -119,9 +123,9 @@ export const FILE_GANTT_TEMPLATE = `
           y="10"
           text-anchor="start"
           font-size="9"
-          font-weight="500"
           font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
-          fill="#334155"
+          [attr.fill]="isRowHoveredOrSelected(row) ? '#0f172a' : '#334155'"
+          [attr.font-weight]="isRowHoveredOrSelected(row) ? '700' : '500'"
           class="file-label-clickable"
           (click)="selectFileNode(row.edits[0]?.node || row.views[0]?.node, $event)"
           [attr.title]="row.filePath">{{ row.basename }}</text>
@@ -131,20 +135,22 @@ export const FILE_GANTT_TEMPLATE = `
           [attr.x1]="row.startX"
           [attr.x2]="row.endX"
           y1="14" y2="14"
-          stroke="#cbd5e1"
-          stroke-width="1.5"
+          [attr.stroke]="isRowHoveredOrSelected(row) ? '#475569' : '#cbd5e1'"
+          [attr.stroke-width]="isRowHoveredOrSelected(row) ? 2 : 1.5"
           stroke-dasharray="3,3" />
 
-        <!-- View event transparent dots (just a border) on the dotted line -->
+        <!-- View/Grep event dots on the dotted line -->
         <circle
           *ngFor="let view of row.views"
           [attr.cx]="view.x"
           cy="14"
-          r="3"
+          [attr.r]="isFileNodeSelected(view.node) ? 5 : (isFileNodeHovered(view.node) ? 4.5 : 3)"
           fill="#ffffff"
-          stroke="#94a3b8"
-          stroke-width="1.2"
+          [attr.stroke]="(isFileNodeSelected(view.node) || isFileNodeHovered(view.node)) ? '#0f172a' : (view.isSearch ? '#94a3b8' : '#334155')"
+          [attr.stroke-width]="isFileNodeSelected(view.node) ? 3 : (isFileNodeHovered(view.node) ? 2.5 : (view.isSearch ? 1.2 : 1.5))"
           class="file-marker-clickable"
+          [class.is-hovered]="isFileNodeHovered(view.node)"
+          [class.selected]="isFileNodeSelected(view.node)"
           (click)="selectFileNode(view.node, $event)"
           (mouseenter)="hoveredNodeId.set(view.node?.id)"
           (mouseleave)="hoveredNodeId.set(null)"
@@ -157,8 +163,8 @@ export const FILE_GANTT_TEMPLATE = `
             [attr.x1]="edit.x"
             [attr.x2]="edit.x + edit.width"
             y1="14" y2="14"
-            [attr.stroke]="row.isPlan ? '#94a3b8' : '#334155'"
-            stroke-width="2" />
+            [attr.stroke]="(isFileNodeSelected(edit.node) || isFileNodeHovered(edit.node)) ? '#0f172a' : (row.isPlan ? '#94a3b8' : '#334155')"
+            [attr.stroke-width]="(isFileNodeSelected(edit.node) || isFileNodeHovered(edit.node)) ? 3 : 2" />
 
           <!-- Downward-hanging edit bar proportional in height to lines written -->
           <rect
@@ -166,10 +172,12 @@ export const FILE_GANTT_TEMPLATE = `
             y="14"
             [attr.width]="edit.width"
             [attr.height]="edit.barHeight"
-            [attr.fill]="row.isPlan ? '#94a3b8' : '#334155'"
-            [attr.opacity]="row.isPlan ? 0.75 : 0.85"
+            [attr.fill]="(isFileNodeSelected(edit.node) || isFileNodeHovered(edit.node)) ? '#0f172a' : (row.isPlan ? '#94a3b8' : '#334155')"
+            [attr.opacity]="(isFileNodeSelected(edit.node) || isFileNodeHovered(edit.node)) ? 1 : (row.isPlan ? 0.75 : 0.85)"
             rx="1.5"
             class="file-marker-clickable"
+            [class.is-hovered]="isFileNodeHovered(edit.node)"
+            [class.selected]="isFileNodeSelected(edit.node)"
             (click)="selectFileNode(edit.node, $event)"
             (mouseenter)="hoveredNodeId.set(edit.node?.id)"
             (mouseleave)="hoveredNodeId.set(null)"
@@ -270,22 +278,27 @@ export const FILE_GANTT_STYLES = `
   .file-marker-clickable {
     cursor: pointer;
     pointer-events: auto !important;
-    transition: filter 0.1s ease, stroke 0.1s ease;
+    transition: stroke 0.15s ease, fill 0.15s ease, r 0.15s ease, stroke-width 0.15s ease;
   }
 
-  .file-marker-clickable:hover {
-    filter: brightness(1.25);
-    stroke: #2563eb !important;
+  .file-marker-clickable:hover,
+  .file-marker-clickable.is-hovered {
+    stroke: #0f172a !important;
+  }
+
+  .file-marker-clickable.selected {
+    stroke: #0f172a !important;
   }
 
   .file-label-clickable {
     cursor: pointer;
     pointer-events: auto !important;
     user-select: none;
-    transition: fill 0.1s ease;
+    transition: fill 0.15s ease, font-weight 0.15s ease;
   }
 
   .file-label-clickable:hover {
-    fill: #2563eb !important;
+    fill: #0f172a !important;
+    font-weight: 700;
   }
 `;

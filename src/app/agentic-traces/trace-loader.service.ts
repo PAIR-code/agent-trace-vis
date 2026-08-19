@@ -383,6 +383,9 @@ function extractFilePathFromInput(input: Record<string, any> | string | undefine
     obj['document'] ??
     obj['src'] ??
     obj['dest'] ??
+    obj['SearchPath'] ??
+    obj['search_path'] ??
+    obj['searchPath'] ??
     null;
 
   if (typeof val !== 'string') return null;
