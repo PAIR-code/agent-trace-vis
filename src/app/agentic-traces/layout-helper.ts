@@ -24,7 +24,7 @@ import { getAgentColor, COLORS } from './colors';
 import { getNodeVisualConfig } from './node-rendering-helper';
 import { LayoutOutput, LayoutParams, VisNode, BackboneLine } from './layout-types';
 import { sanitizeId } from './layout-utils';
-import { NodeBuildContext, buildThinkingNode, buildResponseNode, buildDefaultNode, buildRateLimitNode, buildThinkingAreaNodes, rebuildConnectionLines } from './node-builders';
+import { NodeBuildContext, buildThinkingNode, buildResponseNode, buildDefaultNode, buildRateLimitNode, buildThinkingAreaNodes } from './node-builders';
 import { buildBackboneLines } from './backbone-builder';
 import { computeTimeAxis } from './time-axis';
 import { compressGaps } from './gap-compressor';
@@ -74,7 +74,6 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
 
     const data = trace.data;
     const waitingRects: any[] = [];
-    const xOffset = 0; // Channel offset in Y space
 
     const cols = {
       user: { center: 23.33 },
@@ -210,7 +209,7 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
           if (traceNodes.length > 0) {
             (traceNodes[traceNodes.length - 1] as any).followedByRateLimit = true;
           }
-          const result = buildRateLimitNode(ctx, currentY, an, xOffset, gap);
+          const result = buildRateLimitNode(ctx, currentY, an);
           traceNodes.push(result.node);
           currentY = result.nextY;
         } else {
@@ -239,7 +238,7 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
       }
     });
 
-    const { waitingRects: compressedRects, gapsToReduce, traceMaxX: newTraceMaxX } = compressGaps({
+    const { waitingRects: compressedRects, traceMaxX: newTraceMaxX } = compressGaps({
       traceNodes,
       yAxisMode,
       scale: traceScale,
@@ -249,8 +248,6 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
     });
     traceMaxX = newTraceMaxX;
     waitingRects.push(...compressedRects);
-
-    rebuildConnectionLines(traceNodes, cols, nodeW, yAxisMode, startTime, traceScale, gapsToReduce);
 
     const cx = cols.agent.center;
 

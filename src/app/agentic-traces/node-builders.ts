@@ -15,7 +15,7 @@
  */
 
 /**
- * @fileoverview Construction logic for individual visual components (nodes) and their connections.
+ * @fileoverview Construction logic for individual visual components (nodes).
  * 
  * Functions here build:
  * - User Input Nodes (the top-most nodes in row layout representing user prompt steps)
@@ -23,19 +23,18 @@
  * - Thinking Nodes (nodes representing model reasoning steps, centered and expanded along row)
  * - Thinking Area Shapes (the large custom-shaped backgrounds representing model thinking durations)
  * - Tool Call / Tool Data Nodes (representing calls to file actions, search, or terminal commands)
- * - Error & Rate Limit Indicators (rate limits are drawn as dashed lines across all rows)
- * - Connection Lines (lines connecting tool nodes back to the agent backbone)
+ * - Error & Rate Limit Indicators
  */
 
 import { TraceNodeType, TraceNodeColumn, ReasoningTraceNode, ReasoningTraceStep, BASE_OFFSET } from './layout-types';
 import { getNodeVisualConfig, isFileEventNode } from './node-rendering-helper';
-import { lightenColor, LINE_COLOR, COLORS } from './colors';
+import { COLORS } from './colors';
 import {
-  ConnectionLine, ErrorNode, InteractiveNodeBase, ResponseNode,
+  ErrorNode, InteractiveNodeBase, ResponseNode,
   ThinkingAreaNode, ThinkingStepNode, ToolCallNode, ToolDataNode,
   UserInputNode, SystemNode, VisNode
 } from './layout-types';
-import { sanitizeId, calcHeight, truncate } from './layout-utils';
+import { truncate } from './layout-utils';
 
 export interface NodeBuildContext {
   cols: { user: { center: number }; agent: { center: number }; tools: { center: number } };
@@ -179,7 +178,6 @@ export function buildResponseNode(
     traceId: ctx.traceId,
     timestamp: an.timestamp,
     color: stepAgentColor,
-    connectionLine: undefined,
     stepType: an.stepType
   };
 
@@ -249,74 +247,7 @@ export function buildDefaultNode(
     }
   }
 
-  const nx = x + width / 2;
-  const ny = y + height / 2;
-  const ty = channelRows.agent.center;
-
-  let connectionLine: ConnectionLine | undefined = undefined;
-  let returnConnectionLine: ConnectionLine | undefined = undefined;
-
-  if (type === TraceNodeType.SYSTEM) {
-    if (ny !== ty) {
-      const midY = (ny + ty) / 2;
-      const path = `M ${nx} ${ny} C ${nx} ${midY}, ${nx} ${midY}, ${nx} ${ty}`;
-      connectionLine = {
-        id: `${nid}_to_backbone`,
-        path,
-        stroke: stepAgentColor,
-        fill: 'none',
-        strokeWidth: 1.5,
-        opacity: 0.7,
-      };
-    }
-  } else if (type === TraceNodeType.TOOL_CALL) {
-    const sy = channelRows.agent.center;
-    if (ny !== sy) {
-      const midY = (sy + ny) / 2;
-      const path = `M ${nx} ${sy} C ${nx} ${midY}, ${nx} ${midY}, ${nx} ${ny}`;
-      connectionLine = {
-        id: `${nid}_from_agent_to_tool`,
-        path,
-        stroke: stepAgentColor,
-        fill: 'none',
-        strokeWidth: 1.5,
-        opacity: 0.7,
-      };
-    }
-  } else if (type === TraceNodeType.TOOL_DATA) {
-    const isFailed = !!an.data?.observation?.error;
-    const stroke = isFailed ? COLORS.ERROR : lightenColor(stepAgentColor, 0.3);
-
-    const callPath = `M ${x} ${ty} C ${x} ${ny}, ${x + (nx - x) * 0.5} ${ny}, ${nx} ${ny}`;
-    const returnPath = `M ${nx} ${ny} L ${nx} ${ty}`;
-    const normalStroke = lightenColor(stepAgentColor, 0.3);
-    const returnStroke = isFailed ? COLORS.ERROR : normalStroke;
-    const returnOpacity = isFailed ? 0.7 : 0.35;
-
-    connectionLine = {
-      id: `${nid}_tool_call_path`,
-      path: callPath,
-      stroke: normalStroke,
-      fill: 'none',
-      strokeWidth: 1.5,
-      opacity: 0.35,
-    };
-
-    returnConnectionLine = {
-      id: `${nid}_tool_return_path`,
-      path: returnPath,
-      stroke: returnStroke,
-      fill: 'none',
-      strokeWidth: 1.5,
-      opacity: returnOpacity,
-    };
-  }
-
   const isFile = isFileEventNode(an);
-  if (isFile) {
-    connectionLine = undefined;
-    returnConnectionLine = undefined;
-  }
 
   const baseNode: InteractiveNodeBase = {
     id: nid,
@@ -341,13 +272,13 @@ export function buildDefaultNode(
   if (type === TraceNodeType.USER_INPUT) {
     nodeResult = { ...baseNode, type: TraceNodeType.USER_INPUT, column: 'user' } as UserInputNode;
   } else if (type === TraceNodeType.TOOL_CALL) {
-    nodeResult = { ...baseNode, type: TraceNodeType.TOOL_CALL, column: 'agent', connectionLine } as ToolCallNode;
+    nodeResult = { ...baseNode, type: TraceNodeType.TOOL_CALL, column: 'agent' } as ToolCallNode;
   } else if (type === TraceNodeType.TOOL_DATA) {
-    nodeResult = { ...baseNode, type: TraceNodeType.TOOL_DATA, column: 'tools', connectionLine, returnConnectionLine } as ToolDataNode;
+    nodeResult = { ...baseNode, type: TraceNodeType.TOOL_DATA, column: 'tools' } as ToolDataNode;
   } else if (type === TraceNodeType.SYSTEM) {
-    nodeResult = { ...baseNode, type: TraceNodeType.SYSTEM, column: 'agent', connectionLine } as SystemNode;
+    nodeResult = { ...baseNode, type: TraceNodeType.SYSTEM, column: 'agent' } as SystemNode;
   } else if (type === TraceNodeType.ERROR) {
-    nodeResult = { ...baseNode, type: TraceNodeType.ERROR, column: 'agent', connectionLine } as ErrorNode;
+    nodeResult = { ...baseNode, type: TraceNodeType.ERROR, column: 'agent' } as ErrorNode;
   } else {
     nodeResult = { ...baseNode, type: type as any, column: 'tools' } as any;
   }
@@ -364,16 +295,8 @@ export interface RateLimitResult {
 export function buildRateLimitNode(
   ctx: NodeBuildContext,
   currentY: number,
-  an: ReasoningTraceNode,
-  xOffset: number,
-  gap: number,
+  an: ReasoningTraceNode
 ): RateLimitResult {
-  const { traceScale, startTime, currentTs, completedTs } = ctx;
-  const t = !isNaN(completedTs) ? completedTs : currentTs;
-  const x = !isNaN(t) ? BASE_OFFSET + (t - startTime) * traceScale : currentY;
-  const lineX = x;
-  const path = `M ${lineX} ${xOffset} L ${lineX} ${xOffset + 140}`;
-
   const hiddenNode: ErrorNode = {
     id: an.id,
     type: TraceNodeType.ERROR,
@@ -389,14 +312,6 @@ export function buildRateLimitNode(
     timestamp: an.timestamp,
     color: null,
     hidden: true,
-    connectionLine: {
-      id: `${an.id}_special_error`,
-      path,
-      stroke: COLORS.ERROR,
-      fill: 'none',
-      strokeWidth: 2,
-      opacity: 0.3,
-    },
     stepType: an.stepType
   };
 
@@ -513,58 +428,4 @@ export function buildThinkingAreaNodes(
   });
 
   return result;
-}
-
-export function rebuildConnectionLines(
-  traceNodes: VisNode[],
-  cols: { user: { center: number }; agent: { center: number }; tools: { center: number } },
-  nodeW: number,
-  yAxisMode: string,
-  startTime: number,
-  traceScale: number,
-  gapsToReduce: { originalY?: number; originalX?: number; originalHeight?: number; originalWidth?: number; shift: number }[]
-): void {
-  traceNodes.forEach(n => {
-    if (n.hidden || isFileEventNode(n) || n.type === TraceNodeType.USER_INPUT || n.type === TraceNodeType.RESPONSE || n.type === TraceNodeType.THINKING || !n.connectionLine) {
-      return;
-    }
-    const nx = n.x + n.width / 2;
-    const ny = n.y + n.height / 2;
-    const ty = cols.agent.center;
-
-    if (n.type === TraceNodeType.SYSTEM) {
-      if (ny !== ty) {
-        const midY = (ny + ty) / 2;
-        n.connectionLine.path = `M ${nx} ${ny} C ${nx} ${midY}, ${nx} ${midY}, ${nx} ${ty}`;
-      }
-    } else if (n.type === TraceNodeType.TOOL_CALL) {
-      const sy = cols.agent.center;
-      if (ny !== sy) {
-        const midY = (sy + ny) / 2;
-        n.connectionLine.path = `M ${nx} ${sy} C ${nx} ${midY}, ${nx} ${midY}, ${nx} ${ny}`;
-      }
-    } else if (n.type === TraceNodeType.TOOL_DATA) {
-      if (yAxisMode === 'time') {
-        // Re-evaluate shifted currentTs X position
-        const currentTs = n.timestamp ? new Date(n.timestamp).getTime() : NaN;
-        const x_start_original = !isNaN(currentTs) ? BASE_OFFSET + (currentTs - startTime) * traceScale : n.x;
-        let shift = 0;
-        gapsToReduce.forEach(gap => {
-          const origPos = gap.originalX ?? gap.originalY ?? 0;
-          const origSpan = gap.originalWidth ?? gap.originalHeight ?? 0;
-          if (x_start_original >= origPos + origSpan) {
-            shift += gap.shift;
-          }
-        });
-        const x_start = x_start_original - shift;
-        n.connectionLine.path = `M ${x_start} ${ty} C ${x_start} ${ny}, ${x_start + (nx - x_start) * 0.5} ${ny}, ${nx} ${ny}`;
-        if (n.returnConnectionLine) {
-          n.returnConnectionLine.path = `M ${nx} ${ny} L ${nx} ${ty}`;
-        }
-      } else {
-        const midY = (ny + ty) / 2;
-        n.connectionLine.path = `M ${nx} ${ny} C ${nx} ${midY}, ${nx} ${midY}, ${nx} ${ty}`;
-      }
-    }
-  });
 }

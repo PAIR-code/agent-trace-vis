@@ -113,8 +113,6 @@ export const SPEAKER_STYLES: { [key: string]: SpeakerStyle } = {
   'error': createStyle(COLORS.ERROR)
 };
 
-export const LINE_COLOR = COLORS.TOOL_LINE;
-
 // Standard Agent Palette: Map known agent names to distinct theme colors
 const AGENT_COLORS: Record<string, string> = {
   'jetski': '#d97706',          // Warm Orange

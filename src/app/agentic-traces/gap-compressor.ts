@@ -19,7 +19,6 @@
  */
 
 import { VisNode } from './layout-types';
-import { TraceNodeType } from './layout-types';
 
 export function compressGaps(params: {
   traceNodes: VisNode[];
@@ -27,16 +26,13 @@ export function compressGaps(params: {
   scale: number;
   baseScale: number;
   hideGaps: boolean;
-  traceMaxX?: number;
-  traceMaxY?: number;
+  traceMaxX: number;
 }): {
   waitingRects: any[];
-  gapsToReduce: { originalX: number; originalWidth: number; shift: number; originalY?: number; originalHeight?: number }[];
   traceMaxX: number;
-  traceMaxY?: number;
 } {
   const { traceNodes, yAxisMode, scale, baseScale, hideGaps } = params;
-  let traceMaxX = params.traceMaxX ?? params.traceMaxY ?? 20;
+  let traceMaxX = params.traceMaxX ?? 20;
   const waitingRects: any[] = [];
   const sortedNodes = [...traceNodes].filter(n => !n.hidden).sort((a, b) => a.x - b.x);
   
@@ -111,5 +107,5 @@ export function compressGaps(params: {
     traceMaxX -= currentTotalShift;
   }
 
-  return { waitingRects, gapsToReduce, traceMaxX, traceMaxY: traceMaxX };
+  return { waitingRects, traceMaxX };
 }

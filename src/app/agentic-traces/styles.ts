@@ -628,19 +628,6 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       background-color: ${COLORS.ERROR_LIGHT} !important;
     }
 
-    .lines-layer {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      pointer-events: none;
-    }
-
-    .lines-layer path {
-      transition: d 0.3s ease;
-    }
-
-
     .sidebar-resizer {
       width: 8px;
       margin-left: -4px;

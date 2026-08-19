@@ -62,11 +62,6 @@ export function applyRowLayout(params: {
 
       if (n.type === TraceNodeType.THINKING_AREA) {
         (n as ThinkingAreaNode).path = swapPathCoords((n as ThinkingAreaNode).path);
-      } else if (n.type !== TraceNodeType.USER_INPUT && n.type !== TraceNodeType.RESPONSE && n.type !== TraceNodeType.THINKING && n.connectionLine) {
-        n.connectionLine.path = swapPathCoords(n.connectionLine.path);
-        if (n.returnConnectionLine) {
-          n.returnConnectionLine.path = swapPathCoords(n.returnConnectionLine.path);
-        }
       }
     });
 

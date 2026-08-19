@@ -251,33 +251,6 @@ export const AGENTIC_TRACES_TEMPLATE = `
                             [attr.stroke-width]="area.strokeWidth"
                             [attr.opacity]="area.opacity" />
                     </g>
-                    <!-- Connection Lines -->
-                    <g class="connection-lines">
-                      <ng-container *ngFor="let node of t.nodes; trackBy: trackByNodeId">
-                        <path *ngIf="node.connectionLine && !node.hidden"
-                              [attr.d]="node.connectionLine.path"
-                              [attr.stroke]="node.connectionLine.stroke"
-                              [attr.stroke-width]="(hoveredNodeId() === node.id) ? node.connectionLine.strokeWidth + 2 : node.connectionLine.strokeWidth"
-                              [attr.opacity]="(hoveredNodeId() === node.id) ? 0.8 : node.connectionLine.opacity"
-                              [attr.stroke-dasharray]="node.connectionLine.strokeDasharray || 'none'"
-                              fill="none"
-                              style="cursor: pointer;"
-                              (click)="selectNode(node)"
-                              (mouseenter)="hoveredNodeId.set(node.id)"
-                              (mouseleave)="hoveredNodeId.set(null)" />
-                        <path *ngIf="node.returnConnectionLine && !node.hidden"
-                              [attr.d]="node.returnConnectionLine.path"
-                              [attr.stroke]="node.returnConnectionLine.stroke"
-                              [attr.stroke-width]="(hoveredNodeId() === node.id) ? node.returnConnectionLine.strokeWidth + 2 : node.returnConnectionLine.strokeWidth"
-                              [attr.opacity]="(hoveredNodeId() === node.id) ? 0.8 : node.returnConnectionLine.opacity"
-                              [attr.stroke-dasharray]="node.returnConnectionLine.strokeDasharray || 'none'"
-                              fill="none"
-                              style="cursor: pointer;"
-                              (click)="selectNode(node)"
-                              (mouseenter)="hoveredNodeId.set(node.id)"
-                              (mouseleave)="hoveredNodeId.set(null)" />
-                      </ng-container>
-                    </g>
                   </svg>
 
                   <!-- Track Nodes layer -->
@@ -353,33 +326,6 @@ export const AGENTIC_TRACES_TEMPLATE = `
                               [attr.stroke]="area.stroke"
                               [attr.stroke-width]="area.strokeWidth"
                               [attr.opacity]="area.opacity" />
-                      </g>
-                      <!-- Connection Lines -->
-                      <g class="connection-lines">
-                        <ng-container *ngFor="let node of t.nodes; trackBy: trackByNodeId">
-                          <path *ngIf="node.connectionLine && !node.hidden"
-                                [attr.d]="node.connectionLine.path"
-                                [attr.stroke]="node.connectionLine.stroke"
-                                [attr.stroke-width]="(hoveredNodeId() === node.id) ? node.connectionLine.strokeWidth + 2 : node.connectionLine.strokeWidth"
-                                [attr.opacity]="(hoveredNodeId() === node.id) ? 0.8 : node.connectionLine.opacity"
-                                [attr.stroke-dasharray]="node.connectionLine.strokeDasharray || 'none'"
-                                fill="none"
-                                style="cursor: pointer;"
-                                (click)="selectNode(node)"
-                                (mouseenter)="hoveredNodeId.set(node.id)"
-                                (mouseleave)="hoveredNodeId.set(null)" />
-                          <path *ngIf="node.returnConnectionLine && !node.hidden"
-                                [attr.d]="node.returnConnectionLine.path"
-                                [attr.stroke]="node.returnConnectionLine.stroke"
-                                [attr.stroke-width]="(hoveredNodeId() === node.id) ? node.returnConnectionLine.strokeWidth + 2 : node.returnConnectionLine.strokeWidth"
-                                [attr.opacity]="(hoveredNodeId() === node.id) ? 0.8 : node.returnConnectionLine.opacity"
-                                [attr.stroke-dasharray]="node.returnConnectionLine.strokeDasharray || 'none'"
-                                fill="none"
-                                style="cursor: pointer;"
-                                (click)="selectNode(node)"
-                                (mouseenter)="hoveredNodeId.set(node.id)"
-                                (mouseleave)="hoveredNodeId.set(null)" />
-                        </ng-container>
                       </g>
                     </svg>
 

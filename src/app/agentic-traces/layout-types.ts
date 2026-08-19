@@ -21,7 +21,6 @@
  * - Interactive Nodes (User inputs, model responses, system events, tools)
  * - Thinking Areas (The wide color bands representing model reasoning effort)
  * - Backbone Lines (The vertical/horizontal tracks showing the flow of execution)
- * - Connection Lines (Lines connecting tools or user interactions back to the backbone)
  */
 
 export enum TraceNodeColumn {
@@ -125,16 +124,6 @@ export interface BaseVisNode {
   height: number;
 }
 
-export interface ConnectionLine {
-  id: string;
-  path: string;
-  stroke: string;
-  strokeWidth: number;
-  opacity: number;
-  strokeDasharray?: string;
-  fill?: string;
-}
-
 export interface InteractiveNodeBase extends BaseVisNode {
   label: string;
   text: string;
@@ -145,8 +134,6 @@ export interface InteractiveNodeBase extends BaseVisNode {
   hidden?: boolean;
   isWaiting?: boolean;
   isFailed?: boolean;
-  connectionLine?: ConnectionLine;
-  returnConnectionLine?: ConnectionLine;
   stepType?: ReasoningStepType;
 }
 
@@ -158,7 +145,6 @@ export interface UserInputNode extends InteractiveNodeBase {
 export interface ResponseNode extends InteractiveNodeBase {
   type: TraceNodeType.RESPONSE;
   column: 'user';
-  connectionLine?: ConnectionLine;
 }
 
 export interface ThinkingStepNode extends InteractiveNodeBase {
@@ -172,26 +158,22 @@ export interface ThinkingStepNode extends InteractiveNodeBase {
 export interface ToolCallNode extends InteractiveNodeBase {
   type: TraceNodeType.TOOL_CALL;
   column: 'agent';
-  connectionLine: ConnectionLine;
 }
 
 export interface ToolDataNode extends InteractiveNodeBase {
   type: TraceNodeType.TOOL_DATA;
   column: 'tools';
-  connectionLine: ConnectionLine;
 }
 
 export interface SystemNode extends InteractiveNodeBase {
   type: TraceNodeType.SYSTEM;
   column: 'agent';
-  connectionLine: ConnectionLine;
 }
 
 export interface ErrorNode extends InteractiveNodeBase {
   type: TraceNodeType.ERROR;
   column: 'agent';
   followedByRateLimit?: boolean;
-  connectionLine?: ConnectionLine;
 }
 
 export type VisNode =
