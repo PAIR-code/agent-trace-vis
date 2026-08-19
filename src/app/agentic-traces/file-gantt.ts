@@ -105,8 +105,6 @@ export interface FileGanttData {
   rows: FileGanttRow[];
   /** Pixel height needed to render all rows (for SVG sizing). */
   totalHeight: number;
-  /** Summary row combining all file events into a single lane. */
-  summaryRow: FileGanttRow;
 }
 
 // ---------------------------------------------------------------------------
@@ -540,40 +538,9 @@ export function buildFileGanttData(
     });
   }
 
-  // Build summaryRow combining all events across all files
-  const allViews: FileViewMarker[] = [];
-  const allEdits: FileEditSegment[] = [];
-  let summaryStartX = contentWidth;
-
-  for (const row of rows) {
-    if (row.startX < summaryStartX) {
-      summaryStartX = row.startX;
-    }
-    allViews.push(...row.views);
-    allEdits.push(...row.edits);
-  }
-
-  if (rows.length === 0) {
-    summaryStartX = 0;
-  }
-
-  allViews.sort((a, b) => a.x - b.x);
-  allEdits.sort((a, b) => a.x - b.x);
-
-  const summaryRow: FileGanttRow = {
-    filePath: '',
-    basename: '',
-    viewOnly: rows.every(r => r.viewOnly),
-    isPlan: false,
-    startX: summaryStartX,
-    endX: traceEndX,
-    views: allViews,
-    edits: allEdits,
-  };
-
   const totalHeight = Math.max(FILE_ROW_HEIGHT, rows.length * FILE_ROW_HEIGHT + 8);
 
-  return { rows, totalHeight, summaryRow };
+  return { rows, totalHeight };
 }
 
 // ---------------------------------------------------------------------------

@@ -60,17 +60,6 @@ export const FILE_GANTT_TEMPLATE = `
          [attr.height]="isFilesCollapsed(t.id) ? fileRowHeight : t.fileGanttData.totalHeight"
          style="display:block; overflow: visible;">
 
-      <!-- Summary Baseline (shown when collapsed) -->
-      <line
-        class="file-summary-baseline"
-        [attr.x1]="t.fileGanttData.summaryRow.startX"
-        [attr.x2]="t.fileGanttData.summaryRow.endX"
-        y1="14" y2="14"
-        stroke="#cbd5e1"
-        stroke-width="1.5"
-        stroke-dasharray="3,3"
-        [style.opacity]="isFilesCollapsed(t.id) ? 1 : 0" />
-
       <!-- One group per file row (slides vertically to 0 when collapsed) -->
       <g *ngFor="let row of t.fileGanttData.rows; let rowIndex = index; trackBy: trackByFileRow"
          class="file-row-group"
