@@ -442,6 +442,8 @@ export function buildThinkingAreaNodes(
       'Z'
     ].join(' ');
 
+    const blockColor = (block[0] as any).color || (block[0].data as ReasoningTraceStep)?.color || COLORS.AGENT;
+
     result.push({
       id: `${traceId}_area_chart_${blockIndex}`,
       traceId,
@@ -453,11 +455,11 @@ export function buildThinkingAreaNodes(
       label: '',
       text: '',
       data: null,
-      color: null,
+      color: blockColor,
       path: path,
-      fill: `url(#grad-${sanitizeId(traceId)})`,
-      stroke: '#e2e8f0',
-      strokeWidth: 1,
+      fill: blockColor,
+      stroke: 'none',
+      strokeWidth: 0,
       opacity: 1
     });
   });

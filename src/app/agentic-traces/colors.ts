@@ -115,48 +115,88 @@ export const SPEAKER_STYLES: { [key: string]: SpeakerStyle } = {
 
 export const LINE_COLOR = COLORS.TOOL_LINE;
 
-export function getModelColor(modelStr?: string | null): string {
-  if (!modelStr) {
+// Standard Agent Palette: Map known agent names to distinct theme colors
+const AGENT_COLORS: Record<string, string> = {
+  'jetski': '#d97706',          // Warm Orange
+  'swe-agent': '#10b981',       // Emerald Green
+  'developer agent': '#6366f1', // Indigo
+  'agent': '#d97706',           // Default Agent color
+};
+
+// Maximally-distinct curated categorical palette
+const DISTINCT_PALETTE = [
+  '#0284c7', // Ocean Blue
+  '#059669', // Emerald Green
+  '#d97706', // Warm Amber / Orange
+  '#4f46e5', // Indigo
+  '#e11d48', // Crimson Rose
+  '#7c3aed', // Violet / Purple
+  '#0891b2', // Cyan
+  '#ea580c', // Bright Orange
+  '#16a34a', // Leaf Green
+  '#db2777', // Pink
+  '#ca8a04', // Gold
+  '#475569', // Slate
+];
+
+export function getAgentColor(agentName?: string | null, model?: string | null): string {
+  const cleanAgent = (agentName || 'Agent').trim();
+  const cleanModel = (model || '').trim();
+
+  // If a model is provided, check for known model brands for distinctive palette colors
+  if (cleanModel) {
+    const lowerModel = cleanModel.toLowerCase();
+    if (lowerModel.includes('gemini') || lowerModel.includes('google')) {
+      return '#4f46e5'; // Indigo
+    }
+    if (lowerModel.includes('claude') || lowerModel.includes('anthropic') || lowerModel.includes('sonnet') || lowerModel.includes('opus') || lowerModel.includes('haiku')) {
+      return '#0284c7'; // Ocean Blue
+    }
+    if (lowerModel.includes('gpt') || lowerModel.includes('openai') || lowerModel.includes('cerebras')) {
+      return '#059669'; // Emerald Green
+    }
+    if (lowerModel.includes('llama') || lowerModel.includes('meta')) {
+      return '#2563eb'; // Royal Blue
+    }
+    if (lowerModel.includes('mistral')) {
+      return '#0d9488'; // Teal
+    }
+    if (lowerModel.includes('qwen')) {
+      return '#06b6d4'; // Cyan
+    }
+  }
+
+  // Check known exact agent names if no distinct model
+  if (!cleanModel || cleanModel.toLowerCase() === cleanAgent.toLowerCase()) {
+    const lowerAgent = cleanAgent.toLowerCase();
+    if (AGENT_COLORS[lowerAgent]) {
+      return AGENT_COLORS[lowerAgent];
+    }
+  }
+
+  let key = cleanAgent;
+  if (cleanModel && cleanModel.toLowerCase() !== cleanAgent.toLowerCase()) {
+    key = `${cleanAgent} (${cleanModel})`;
+  }
+
+  if (key.toLowerCase() === 'agent') {
     return COLORS.AGENT;
   }
-  const lower = modelStr.toLowerCase();
-  
-  if (lower.includes('gemini') || lower.includes('google')) {
-    return '#6366f1'; // Indigo
-  }
-  if (lower.includes('claude') || lower.includes('anthropic') || lower.includes('opus') || lower.includes('sonnet') || lower.includes('haiku')) {
-    return '#0284c7'; // Ocean Blue
-  }
-  if (lower.includes('gpt') || lower.includes('openai')) {
-    return '#10b981'; // Emerald Green
-  }
-  if (lower.includes('llama')) {
-    return '#2563eb'; // Royal Blue
-  }
-  if (lower.includes('mistral')) {
-    return '#0d9488'; // Teal
-  }
-  if (lower.includes('qwen')) {
-    return '#06b6d4'; // Cyan
-  }
-  if (lower === 'agent') {
-    return '#64748b'; // Slate Gray for generic Agent
-  }
 
-  // Fallback: hash the string to generate a dynamic categorical color
-  return hashStringToColor(modelStr);
-}
-
-export function getDarkerModelColor(modelStr?: string | null): string {
-  return darkenColor(getModelColor(modelStr));
-}
-
-function hashStringToColor(str: string): string {
+  // Fallback: pick from DISTINCT_PALETTE using hash
   let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < key.length; i++) {
+    hash = key.charCodeAt(i) + ((hash << 5) - hash);
   }
-  const hue = Math.abs(hash) % 360;
-  return `hsl(${hue}, 65%, 45%)`;
+  const idx = Math.abs(hash) % DISTINCT_PALETTE.length;
+  return DISTINCT_PALETTE[idx];
 }
+
+export function getDarkerAgentColor(agentName?: string | null, model?: string | null): string {
+  return darkenColor(getAgentColor(agentName, model));
+}
+
+// Backward-compatibility aliases
+export const getModelColor = getAgentColor;
+export const getDarkerModelColor = getDarkerAgentColor;
 

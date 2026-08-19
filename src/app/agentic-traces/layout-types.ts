@@ -83,6 +83,7 @@ export interface ReasoningTrace {
   metadata?: Record<string, any>;
   agentColor?: string;
   darkerAgentColor?: string;
+  agents?: { name: string; model?: string; color: string }[];
   models?: { name: string; color: string }[];
   date?: string;
   timestamp?: number;
@@ -95,7 +96,7 @@ export interface ReasoningTraceStep {
   timestamp?: string;
   completedAt?: string;
   model?: string;
-  modelFamily?: string;
+  agentName?: string;
   userIntent?: string;
   stepType?: ReasoningStepType;
   nodes: ReasoningTraceNode[];

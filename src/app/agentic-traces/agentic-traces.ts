@@ -203,23 +203,20 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     const seenNames = new Set<string>();
 
     for (const trace of traces) {
-      if (trace?.models) {
-        for (const m of trace.models) {
-          if (!seenNames.has(m.name)) {
-            seenNames.add(m.name);
+      const agents = trace?.agents || trace?.models;
+      if (agents) {
+        for (const a of agents) {
+          const entryKey = a.model ? `${a.name} (${a.model})` : a.name;
+          if (!seenNames.has(entryKey)) {
+            seenNames.add(entryKey);
             
-            let label = m.name;
-            let subLabel: string | undefined = undefined;
-            const parenIdx = m.name.indexOf('(');
-            if (parenIdx !== -1) {
-              label = m.name.substring(0, parenIdx).trim();
-              subLabel = m.name.substring(parenIdx).trim();
-            }
+            let label = a.name;
+            let subLabel = a.model ? `(${a.model})` : undefined;
 
             modelEntries.push({
               label: label,
               subLabel: subLabel,
-              color: m.color,
+              color: a.color,
               isAI: true,
             });
           }

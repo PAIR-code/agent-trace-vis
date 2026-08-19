@@ -20,7 +20,7 @@
  */
 
 import { TraceNodeType, TraceNodeColumn, ReasoningTrace, ReasoningTraceStep, ReasoningTraceNode, BASE_OFFSET } from './layout-types';
-import { getModelColor, getDarkerModelColor, COLORS } from './colors';
+import { getAgentColor, getDarkerAgentColor, COLORS } from './colors';
 import { getNodeVisualConfig } from './node-rendering-helper';
 import { LayoutOutput, LayoutParams, VisNode, BackboneLine } from './layout-types';
 import { sanitizeId } from './layout-utils';
@@ -84,21 +84,12 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
 
     let currentY = BASE_OFFSET; // current position along timeline X axis
     const steps = (data as ReasoningTrace).steps || [];
-    const rawStops: { x: number, color: string }[] = [];
 
-    // Find a model family/name in the steps to assign fallback trace colors
-    let traceModel = 'Agent';
-    for (const step of steps) {
-      if (step.modelFamily) {
-        traceModel = step.modelFamily;
-        break;
-      } else if (step.model) {
-        traceModel = step.model;
-        break;
-      }
-    }
-    const agentColor = getModelColor(traceModel);
-    const darkerAgentColor = getDarkerModelColor(traceModel);
+    // Resolve trace-level agent colors
+    const traceAgentName = (data as any)?.agent?.name || 'Agent';
+    const traceModel = (data as any)?.agent?.model || steps.find(s => s.model)?.model;
+    const agentColor = steps.find(s => s.color)?.color || getAgentColor(traceAgentName, traceModel);
+    const darkerAgentColor = steps.find(s => s.darkerColor)?.darkerColor || getDarkerAgentColor(traceAgentName, traceModel);
     trace.agentColor = agentColor;
     trace.darkerAgentColor = darkerAgentColor;
 
@@ -147,8 +138,8 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
     steps.forEach((step: ReasoningTraceStep, index: number) => {
       const numNodes = step.nodes.length;
 
-      const stepAgentColor = step.color || getModelColor(step.modelFamily || traceModel);
-      const stepDarkerAgentColor = step.darkerColor || getDarkerModelColor(step.modelFamily || traceModel);
+      const stepAgentColor = step.color || getAgentColor(step.agentName || traceAgentName, step.model || traceModel);
+      const stepDarkerAgentColor = step.darkerColor || getDarkerAgentColor(step.agentName || traceAgentName, step.model || traceModel);
 
       let currentTs = step.timestamp ? new Date(step.timestamp).getTime() : NaN;
       let completedTs = step.completedAt ? new Date(step.completedAt).getTime() : NaN;
@@ -224,13 +215,6 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
         }
       });
 
-      const stepNodes = traceNodes.filter(n => n.data === step);
-      if (stepNodes.length > 0) {
-        const minX = Math.min(...stepNodes.map(n => n.x));
-        const color = step.color || getModelColor(step.modelFamily || traceModel);
-        rawStops.push({ x: minX, color: color });
-      }
-
       if (yAxisMode === 'tokens') {
         cumulativeTokens += stepTokens;
       }
@@ -249,33 +233,12 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
 
     rebuildConnectionLines(traceNodes, cols, nodeW, yAxisMode, startTime, traceScale, gapsToReduce);
 
-    // Calculate gradient stops
-    const gradientStops: { offset: string, color: string }[] = [];
-    let prevColor = '';
-    rawStops.forEach(rs => {
-      const offset = `${rs.x / (maxContentWidth + 100)}`;
-      if (rs.color !== prevColor) {
-        if (prevColor) {
-          gradientStops.push({ offset: offset, color: prevColor });
-        }
-        gradientStops.push({ offset: offset, color: rs.color });
-        prevColor = rs.color;
-      }
-    });
-    if (gradientStops.length > 0) {
-      gradientStops.push({ offset: '1', color: prevColor });
-    } else {
-      gradientStops.push({ offset: '0', color: COLORS.AGENT });
-      gradientStops.push({ offset: '1', color: COLORS.AGENT });
-    }
-    trace.gradientStops = gradientStops;
-
     const cx = cols.agent.center;
 
     // Generate area charts as ThinkingAreaNodes
     const sortedNodes = [...traceNodes].filter(n => !n.hidden).sort((a, b) => a.x - b.x);
     const traceThinkingAreaNodes = buildThinkingAreaNodes(id, sortedNodes, cx, yAxisMode);
-    const traceBackboneLines = buildBackboneLines(id, cx, waitingRects, traceMaxX);
+    const traceBackboneLines = buildBackboneLines(id, cx, waitingRects, traceMaxX, agentColor, sortedNodes);
 
     trace.nodes = traceNodes;
     trace.thinkingAreaNodes = traceThinkingAreaNodes;

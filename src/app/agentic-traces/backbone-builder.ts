@@ -23,14 +23,32 @@
  * - Squiggle segments: rate limit retry loops.
  */
 
-import { BackboneLine, BASE_OFFSET } from './layout-types';
-import { sanitizeId } from './layout-utils';
+import { BackboneLine, BASE_OFFSET, VisNode, ReasoningTraceStep } from './layout-types';
+import { COLORS } from './colors';
+
+function getSegmentColor(x: number, traceNodes?: VisNode[], defaultColor: string = COLORS.AGENT): string {
+  if (!traceNodes || traceNodes.length === 0) return defaultColor;
+  let activeColor = defaultColor;
+  let maxNodeX = -1;
+  for (const n of traceNodes) {
+    if (n.hidden) continue;
+    // Look up the step's primary color, avoiding node-specific variants (like darkened response bubbles)
+    const stepColor = (n.data as ReasoningTraceStep)?.color;
+    if (stepColor && n.x <= x && n.x >= maxNodeX) {
+      maxNodeX = n.x;
+      activeColor = stepColor;
+    }
+  }
+  return activeColor;
+}
 
 export function buildBackboneLines(
   traceId: string,
   cy: number,
   waitingRects: any[],
-  traceMaxX: number
+  traceMaxX: number,
+  lineColor: string = COLORS.AGENT,
+  traceNodes?: VisNode[]
 ): BackboneLine[] {
   const lines: BackboneLine[] = [];
 
@@ -53,6 +71,8 @@ export function buildBackboneLines(
   }
 
   backboneSegments.forEach((seg, segIndex) => {
+    const segColor = getSegmentColor(seg.x1, traceNodes, lineColor);
+
     if (seg.type === 'squiggle') {
       const x1 = seg.x1;
       const x2 = seg.x2;
@@ -61,7 +81,7 @@ export function buildBackboneLines(
         id: `${traceId}_agent_backbone_line_${segIndex}_p1`,
         traceId,
         path: `M ${x1} ${cy} L ${x1 + 10} ${cy}`,
-        stroke: `url(#grad-${sanitizeId(traceId)})`,
+        stroke: segColor,
         strokeWidth: 1.5,
         opacity: 0.7,
         strokeDasharray: '4,6'
@@ -71,7 +91,7 @@ export function buildBackboneLines(
         id: `${traceId}_agent_backbone_line_${segIndex}_p2`,
         traceId,
         path: `M ${x1 + 10} ${cy} q 2.5 -5 5 0 q 2.5 5 5 0`,
-        stroke: `url(#grad-${sanitizeId(traceId)})`,
+        stroke: segColor,
         strokeWidth: 3,
         opacity: 0.7,
       });
@@ -80,7 +100,7 @@ export function buildBackboneLines(
         id: `${traceId}_agent_backbone_line_${segIndex}_p3`,
         traceId,
         path: `M ${x1 + 20} ${cy} L ${x2} ${cy}`,
-        stroke: `url(#grad-${sanitizeId(traceId)})`,
+        stroke: segColor,
         strokeWidth: 1.5,
         opacity: 0.7,
         strokeDasharray: '4,6'
@@ -93,9 +113,9 @@ export function buildBackboneLines(
         id: `${traceId}_agent_backbone_line_${segIndex}`,
         traceId,
         path,
-        stroke: `url(#grad-${sanitizeId(traceId)})`,
+        stroke: segColor,
         strokeWidth: seg.type === 'dotted' ? 1.5 : 3,
-        opacity: 0.7,
+        opacity: seg.type === 'dotted' ? 0.7 : 1,
         strokeDasharray
       });
     }

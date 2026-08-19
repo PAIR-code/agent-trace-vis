@@ -22,7 +22,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { ReasoningTrace, ReasoningTraceStep, ReasoningTraceNode, TraceNodeColumn, TraceNodeType, ReasoningStepType } from './layout-helper';
 import { TraceRecord, Step, ToolCall, Observation, Agent } from './trace';
-import { getModelColor, getDarkerModelColor, darkenColor } from './colors';
+import { getAgentColor, getDarkerAgentColor, darkenColor } from './colors';
 import { hashString } from './layout-utils';
 
 export interface DatasetItem {
@@ -211,16 +211,15 @@ export class TraceLoaderService {
     return records;
   }
 
-  parseStep(step: Step, traceId: string, stepIndex: number, defaultAgent?: Agent): ReasoningTraceStep {
+  parseStep(step: Step, traceId: string, stepIndex: number, defaultAgent?: Agent, inheritedModel?: string): ReasoningTraceStep {
     const stepId = `${traceId}_step_${stepIndex}`;
     const nodes: ReasoningTraceNode[] = [];
 
-    const model = step.model || defaultAgent?.model || undefined;
-    const modelFamily = defaultAgent?.name || 'Agent';
+    const model = step.model || inheritedModel || defaultAgent?.model || undefined;
+    const agentName = step.agent_role || defaultAgent?.name || 'Agent';
 
-    const colorTarget = model || modelFamily;
-    const color = getModelColor(colorTarget);
-    const darkerColor = getDarkerModelColor(colorTarget);
+    const color = getAgentColor(agentName, model);
+    const darkerColor = getDarkerAgentColor(agentName, model);
 
     const createNode = (
       nid: string,
@@ -280,7 +279,7 @@ export class TraceLoaderService {
       id: stepId,
       timestamp: step.timestamp,
       model,
-      modelFamily,
+      agentName,
       stepType: step.role === 'user' ? ReasoningStepType.USER_INPUT : (step.role === 'system' ? ReasoningStepType.SYSTEM_MESSAGE : ReasoningStepType.PLANNER_RESPONSE),
       nodes: nodes,
       token_usage: step.token_usage,
@@ -297,30 +296,56 @@ export class TraceLoaderService {
     }
     const title = traceData.task?.description || traceId;
     const steps = traceData.steps || [];
-    const parsedSteps = steps.map((step: Step, index: number) =>
-      this.parseStep(step, traceId, index, traceData.agent)
-    );
-
-    const modelMap = new Map<string, { name: string; color: string }>();
-    parsedSteps.forEach((step) => {
-      if (step.stepType === ReasoningStepType.PLANNER_RESPONSE && step.color) {
-        const familyName = step.modelFamily || 'Agent';
-        let displayName = familyName;
-        if (step.model && step.model !== familyName) {
-          displayName = `${familyName} (${step.model})`;
+    let lastSeenModel: string | undefined = traceData.agent?.model || undefined;
+    if (!lastSeenModel) {
+      for (const s of steps) {
+        if (s.model) {
+          lastSeenModel = s.model;
+          break;
         }
-        if (!modelMap.has(displayName)) {
-          modelMap.set(displayName, { name: displayName, color: step.color });
+      }
+    }
+
+    const parsedSteps = steps.map((step: Step, index: number) => {
+      const parsed = this.parseStep(step, traceId, index, traceData.agent, lastSeenModel);
+      if (step.model) {
+        lastSeenModel = step.model;
+      }
+      return parsed;
+    });
+
+    const agentMap = new Map<string, { name: string; model?: string; color: string }>();
+    const defaultAgentName = traceData.agent?.name || 'Agent';
+    const defaultAgentModel = traceData.agent?.model || lastSeenModel;
+    const defaultKey = defaultAgentModel ? `${defaultAgentName} (${defaultAgentModel})` : defaultAgentName;
+    agentMap.set(defaultKey, {
+      name: defaultAgentName,
+      model: defaultAgentModel,
+      color: getAgentColor(defaultAgentName, defaultAgentModel)
+    });
+
+    parsedSteps.forEach((step) => {
+      if (step.stepType === ReasoningStepType.PLANNER_RESPONSE && step.agentName) {
+        const stepKey = step.model ? `${step.agentName} (${step.model})` : step.agentName;
+        if (!agentMap.has(stepKey)) {
+          agentMap.set(stepKey, {
+            name: step.agentName,
+            model: step.model,
+            color: step.color || getAgentColor(step.agentName, step.model)
+          });
         }
       }
     });
+
+    const agentList = Array.from(agentMap.values());
 
     return {
       id: traceId,
       title: title,
       steps: parsedSteps,
       metadata: traceData.metadata,
-      models: Array.from(modelMap.values())
+      agents: agentList,
+      models: agentList
     };
   }
 }

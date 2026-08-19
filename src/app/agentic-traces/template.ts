@@ -162,8 +162,8 @@ export const AGENTIC_TRACES_TEMPLATE = `
                    title="Drag track to reorder">
                 <div class="trace-title" [title]="t.title">{{ t.title }}</div>
                 <div class="model-list">
-                  <div class="model-item" *ngFor="let m of t.models">
-                    <span class="model-name" [title]="m.name" [style.color]="m.color">{{ m.name }}</span>
+                  <div class="model-item" *ngFor="let a of (t.agents || t.models)">
+                    <span class="model-name" [title]="a.name" [style.color]="a.color">{{ a.name }}</span>
                   </div>
                 </div>
               </div>
@@ -232,20 +232,6 @@ export const AGENTIC_TRACES_TEMPLATE = `
                   <svg class="track-lines-layer" [attr.width]="140" [attr.height]="contentHeight()"
                        draggable="false"
                        (dragstart)="$event.stopPropagation(); $event.preventDefault()">
-                    <defs>
-                      <linearGradient [attr.id]="'grad-' + sanitizeId(t.id)" x1="0" y1="0" x2="0" [attr.y2]="contentHeight()" gradientUnits="userSpaceOnUse">
-                        <stop *ngFor="let stop of t.gradientStops" [attr.offset]="stop.offset" [attr.stop-color]="stop.color" />
-                      </linearGradient>
-                    </defs>
-                    <!-- Thinking Area SVG Nodes -->
-                    <g class="thinking-areas">
-                      <path *ngFor="let area of t.thinkingAreaNodes; trackBy: trackByNodeId"
-                            [attr.d]="area.path"
-                            [attr.fill]="area.fill"
-                            [attr.stroke]="area.stroke"
-                            [attr.stroke-width]="area.strokeWidth"
-                            [attr.opacity]="area.opacity" />
-                    </g>
                     <!-- Agent Backbone Lines -->
                     <g class="backbone-lines">
                       <path *ngFor="let backbone of t.backboneLines; trackBy: trackByLineId"
@@ -255,6 +241,15 @@ export const AGENTIC_TRACES_TEMPLATE = `
                             [attr.stroke-dasharray]="backbone.strokeDasharray || 'none'"
                             [attr.opacity]="backbone.opacity"
                             fill="none" />
+                    </g>
+                    <!-- Thinking Area SVG Nodes -->
+                    <g class="thinking-areas">
+                      <path *ngFor="let area of t.thinkingAreaNodes; trackBy: trackByNodeId"
+                            [attr.d]="area.path"
+                            [attr.fill]="area.fill"
+                            [attr.stroke]="area.stroke"
+                            [attr.stroke-width]="area.strokeWidth"
+                            [attr.opacity]="area.opacity" />
                     </g>
                     <!-- Connection Lines -->
                     <g class="connection-lines">
@@ -340,20 +335,6 @@ export const AGENTIC_TRACES_TEMPLATE = `
                     <svg class="track-lines-layer" [attr.width]="contentWidth()" [attr.height]="140"
                          draggable="false"
                          (dragstart)="$event.stopPropagation(); $event.preventDefault()">
-                      <defs>
-                        <linearGradient [attr.id]="'grad-' + sanitizeId(t.id)" x1="0" y1="0" [attr.x2]="contentWidth()" y2="0" gradientUnits="userSpaceOnUse">
-                          <stop *ngFor="let stop of t.gradientStops" [attr.offset]="stop.offset" [attr.stop-color]="stop.color" />
-                        </linearGradient>
-                      </defs>
-                      <!-- Thinking Area SVG Nodes -->
-                      <g class="thinking-areas">
-                        <path *ngFor="let area of t.thinkingAreaNodes; trackBy: trackByNodeId"
-                              [attr.d]="area.path"
-                              [attr.fill]="area.fill"
-                              [attr.stroke]="area.stroke"
-                              [attr.stroke-width]="area.strokeWidth"
-                              [attr.opacity]="area.opacity" />
-                      </g>
                       <!-- Agent Backbone Lines -->
                       <g class="backbone-lines">
                         <path *ngFor="let backbone of t.backboneLines; trackBy: trackByLineId"
@@ -363,6 +344,15 @@ export const AGENTIC_TRACES_TEMPLATE = `
                               [attr.stroke-dasharray]="backbone.strokeDasharray || 'none'"
                               [attr.opacity]="backbone.opacity"
                               fill="none" />
+                      </g>
+                      <!-- Thinking Area SVG Nodes -->
+                      <g class="thinking-areas">
+                        <path *ngFor="let area of t.thinkingAreaNodes; trackBy: trackByNodeId"
+                              [attr.d]="area.path"
+                              [attr.fill]="area.fill"
+                              [attr.stroke]="area.stroke"
+                              [attr.stroke-width]="area.strokeWidth"
+                              [attr.opacity]="area.opacity" />
                       </g>
                       <!-- Connection Lines -->
                       <g class="connection-lines">

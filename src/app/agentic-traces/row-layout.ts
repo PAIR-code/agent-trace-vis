@@ -104,22 +104,6 @@ export function applyRowLayout(params: {
     const baseWidth = count * 140 + (count > 1 ? (count - 1) * 20 : 0);
     const axisWidth = (yAxisMode === 'time' || yAxisMode === 'tokens') ? 60 : 0;
     contentWidth = Math.max(130, baseWidth + axisWidth);
-
-    // Rescale gradient stop offsets for column mode.
-    // Stops were computed as x / (maxContentWidth + 100), but in column mode
-    // the gradient spans maxContentHeight on the y-axis.
-    const maxContentWidth = params.maxContentHeight; // passed as maxContentWidth from layout-helper
-    if (maxContentWidth > 0 && maxContentHeight > 0) {
-      const scale = (maxContentWidth + 100) / maxContentHeight;
-      traces.forEach(t => {
-        if (t.gradientStops) {
-          t.gradientStops = t.gradientStops.map((s: any) => ({
-            ...s,
-            offset: `${Math.min(1, parseFloat(s.offset) * scale)}`
-          }));
-        }
-      });
-    }
   } else {
     // Row Mode: calculation is already natively horizontal!
     idsArray.forEach(id => {

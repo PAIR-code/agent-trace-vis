@@ -27,6 +27,7 @@ export interface DropdownItem {
   id: string;
   title: string;
   date?: string;
+  agents?: { name: string, model?: string, color: string }[];
   models?: { name: string, color: string }[];
 }
 
@@ -57,10 +58,10 @@ export interface DropdownItem {
                 (mousedown)="onMouseDown(item.id, $event)"
                 (mouseup)="onMouseUp(item.id, $event)">
             <div class="conv-item-main-title">{{ item.title }}</div>
-            <div class="conv-item-subtitle" *ngIf="item.date || item.models">
+            <div class="conv-item-subtitle" *ngIf="item.date || item.agents || item.models">
               <span *ngIf="item.date" class="conv-item-date">{{ item.date }}</span>
-              <div *ngIf="item.models" class="conv-item-models">
-                <span *ngFor="let m of item.models" [style.color]="m.color">{{ m.name }}</span>
+              <div *ngIf="item.agents || item.models" class="conv-item-models">
+                <span *ngFor="let a of (item.agents || item.models)" [style.color]="a.color">{{ a.name }}</span>
               </div>
             </div>
           </div>
