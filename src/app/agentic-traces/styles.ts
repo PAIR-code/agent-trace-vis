@@ -763,14 +763,10 @@ export const AGENTIC_TRACES_STYLES: string[] = [
     ::ng-deep .message-card {
       color: #1e293b !important;
       padding: 12px 16px !important;
-      opacity: 0.65;
-      transition: opacity 0.2s ease, background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
     }
 
     ::ng-deep .message-card:hover,
-    ::ng-deep .message-card.is-hovered,
-    ::ng-deep .message-card.is-active {
-      opacity: 1 !important;
+    ::ng-deep .message-card.is-hovered {
       background: #f1f5f9 !important;
     }
 
@@ -950,19 +946,15 @@ export const AGENTIC_TRACES_STYLES: string[] = [
     ::ng-deep .child-msg {
       color: #1e293b !important;
       padding: 8px 10px !important;
-      opacity: 0.65;
-      transition: opacity 0.2s ease, background 0.2s ease, border-color 0.2s ease;
     }
 
     ::ng-deep .child-msg.is-active {
       background: #f8fafc !important;
       border-color: #3b82f6 !important;
-      opacity: 1 !important;
     }
 
     ::ng-deep .child-msg:hover, ::ng-deep .child-msg.is-hovered {
       background: #f1f5f9 !important;
-      opacity: 1 !important;
     }
 
     ::ng-deep .raw-json-btn {
