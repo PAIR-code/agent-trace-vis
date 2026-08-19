@@ -531,8 +531,8 @@ export const AGENTIC_TRACES_STYLES: string[] = [
     }
 
     /* ── Filled types ── */
-    .vis-node.user_input { background: ${COLORS.USER_BG}; border: 1.5px solid ${COLORS.USER_BORDER}; border-bottom-left-radius: 0; }
-    .vis-node.response { background: ${COLORS.AGENT}; border-bottom-right-radius: 0; }
+    .vis-node.user_input { background: ${COLORS.USER_BG}; border: 1.5px solid ${COLORS.USER_BORDER}; border-radius: 3px; }
+    .vis-node.response { background: ${COLORS.AGENT}; border-radius: 3px; }
     .vis-node.thinking { background: ${COLORS.THINKING}; border-top-left-radius: 0; border-bottom-left-radius: 0; transform-origin: left center; }
     .vis-node.thinking.is-waiting { background: ${COLORS.THINKING_WAITING}; }
     .vis-node.error { background: ${COLORS.ERROR_LIGHT}; }

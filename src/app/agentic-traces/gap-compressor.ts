@@ -91,6 +91,21 @@ export function compressGaps(params: {
         }
       });
       n.x -= nodeShift;
+
+      if ((n as any).timeBasedX !== undefined) {
+        let startShift = 0;
+        let endShift = 0;
+        gapsToReduce.forEach(g => {
+          if ((n as any).timeBasedX >= g.originalX + g.originalWidth) {
+            startShift += g.shift;
+          }
+          if ((n as any).timeBasedEndX >= g.originalX + g.originalWidth) {
+            endShift += g.shift;
+          }
+        });
+        (n as any).timeBasedX -= startShift;
+        (n as any).timeBasedEndX -= endShift;
+      }
     });
 
     traceMaxX -= currentTotalShift;

@@ -44,9 +44,9 @@ export interface NodeBuildContext {
   traceScale: number;
   startTime: number;
   stepAgentColor: string;
-  stepDarkerAgentColor: string;
   traceId: string;
   nodeW: number;
+  maxTokens?: number;
   // step-level context
   step: ReasoningTraceStep;
   numNodes: number;
@@ -72,15 +72,21 @@ export function buildThinkingNode(
   nodeGap: number,
   an: ReasoningTraceNode
 ): NodeBuildResult {
-  const { traceScale, startTime, stepAgentColor, cols, rows, numNodes, stepDuration, currentTs, completedTs, stepNodeHeight } = ctx;
+  const { traceScale, startTime, stepAgentColor, cols, rows, numNodes, stepDuration, currentTs, completedTs, stepNodeHeight, yAxisMode } = ctx;
   const channelRows = rows || cols;
 
   const width = stepNodeHeight;
   const height = 40;
 
-  const t_end = !isNaN(currentTs) ? currentTs + ((nodeIndex + 1) / numNodes) * stepDuration : currentTs;
-  const x_end = !isNaN(t_end) ? BASE_OFFSET + (t_end - startTime) * traceScale : currentY;
-  const x = x_end - width;
+  const nodeTs = an.timestamp ? new Date(an.timestamp).getTime() : currentTs;
+  let x: number;
+  if (yAxisMode === 'time' && !isNaN(nodeTs)) {
+    x = BASE_OFFSET + (nodeTs - startTime) * traceScale;
+  } else if (yAxisMode === 'tokens' && !isNaN(currentTs)) {
+    x = BASE_OFFSET + (currentTs + (nodeIndex / Math.max(numNodes, 1)) * stepDuration) * traceScale;
+  } else {
+    x = currentY;
+  }
 
   // Compute step-level x positions for the thinking area block.
   const timeBasedX = !isNaN(currentTs) ? BASE_OFFSET + (currentTs - startTime) * traceScale : x;
@@ -124,22 +130,40 @@ export function buildResponseNode(
   nodeGap: number,
   an: ReasoningTraceNode
 ): NodeBuildResult {
-  const { traceScale, startTime, stepDarkerAgentColor, stepAgentColor, cols, rows, nodeW, numNodes, stepDuration, currentTs } = ctx;
+  const { traceScale, startTime, stepAgentColor, cols, rows, numNodes, stepDuration, currentTs, yAxisMode, maxTokens } = ctx;
   const channelRows = rows || cols;
-  const segmentWidth = nodeW;
-  const width = segmentWidth;
-  const height = nodeW;
+  const width = 7;
 
-  const t_end = !isNaN(currentTs) ? currentTs + ((nodeIndex + 1) / numNodes) * stepDuration : currentTs;
-  const x_end = !isNaN(t_end) ? BASE_OFFSET + (t_end - startTime) * traceScale : currentY;
-  const x = x_end - width;
+  const MAX_NODE_HEIGHT = 22;
+  const MIN_NODE_HEIGHT = 10;
+  const CONSTANT_NODE_HEIGHT = 18;
 
-  const y = channelRows[column].center - height / 2 + 12;
-  const targetX = x + width;
-  const targetY = y + height;
-  const sy = channelRows.agent.center;
-  const midY = (sy + targetY) / 2;
-  const path = `M ${targetX} ${sy} C ${targetX} ${midY}, ${targetX} ${midY}, ${targetX} ${targetY}`;
+  let height: number;
+  if (yAxisMode === 'tokens') {
+    height = CONSTANT_NODE_HEIGHT;
+  } else {
+    let tokens = ctx.step.token_usage?.output_tokens || (ctx.step.token_usage as any)?.completion_tokens || 0;
+    if (tokens === 0) {
+      tokens = text.split(/\s+/).filter((w: string) => w.length > 0).length;
+    }
+    height = MIN_NODE_HEIGHT +
+      (MAX_NODE_HEIGHT - MIN_NODE_HEIGHT) * (tokens / Math.max(maxTokens || 1, 1));
+    height = Math.round(Math.max(MIN_NODE_HEIGHT, Math.min(MAX_NODE_HEIGHT, height)));
+  }
+
+  const nodeTs = an.timestamp ? new Date(an.timestamp).getTime() : currentTs;
+  let x: number;
+  if (yAxisMode === 'time' && !isNaN(nodeTs)) {
+    x = BASE_OFFSET + (nodeTs - startTime) * traceScale;
+  } else if (yAxisMode === 'tokens' && !isNaN(currentTs)) {
+    x = BASE_OFFSET + (currentTs + (nodeIndex / Math.max(numNodes, 1)) * stepDuration) * traceScale;
+  } else {
+    x = currentY;
+  }
+
+  // Agent text goes DOWN from the center line of the row
+  const cy = channelRows[column].center;
+  const y = cy + 1;
 
   const node: ResponseNode = {
     id: nid,
@@ -154,15 +178,8 @@ export function buildResponseNode(
     data: ctx.step,
     traceId: ctx.traceId,
     timestamp: an.timestamp,
-    color: stepDarkerAgentColor,
-    connectionLine: {
-      id: `${nid}_from_agent_backbone`,
-      path,
-      stroke: stepAgentColor,
-      fill: 'none',
-      strokeWidth: 1.5,
-      opacity: 0.7,
-    },
+    color: stepAgentColor,
+    connectionLine: undefined,
     stepType: an.stepType
   };
 
@@ -181,19 +198,49 @@ export function buildDefaultNode(
   nodeGap: number,
   an: ReasoningTraceNode
 ): NodeBuildResult {
-  const { traceScale, startTime, stepAgentColor, cols, rows, nodeW, numNodes, stepDuration, currentTs, stepNodeHeight } = ctx;
+  const { traceScale, startTime, stepAgentColor, cols, rows, nodeW, numNodes, stepDuration, currentTs, stepNodeHeight, yAxisMode, maxTokens } = ctx;
   const channelRows = rows || cols;
-  const segmentWidth = (type === TraceNodeType.USER_INPUT || type === TraceNodeType.SYSTEM || type === TraceNodeType.ERROR)
+  const segmentWidth = (type === TraceNodeType.SYSTEM || type === TraceNodeType.ERROR)
     ? nodeW
     : stepNodeHeight;
-  const height = nodeW;
-  const width = (type === TraceNodeType.SYSTEM || type === TraceNodeType.TOOL_DATA) ? height : segmentWidth;
+  let height = nodeW;
+  let width = (type === TraceNodeType.SYSTEM || type === TraceNodeType.TOOL_DATA) ? height : segmentWidth;
 
-  const t_end = !isNaN(currentTs) ? currentTs + ((nodeIndex + 1) / numNodes) * stepDuration : currentTs;
-  const x_end = !isNaN(t_end) ? BASE_OFFSET + (t_end - startTime) * traceScale : currentY;
-  const x = x_end - width;
+  if (type === TraceNodeType.USER_INPUT) {
+    width = 7;
+    const MAX_NODE_HEIGHT = 22;
+    const MIN_NODE_HEIGHT = 10;
+    const CONSTANT_NODE_HEIGHT = 18;
+
+    if (yAxisMode === 'tokens') {
+      height = CONSTANT_NODE_HEIGHT;
+    } else {
+      let tokens = ctx.step.token_usage?.input_tokens || (ctx.step.token_usage as any)?.prompt_tokens || 0;
+      if (tokens === 0) {
+        tokens = text.split(/\s+/).filter((w: string) => w.length > 0).length;
+      }
+      height = MIN_NODE_HEIGHT +
+        (MAX_NODE_HEIGHT - MIN_NODE_HEIGHT) * (tokens / Math.max(maxTokens || 1, 1));
+      height = Math.round(Math.max(MIN_NODE_HEIGHT, Math.min(MAX_NODE_HEIGHT, height)));
+    }
+  }
+
+  const nodeTs = an.timestamp ? new Date(an.timestamp).getTime() : currentTs;
+  let x: number;
+  if (yAxisMode === 'time' && !isNaN(nodeTs)) {
+    x = BASE_OFFSET + (nodeTs - startTime) * traceScale;
+  } else if (yAxisMode === 'tokens' && !isNaN(currentTs)) {
+    x = BASE_OFFSET + (currentTs + (nodeIndex / Math.max(numNodes, 1)) * stepDuration) * traceScale;
+  } else {
+    x = currentY;
+  }
 
   let y = channelRows[column].center - height / 2;
+  if (type === TraceNodeType.USER_INPUT) {
+    // User text goes UP from the center line of the row
+    const cy = channelRows[column].center;
+    y = cy - height - 1;
+  }
 
   if (column === 'tools') {
     const visualConfig = getNodeVisualConfig(an);
@@ -478,20 +525,14 @@ export function rebuildConnectionLines(
   gapsToReduce: { originalY?: number; originalX?: number; originalHeight?: number; originalWidth?: number; shift: number }[]
 ): void {
   traceNodes.forEach(n => {
-    if (n.hidden || isFileEventNode(n) || n.type === TraceNodeType.USER_INPUT || n.type === TraceNodeType.THINKING || !n.connectionLine) {
+    if (n.hidden || isFileEventNode(n) || n.type === TraceNodeType.USER_INPUT || n.type === TraceNodeType.RESPONSE || n.type === TraceNodeType.THINKING || !n.connectionLine) {
       return;
     }
     const nx = n.x + n.width / 2;
     const ny = n.y + n.height / 2;
     const ty = cols.agent.center;
 
-    if (n.type === TraceNodeType.RESPONSE) {
-      const sy = cols.agent.center;
-      const targetX = n.x + n.width;
-      const targetY = n.y + n.height;
-      const midY = (sy + targetY) / 2;
-      n.connectionLine.path = `M ${targetX} ${sy} C ${targetX} ${midY}, ${targetX} ${midY}, ${targetX} ${targetY}`;
-    } else if (n.type === TraceNodeType.SYSTEM) {
+    if (n.type === TraceNodeType.SYSTEM) {
       if (ny !== ty) {
         const midY = (ny + ty) / 2;
         n.connectionLine.path = `M ${nx} ${ny} C ${nx} ${midY}, ${nx} ${midY}, ${nx} ${ty}`;

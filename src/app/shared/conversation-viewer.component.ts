@@ -215,7 +215,7 @@ export interface ConversationMessage {
       display: flex;
       justify-content: center;
       z-index: 50;
-      pointer-events: auto;
+      pointer-events: none;
       transition: opacity 0.2s ease, transform 0.2s ease;
       opacity: 0;
     }
@@ -298,7 +298,7 @@ export interface ConversationMessage {
     .thread-scroll {
       flex: 1;
       overflow-y: auto;
-      padding: 16px;
+      padding: 16px 16px 64px 16px;
       position: relative;
     }
 

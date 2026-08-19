@@ -32,10 +32,13 @@ export function getNodeVisualConfig(node: any): NodeVisualConfig {
   const textLower = text.toLowerCase();
   const stepType = node.stepType || '';
 
-  // Core conversation nodes keep their default shapes
+  // User and response speech nodes are rendered as rectangles
   if (node.type === TraceNodeType.USER_INPUT || 
-      node.type === TraceNodeType.RESPONSE || 
-      node.type === TraceNodeType.THINKING ||
+      node.type === TraceNodeType.RESPONSE) {
+    return { shape: 'rect', type: 'default' };
+  }
+
+  if (node.type === TraceNodeType.THINKING ||
       node.type === TraceNodeType.SYSTEM) {
     return { shape: '', type: 'default' };
   }

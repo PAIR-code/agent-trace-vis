@@ -192,11 +192,6 @@ export function getAgentColor(agentName?: string | null, model?: string | null):
   return DISTINCT_PALETTE[idx];
 }
 
-export function getDarkerAgentColor(agentName?: string | null, model?: string | null): string {
-  return darkenColor(getAgentColor(agentName, model));
-}
-
 // Backward-compatibility aliases
 export const getModelColor = getAgentColor;
-export const getDarkerModelColor = getDarkerAgentColor;
 

@@ -82,7 +82,6 @@ export interface ReasoningTrace {
   steps: ReasoningTraceStep[];
   metadata?: Record<string, any>;
   agentColor?: string;
-  darkerAgentColor?: string;
   agents?: { name: string; model?: string; color: string }[];
   models?: { name: string; color: string }[];
   date?: string;
@@ -102,7 +101,6 @@ export interface ReasoningTraceStep {
   nodes: ReasoningTraceNode[];
   token_usage?: TokenUsage;
   color?: string;
-  darkerColor?: string;
 }
 
 export interface ReasoningTraceNode {
@@ -160,7 +158,7 @@ export interface UserInputNode extends InteractiveNodeBase {
 export interface ResponseNode extends InteractiveNodeBase {
   type: TraceNodeType.RESPONSE;
   column: 'user';
-  connectionLine: ConnectionLine;
+  connectionLine?: ConnectionLine;
 }
 
 export interface ThinkingStepNode extends InteractiveNodeBase {

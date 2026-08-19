@@ -19,8 +19,8 @@
  * in horizontal (row) layout, backbone lines, and SVG dimensions for the trace visualization.
  */
 
-import { TraceNodeType, TraceNodeColumn, ReasoningTrace, ReasoningTraceStep, ReasoningTraceNode, BASE_OFFSET } from './layout-types';
-import { getAgentColor, getDarkerAgentColor, COLORS } from './colors';
+import { TraceNodeType, TraceNodeColumn, ReasoningTrace, ReasoningTraceStep, ReasoningTraceNode, ReasoningStepType, BASE_OFFSET } from './layout-types';
+import { getAgentColor, COLORS } from './colors';
 import { getNodeVisualConfig } from './node-rendering-helper';
 import { LayoutOutput, LayoutParams, VisNode, BackboneLine } from './layout-types';
 import { sanitizeId } from './layout-utils';
@@ -89,9 +89,7 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
     const traceAgentName = (data as any)?.agent?.name || 'Agent';
     const traceModel = (data as any)?.agent?.model || steps.find(s => s.model)?.model;
     const agentColor = steps.find(s => s.color)?.color || getAgentColor(traceAgentName, traceModel);
-    const darkerAgentColor = steps.find(s => s.darkerColor)?.darkerColor || getDarkerAgentColor(traceAgentName, traceModel);
     trace.agentColor = agentColor;
-    trace.darkerAgentColor = darkerAgentColor;
 
     // Find start time and duration/tokens for this specific trace
     let startTime = 0;
@@ -110,10 +108,26 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
       startTime = 0;
       let runningSum = 0;
       steps.forEach((s: ReasoningTraceStep) => {
-        runningSum += getStepTokens(s.token_usage, selectedTokenTypes);
+        let tok = getStepTokens(s.token_usage, selectedTokenTypes);
+        if (tok === 0) {
+          const text = s.nodes?.map(n => n.text).join(' ') || (s as any).content || (s as any).reasoning_content || '';
+          tok = text.split(/\s+/).filter((w: string) => w.length > 0).length;
+        }
+        runningSum += tok;
       });
       traceDuration = runningSum;
     }
+
+    // Compute max tokens across all steps for proportional height scaling
+    const stepTokensList = steps.map((s: ReasoningTraceStep) => {
+      let tok = (s.token_usage?.output_tokens || 0) + (s.token_usage?.input_tokens || 0);
+      if (tok === 0) {
+        const text = s.nodes?.map(n => n.text).join(' ') || (s as any).content || (s as any).reasoning_content || '';
+        tok = text.split(/\s+/).filter((w: string) => w.length > 0).length;
+      }
+      return tok;
+    });
+    const maxTokens = Math.max(...stepTokensList, 1);
 
     let traceScale = scale;
     if (stretch) {
@@ -139,14 +153,15 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
       const numNodes = step.nodes.length;
 
       const stepAgentColor = step.color || getAgentColor(step.agentName || traceAgentName, step.model || traceModel);
-      const stepDarkerAgentColor = step.darkerColor || getDarkerAgentColor(step.agentName || traceAgentName, step.model || traceModel);
 
       let currentTs = step.timestamp ? new Date(step.timestamp).getTime() : NaN;
       let completedTs = step.completedAt ? new Date(step.completedAt).getTime() : NaN;
 
       if (isNaN(completedTs) && index < steps.length - 1) {
         const nextStep = steps[index + 1];
-        completedTs = nextStep.timestamp ? new Date(nextStep.timestamp).getTime() : NaN;
+        if (nextStep.stepType !== ReasoningStepType.USER_INPUT && step.stepType !== ReasoningStepType.USER_INPUT) {
+          completedTs = nextStep.timestamp ? new Date(nextStep.timestamp).getTime() : NaN;
+        }
       }
 
       let stepDuration = 0;
@@ -154,7 +169,11 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
         stepDuration = completedTs - currentTs;
       }
 
-      const stepTokens = getStepTokens(step.token_usage, selectedTokenTypes);
+      let stepTokens = getStepTokens(step.token_usage, selectedTokenTypes);
+      if (stepTokens === 0) {
+        const text = step.nodes?.map(n => n.text).join(' ') || (step as any).content || (step as any).reasoning_content || '';
+        stepTokens = text.split(/\s+/).filter((w: string) => w.length > 0).length;
+      }
 
       if (yAxisMode === 'tokens') {
         currentTs = cumulativeTokens;
@@ -174,9 +193,9 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
         traceScale,
         startTime,
         stepAgentColor,
-        stepDarkerAgentColor,
         traceId: id,
         nodeW,
+        maxTokens,
         step,
         numNodes,
         stepDuration,

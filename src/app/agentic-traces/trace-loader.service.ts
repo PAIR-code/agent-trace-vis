@@ -22,7 +22,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { ReasoningTrace, ReasoningTraceStep, ReasoningTraceNode, TraceNodeColumn, TraceNodeType, ReasoningStepType } from './layout-helper';
 import { TraceRecord, Step, ToolCall, Observation, Agent } from './trace';
-import { getAgentColor, getDarkerAgentColor, darkenColor } from './colors';
+import { getAgentColor, darkenColor } from './colors';
 import { hashString } from './layout-utils';
 
 export interface DatasetItem {
@@ -219,7 +219,6 @@ export class TraceLoaderService {
     const agentName = step.agent_role || defaultAgent?.name || 'Agent';
 
     const color = getAgentColor(agentName, model);
-    const darkerColor = getDarkerAgentColor(agentName, model);
 
     const createNode = (
       nid: string,
@@ -283,8 +282,7 @@ export class TraceLoaderService {
       stepType: step.role === 'user' ? ReasoningStepType.USER_INPUT : (step.role === 'system' ? ReasoningStepType.SYSTEM_MESSAGE : ReasoningStepType.PLANNER_RESPONSE),
       nodes: nodes,
       token_usage: step.token_usage,
-      color,
-      darkerColor
+      color
     };
   }
 

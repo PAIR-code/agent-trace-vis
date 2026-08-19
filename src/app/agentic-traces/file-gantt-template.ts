@@ -54,70 +54,29 @@ export const FILE_GANTT_TEMPLATE = `
       </div>
     </div>
 
-    <!-- Summary Lane when collapsed: single lane containing data from ALL files -->
-    <svg *ngIf="isFilesCollapsed(t.id)"
-         class="file-gantt-svg file-gantt-summary-svg"
+    <!-- Unified File Gantt SVG (smoothly transitions between collapsed summary and expanded multi-row) -->
+    <svg class="file-gantt-svg"
          [attr.width]="contentWidth()"
-         [attr.height]="fileRowHeight"
-         style="display:block; overflow: visible;">
-      <g>
-        <!-- All view/grep event dots on the summary line -->
-        <circle
-          *ngFor="let view of t.fileGanttData.summaryRow.views"
-          [attr.cx]="view.x"
-          cy="14"
-          [attr.r]="isFileNodeSelected(view.node) ? 5 : (isFileNodeHovered(view.node) ? 4.5 : 3)"
-          fill="#ffffff"
-          [attr.stroke]="(isFileNodeSelected(view.node) || isFileNodeHovered(view.node)) ? '#0f172a' : (view.isSearch ? '#94a3b8' : '#334155')"
-          [attr.stroke-width]="isFileNodeSelected(view.node) ? 3 : (isFileNodeHovered(view.node) ? 2.5 : (view.isSearch ? 1.2 : 1.5))"
-          class="file-marker-clickable"
-          [class.is-hovered]="isFileNodeHovered(view.node)"
-          [class.selected]="isFileNodeSelected(view.node)"
-          (click)="selectFileNode(view.node, $event)"
-          (mouseenter)="hoveredNodeId.set(view.node?.id)"
-          (mouseleave)="hoveredNodeId.set(null)"
-          [attr.title]="view.label" />
-
-        <!-- All edit segments from all files on the summary line -->
-        <ng-container *ngFor="let edit of t.fileGanttData.summaryRow.edits">
-          <line
-            [attr.x1]="edit.x"
-            [attr.x2]="edit.x + edit.width"
-            y1="14" y2="14"
-            [attr.stroke]="(isFileNodeSelected(edit.node) || isFileNodeHovered(edit.node)) ? '#0f172a' : (edit.isPlan ? '#94a3b8' : '#334155')"
-            [attr.stroke-width]="(isFileNodeSelected(edit.node) || isFileNodeHovered(edit.node)) ? 3 : 2" />
-
-          <rect
-            [attr.x]="edit.x"
-            y="14"
-            [attr.width]="edit.width"
-            [attr.height]="edit.barHeight"
-            [attr.fill]="(isFileNodeSelected(edit.node) || isFileNodeHovered(edit.node)) ? '#0f172a' : (edit.isPlan ? '#94a3b8' : '#334155')"
-            [attr.opacity]="(isFileNodeSelected(edit.node) || isFileNodeHovered(edit.node)) ? 1 : (edit.isPlan ? 0.75 : 0.85)"
-            rx="1.5"
-            class="file-marker-clickable"
-            [class.is-hovered]="isFileNodeHovered(edit.node)"
-            [class.selected]="isFileNodeSelected(edit.node)"
-            (click)="selectFileNode(edit.node, $event)"
-            (mouseenter)="hoveredNodeId.set(edit.node?.id)"
-            (mouseleave)="hoveredNodeId.set(null)"
-            [attr.title]="edit.label" />
-        </ng-container>
-      </g>
-    </svg>
-
-    <!-- Expanded View: one row per file -->
-    <svg *ngIf="!isFilesCollapsed(t.id)"
-         class="file-gantt-svg"
-         [attr.width]="contentWidth()"
-         [attr.height]="t.fileGanttData.totalHeight"
+         [attr.height]="isFilesCollapsed(t.id) ? fileRowHeight : t.fileGanttData.totalHeight"
          style="display:block; overflow: visible;">
 
-      <!-- One group per file row -->
-      <g *ngFor="let row of t.fileGanttData.rows; let rowIndex = index"
-         [attr.transform]="'translate(0,' + (rowIndex * fileRowHeight) + ')'">
+      <!-- Summary Baseline (shown when collapsed) -->
+      <line
+        class="file-summary-baseline"
+        [attr.x1]="t.fileGanttData.summaryRow.startX"
+        [attr.x2]="t.fileGanttData.summaryRow.endX"
+        y1="14" y2="14"
+        stroke="#cbd5e1"
+        stroke-width="1.5"
+        stroke-dasharray="3,3"
+        [style.opacity]="isFilesCollapsed(t.id) ? 1 : 0" />
 
-        <!-- File label above the line (starts where the file is first accessed) -->
+      <!-- One group per file row (slides vertically to 0 when collapsed) -->
+      <g *ngFor="let row of t.fileGanttData.rows; let rowIndex = index; trackBy: trackByFileRow"
+         class="file-row-group"
+         [attr.transform]="'translate(0,' + (isFilesCollapsed(t.id) ? 0 : (rowIndex * fileRowHeight)) + ')'">
+
+        <!-- File label above the line (fades out when collapsed) -->
         <text
           [attr.x]="row.startX"
           y="10"
@@ -127,21 +86,25 @@ export const FILE_GANTT_TEMPLATE = `
           [attr.fill]="isRowHoveredOrSelected(row) ? '#0f172a' : '#334155'"
           [attr.font-weight]="isRowHoveredOrSelected(row) ? '700' : '500'"
           class="file-label-clickable"
+          [style.opacity]="isFilesCollapsed(t.id) ? 0 : 1"
+          [style.pointer-events]="isFilesCollapsed(t.id) ? 'none' : 'auto'"
           (click)="selectFileNode(row.edits[0]?.node || row.views[0]?.node, $event)"
           [attr.title]="row.filePath">{{ row.basename }}</text>
 
-        <!-- Continuous dotted light gray track for the whole file lifespan -->
+        <!-- Continuous dotted light gray track for the whole file lifespan (fades out when collapsed) -->
         <line
+          class="file-row-track-line"
           [attr.x1]="row.startX"
           [attr.x2]="row.endX"
           y1="14" y2="14"
           [attr.stroke]="isRowHoveredOrSelected(row) ? '#475569' : '#cbd5e1'"
           [attr.stroke-width]="isRowHoveredOrSelected(row) ? 2 : 1.5"
-          stroke-dasharray="3,3" />
+          stroke-dasharray="3,3"
+          [style.opacity]="isFilesCollapsed(t.id) ? 0 : 1" />
 
-        <!-- View/Grep event dots on the dotted line -->
+        <!-- View/Grep event dots on the line -->
         <circle
-          *ngFor="let view of row.views"
+          *ngFor="let view of row.views; trackBy: trackByFileView"
           [attr.cx]="view.x"
           cy="14"
           [attr.r]="isFileNodeSelected(view.node) ? 5 : (isFileNodeHovered(view.node) ? 4.5 : 3)"
@@ -156,8 +119,8 @@ export const FILE_GANTT_TEMPLATE = `
           (mouseleave)="hoveredNodeId.set(null)"
           [attr.title]="view.label" />
 
-        <!-- Individual edit segments on top of the gray line -->
-        <ng-container *ngFor="let edit of row.edits">
+        <!-- Individual edit segments on top of the line -->
+        <ng-container *ngFor="let edit of row.edits; trackBy: trackByFileEdit">
           <!-- Solid baseline segment under the edit -->
           <line
             [attr.x1]="edit.x"
@@ -273,12 +236,32 @@ export const FILE_GANTT_STYLES = `
     display: block;
     overflow: visible;
     pointer-events: auto !important;
+    transition: height 0.3s ease;
+  }
+
+  .file-gantt-svg g.file-row-group {
+    transition: transform 0.3s ease;
+  }
+
+  .file-gantt-svg circle {
+    transition: cx 0.3s ease, cy 0.3s ease, r 0.15s ease, stroke 0.15s ease, fill 0.15s ease, stroke-width 0.15s ease;
+  }
+
+  .file-gantt-svg rect {
+    transition: x 0.3s ease, y 0.3s ease, width 0.3s ease, height 0.3s ease, fill 0.15s ease, opacity 0.15s ease;
+  }
+
+  .file-gantt-svg line {
+    transition: x1 0.3s ease, x2 0.3s ease, y1 0.3s ease, y2 0.3s ease, opacity 0.3s ease, stroke 0.15s ease, stroke-width 0.15s ease;
+  }
+
+  .file-gantt-svg text {
+    transition: x 0.3s ease, y 0.3s ease, opacity 0.3s ease, fill 0.15s ease, font-weight 0.15s ease;
   }
 
   .file-marker-clickable {
     cursor: pointer;
     pointer-events: auto !important;
-    transition: stroke 0.15s ease, fill 0.15s ease, r 0.15s ease, stroke-width 0.15s ease;
   }
 
   .file-marker-clickable:hover,
@@ -294,7 +277,6 @@ export const FILE_GANTT_STYLES = `
     cursor: pointer;
     pointer-events: auto !important;
     user-select: none;
-    transition: fill 0.15s ease, font-weight 0.15s ease;
   }
 
   .file-label-clickable:hover {

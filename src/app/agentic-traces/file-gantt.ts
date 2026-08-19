@@ -518,7 +518,7 @@ export function buildFileGanttData(
         const barHeight = linesToBarHeight(linesCount);
         edits.push({
           x: ev.x,
-          width: 14,
+          width: 7,
           barHeight,
           linesCount,
           isPlan,
@@ -585,13 +585,13 @@ export function buildFileGanttData(
  * Uses a logarithmic scale so massive writes don't overflow the row space.
  */
 function linesToBarHeight(linesCount: number): number {
-  if (linesCount <= 0) return 4;
+  if (linesCount <= 0) return 6;
   // Log scale:
-  // 1 line -> 4px
-  // 5 lines -> 7px
-  // 20 lines -> 11px
-  // 100 lines -> 16px
-  // 500+ lines -> 20px
-  const h = 4 + Math.log1p(linesCount) * 2.5;
-  return Math.min(22, Math.round(h));
+  // 1 line -> 6px
+  // 5 lines -> 12px
+  // 20 lines -> 17px
+  // 100 lines -> 22px
+  // 500+ lines -> 26px
+  const h = 6 + Math.log1p(linesCount) * 3.2;
+  return Math.min(26, Math.round(h));
 }

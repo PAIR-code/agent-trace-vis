@@ -671,6 +671,21 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     return line.id;
   }
 
+  /** TrackBy function for file rows in file gantt. */
+  trackByFileRow(index: number, row: any): string {
+    return row.filePath || row.basename || String(index);
+  }
+
+  /** TrackBy function for file view markers. */
+  trackByFileView(index: number, view: any): string {
+    return view.node?.id || `${view.label}_${index}`;
+  }
+
+  /** TrackBy function for file edit segments. */
+  trackByFileEdit(index: number, edit: any): string {
+    return edit.node?.id || `${edit.label}_${index}`;
+  }
+
   private loadImportedDatasets(): DatasetItem[] {
     try {
       const data = localStorage.getItem('imported_datasets');
