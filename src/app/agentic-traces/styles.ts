@@ -548,7 +548,7 @@ export const AGENTIC_TRACES_STYLES: string[] = [
     /* ── Hollow types ── */
     .vis-node.tool_call { background: ${COLORS.USER_BG}; border: 1.5px solid ${COLORS.TOOL_LINE}; }
     .vis-node.tool_data { background: ${COLORS.USER_BG}; border: 1.5px solid ${COLORS.TOOL_LINE}; }
-    .vis-node.system { background: ${COLORS.USER_BG}; border: 1.5px solid ${COLORS.TOOL_LINE}; border-radius: 0; transform: rotate(45deg); }
+    .vis-node.system { background: ${COLORS.USER_BG}; border: 1.5px solid ${COLORS.AGENT}; border-radius: 0; transform: rotate(45deg); }
     .vis-node.system:hover, .vis-node.system.is-hovered { transform: rotate(45deg); }
 
     /* Custom shapes and content for abstracted node rendering */

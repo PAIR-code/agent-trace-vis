@@ -133,7 +133,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
               <div class="legend-item" *ngFor="let entry of legendEntries()">
                 <div class="legend-color" 
                      [style.background-color]="entry.color" 
-                     [style.border]="entry.border ? entry.border : (entry.isDiamond ? '1.5px solid #c4c9d0' : ((entry.isAI || entry.color === '#ffffff') ? '1px solid #9ca3af' : 'none'))"
+                     [style.border]="entry.border ? entry.border : (entry.isDiamond ? ('1.5px solid ' + (selectedTraces()[0]?.agentColor || '#d97706')) : ((entry.isAI || entry.color === '#ffffff') ? '1px solid #9ca3af' : 'none'))"
                      [style.border-radius]="entry.isDiamond ? '0' : '50%'"
                      [style.transform]="entry.isDiamond ? 'rotate(45deg)' : 'none'"></div>
                 <span class="legend-label">

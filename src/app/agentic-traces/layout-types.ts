@@ -143,6 +143,7 @@ export interface InteractiveNodeBase extends BaseVisNode {
   data: any; // original trace step JSON
   timestamp?: string;
   color: string | null;
+  borderColor?: string;
   hidden?: boolean;
   isWaiting?: boolean;
   isFailed?: boolean;

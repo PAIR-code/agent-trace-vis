@@ -228,6 +228,8 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
       modelEntries.push({ label: "Agent", color: COLORS.AGENT, isAI: true });
     }
 
+    const currentAgentColor = modelEntries[0]?.color || COLORS.AGENT;
+
     return [
       {
         label: "User",
@@ -236,7 +238,13 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
         border: `1px solid ${COLORS.USER_BORDER}`,
       },
       ...modelEntries,
-      { label: "Harness", color: COLORS.USER_BG, isAI: false, isDiamond: true },
+      {
+        label: "Harness",
+        color: COLORS.USER_BG,
+        isAI: false,
+        isDiamond: true,
+        border: `1.5px solid ${currentAgentColor}`,
+      },
       { label: "Error", color: COLORS.ERROR_LIGHT, isAI: false },
       { label: "Tool", color: COLORS.USER_BG, isAI: false },
     ];

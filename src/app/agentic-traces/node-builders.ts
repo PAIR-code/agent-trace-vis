@@ -216,7 +216,7 @@ export function buildDefaultNode(
       connectionLine = {
         id: `${nid}_to_backbone`,
         path,
-        stroke: LINE_COLOR,
+        stroke: stepAgentColor,
         fill: 'none',
         strokeWidth: 1.5,
         opacity: 0.7,
@@ -284,6 +284,7 @@ export function buildDefaultNode(
     traceId: ctx.traceId,
     timestamp: an.timestamp,
     color: null,
+    borderColor: type === TraceNodeType.SYSTEM ? stepAgentColor : undefined,
     hidden: isFile || undefined,
     isFailed: (type === TraceNodeType.TOOL_DATA && !!an.data?.observation?.error) || undefined,
     stepType: an.stepType

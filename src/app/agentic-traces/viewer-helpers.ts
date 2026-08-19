@@ -47,6 +47,9 @@ export function getRoleLabel(type: string): string {
 }
 
 export function getNodeBorderColor(node: any): string {
+  if (node.type === TraceNodeType.SYSTEM || node.type === 'system') {
+    return node.borderColor || (node.data as any)?.color || (node.data as any)?.agentColor || COLORS.AGENT;
+  }
   if (
     node.type !== TraceNodeType.TOOL_CALL &&
     node.type !== TraceNodeType.TOOL_DATA
