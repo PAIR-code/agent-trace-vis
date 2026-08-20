@@ -23,7 +23,7 @@
  */
 
 import { ReasoningTrace, ReasoningTraceStep, BASE_OFFSET } from './layout-types';
-import { formatElapsedTime } from './layout-utils';
+import { formatElapsedTime, getStepTokens } from './layout-utils';
 
 export interface TimeAxisConfig {
   scale: number;
@@ -31,19 +31,6 @@ export interface TimeAxisConfig {
   maxDuration: number; // represents maxDuration in 'time' mode, maxCumulativeTokens in 'tokens' mode
   timeTicks: { label: string; x: number; y?: number }[];
   intervalLabel: string;
-}
-
-function getStepTokens(usage: any, selectedTypes?: Set<string>): number {
-  if (!usage) return 0;
-  let sum = 0;
-  if (!selectedTypes) {
-    return (usage.input_tokens || 0) + (usage.output_tokens || 0) + (usage.cache_read_tokens || 0) + (usage.cache_write_tokens || 0);
-  }
-  if (selectedTypes.has('input_tokens')) sum += usage.input_tokens || 0;
-  if (selectedTypes.has('output_tokens')) sum += usage.output_tokens || 0;
-  if (selectedTypes.has('cache_read_tokens')) sum += usage.cache_read_tokens || 0;
-  if (selectedTypes.has('cache_write_tokens')) sum += usage.cache_write_tokens || 0;
-  return sum;
 }
 
 export function computeTimeAxis(

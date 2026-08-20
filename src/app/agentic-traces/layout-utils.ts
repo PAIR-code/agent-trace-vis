@@ -80,3 +80,21 @@ export function swapPathCoords(pathStr: string): string {
 export function truncate(text: string, max: number): string {
   return text.length > max ? text.slice(0, max) + '…' : text;
 }
+
+/** Computes the total tokens for a step given selected token types. */
+export function getStepTokens(usage: any, selectedTypes?: Set<string>): number {
+  if (!usage) return 0;
+  if (!selectedTypes) {
+    return (usage.input_tokens || usage.prompt_tokens || 0) +
+           (usage.output_tokens || usage.completion_tokens || 0) +
+           (usage.cache_read_tokens || 0) +
+           (usage.cache_write_tokens || 0);
+  }
+  let sum = 0;
+  if (selectedTypes.has('input_tokens')) sum += (usage.input_tokens || usage.prompt_tokens || 0);
+  if (selectedTypes.has('output_tokens')) sum += (usage.output_tokens || usage.completion_tokens || 0);
+  if (selectedTypes.has('cache_read_tokens')) sum += (usage.cache_read_tokens || 0);
+  if (selectedTypes.has('cache_write_tokens')) sum += (usage.cache_write_tokens || 0);
+  return sum;
+}
+

@@ -37,7 +37,7 @@ export interface DropdownItem {
   imports: [CommonModule, FormsModule],
   template: `
     <div class="conv-dropdown-wrapper" (click)="$event.stopPropagation()">
-      <button class="conv-dropdown-trigger" (click)="toggleDropdown($event)">
+      <button class="conv-dropdown-trigger" [style.width]="buttonWidth" [style.max-width]="buttonWidth" (click)="toggleDropdown($event)">
         <span class="dropdown-label-text">{{ getDropdownLabel() }}</span>
         <span class="dropdown-caret">▾</span>
       </button>
@@ -97,7 +97,9 @@ export interface DropdownItem {
       background: rgba(255,255,255,0.15);
       cursor: pointer;
       outline: none;
-      max-width: 350px;
+      width: 150px;
+      max-width: 150px;
+      box-sizing: border-box;
       display: flex;
       align-items: center;
       gap: 6px;
@@ -266,6 +268,7 @@ export class MultiSelectDropdownComponent {
   @Input() itemTypeName: string = 'item';
   @Input() allowRename = true;
   @Input() showSelectOnly = true;
+  @Input() buttonWidth?: string;
 
   @Output() selectionChange = new EventEmitter<Set<string>>();
   @Output() renameItem = new EventEmitter<{ id: string, title: string }>();
@@ -294,9 +297,9 @@ export class MultiSelectDropdownComponent {
     if (selectedCount === 1) {
       const id = Array.from(this.selectedIds)[0];
       const item = this.items.find(i => i.id === id);
-      return item ? item.title : `1 ${this.itemTypeName} selected`;
+      return item ? item.title : '1 selected';
     }
-    return `${selectedCount} ${this.itemTypeName}s selected`;
+    return `${selectedCount} selected`;
   }
 
   onToggle(id: string) {

@@ -34,7 +34,7 @@ import {
   ThinkingAreaNode, ThinkingStepNode, ToolCallNode, ToolDataNode,
   UserInputNode, SystemNode, VisNode
 } from './layout-types';
-import { truncate } from './layout-utils';
+import { truncate, getStepTokens } from './layout-utils';
 
 export interface NodeBuildContext {
   cols: { user: { center: number }; agent: { center: number }; tools: { center: number } };
@@ -46,6 +46,7 @@ export interface NodeBuildContext {
   traceId: string;
   nodeW: number;
   maxTokens?: number;
+  selectedTokenTypes?: Set<string>;
   // step-level context
   step: ReasoningTraceStep;
   numNodes: number;
@@ -141,8 +142,10 @@ export function buildResponseNode(
   if (yAxisMode === 'tokens') {
     height = CONSTANT_NODE_HEIGHT;
   } else {
-    let tokens = ctx.step.token_usage?.output_tokens || (ctx.step.token_usage as any)?.completion_tokens || 0;
-    if (tokens === 0) {
+    let tokens = 0;
+    if (ctx.step.token_usage) {
+      tokens = getStepTokens(ctx.step.token_usage, ctx.selectedTokenTypes);
+    } else {
       tokens = text.split(/\s+/).filter((w: string) => w.length > 0).length;
     }
     height = MIN_NODE_HEIGHT +
@@ -213,8 +216,10 @@ export function buildDefaultNode(
     if (yAxisMode === 'tokens') {
       height = CONSTANT_NODE_HEIGHT;
     } else {
-      let tokens = ctx.step.token_usage?.input_tokens || (ctx.step.token_usage as any)?.prompt_tokens || 0;
-      if (tokens === 0) {
+      let tokens = 0;
+      if (ctx.step.token_usage) {
+        tokens = getStepTokens(ctx.step.token_usage, ctx.selectedTokenTypes);
+      } else {
         tokens = text.split(/\s+/).filter((w: string) => w.length > 0).length;
       }
       height = MIN_NODE_HEIGHT +
@@ -324,7 +329,8 @@ export function buildThinkingAreaNodes(
   traceId: string,
   sortedNodes: VisNode[],
   cy: number,
-  yAxisMode: 'time' | 'tokens' = 'time'
+  yAxisMode: 'time' | 'tokens' = 'time',
+  selectedTokenTypes?: Set<string>
 ): ThinkingAreaNode[] {
   // Find contiguous blocks of thinking nodes
   const thinkingBlocks: ThinkingStepNode[][] = [];
@@ -344,18 +350,22 @@ export function buildThinkingAreaNodes(
     thinkingBlocks.push(currentBlock);
   }
 
-  // Compute output tokens per block for proportional sizing
+  // Compute tokens per block for proportional sizing based on selected token types
   const blockTokens: number[] = thinkingBlocks.map(block => {
     const uniqueSteps = new Set<any>();
     block.forEach(n => {
       if (n.data) uniqueSteps.add(n.data);
     });
     let totalTokens = 0;
+    let hasUsage = false;
     uniqueSteps.forEach(step => {
-      totalTokens += step.token_usage?.output_tokens || 0;
+      if (step.token_usage) {
+        hasUsage = true;
+        totalTokens += getStepTokens(step.token_usage, selectedTokenTypes);
+      }
     });
-    // Fallback to word count if no token data available
-    if (totalTokens === 0) {
+    // Fallback to word count if no token data available on steps
+    if (!hasUsage && totalTokens === 0) {
       totalTokens = block.reduce(
         (sum, n) => sum + n.text.split(/\s+/).filter((w: string) => w.length > 0).length,
         0
@@ -385,7 +395,7 @@ export function buildThinkingAreaNodes(
     if (yAxisMode === 'tokens') {
       blockHeight = CONSTANT_WIDTH;
     } else {
-      // Proportional to output_tokens, normalized against max across all blocks
+      // Proportional to selected tokens, normalized against max across all blocks
       blockHeight = MIN_BLOCK_WIDTH +
         (MAX_BLOCK_WIDTH - MIN_BLOCK_WIDTH) * (blockTokens[blockIndex] / maxTokens);
     }

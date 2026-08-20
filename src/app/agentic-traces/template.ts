@@ -67,12 +67,12 @@ export const AGENTIC_TRACES_TEMPLATE = `
       </div>
 
       <!-- Token Options Dropdown -->
-      <div class="selector-group" *ngIf="yAxisMode() === 'tokens'">
-        <label class="selector-label">Metrics</label>
+      <div class="selector-group">
+        <label class="selector-label">Tokens</label>
         <app-multi-select-dropdown
           [items]="tokenMetricItems()"
           [selectedIds]="selectedTokenTypes()"
-          [itemTypeName]="'metric'"
+          [itemTypeName]="'token'"
           [allowRename]="false"
           [showSelectOnly]="true"
           (selectionChange)="onTokenMetricSelectionChange($event)">

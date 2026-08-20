@@ -72,6 +72,12 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       background: rgba(255,255,255,0.15);
       cursor: pointer;
       outline: none;
+      width: 150px;
+      max-width: 150px;
+      box-sizing: border-box;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      white-space: nowrap;
     }
 
     .selector-dropdown option {

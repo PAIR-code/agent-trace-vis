@@ -23,7 +23,7 @@ import { TraceNodeType, TraceNodeColumn, ReasoningTrace, ReasoningTraceStep, Rea
 import { getAgentColor, COLORS } from './colors';
 import { getNodeVisualConfig } from './node-rendering-helper';
 import { LayoutOutput, LayoutParams, VisNode, BackboneLine } from './layout-types';
-import { sanitizeId } from './layout-utils';
+import { sanitizeId, getStepTokens } from './layout-utils';
 import { NodeBuildContext, buildThinkingNode, buildResponseNode, buildDefaultNode, buildRateLimitNode, buildThinkingAreaNodes } from './node-builders';
 import { buildBackboneLines } from './backbone-builder';
 import { computeTimeAxis } from './time-axis';
@@ -32,21 +32,6 @@ import { applyRowLayout } from './row-layout';
 
 export * from './layout-types';
 export { sanitizeId } from './layout-utils';
-
-
-
-function getStepTokens(usage: any, selectedTypes?: Set<string>): number {
-  if (!usage) return 0;
-  let sum = 0;
-  if (!selectedTypes) {
-    return (usage.input_tokens || 0) + (usage.output_tokens || 0) + (usage.cache_read_tokens || 0) + (usage.cache_write_tokens || 0);
-  }
-  if (selectedTypes.has('input_tokens')) sum += usage.input_tokens || 0;
-  if (selectedTypes.has('output_tokens')) sum += usage.output_tokens || 0;
-  if (selectedTypes.has('cache_read_tokens')) sum += usage.cache_read_tokens || 0;
-  if (selectedTypes.has('cache_write_tokens')) sum += usage.cache_write_tokens || 0;
-  return sum;
-}
 
 function getTraceMetadata(trace: any, yAxisMode: string, selectedTokenTypes?: Set<string>) {
   const data = (trace.data as ReasoningTrace) || {};
@@ -73,7 +58,7 @@ function getTraceMetadata(trace: any, yAxisMode: string, selectedTokenTypes?: Se
     let runningSum = 0;
     steps.forEach((s: ReasoningTraceStep) => {
       let tok = getStepTokens(s.token_usage, selectedTokenTypes);
-      if (tok === 0) {
+      if (tok === 0 && !s.token_usage) {
         const text = s.nodes?.map(n => n.text).join(' ') || (s as any).content || (s as any).reasoning_content || '';
         tok = text.split(/\s+/).filter((w: string) => w.length > 0).length;
       }
@@ -83,8 +68,8 @@ function getTraceMetadata(trace: any, yAxisMode: string, selectedTokenTypes?: Se
   }
 
   const stepTokensList = steps.map((s: ReasoningTraceStep) => {
-    let tok = (s.token_usage?.output_tokens || 0) + (s.token_usage?.input_tokens || 0);
-    if (tok === 0) {
+    let tok = getStepTokens(s.token_usage, selectedTokenTypes);
+    if (tok === 0 && !s.token_usage) {
       const text = s.nodes?.map(n => n.text).join(' ') || (s as any).content || (s as any).reasoning_content || '';
       tok = text.split(/\s+/).filter((w: string) => w.length > 0).length;
     }
@@ -150,6 +135,7 @@ function layoutSingleTrace(
       traceId: trace.id,
       nodeW: 12,
       maxTokens,
+      selectedTokenTypes,
       step,
       numNodes,
       stepDuration: yAxisMode === 'tokens' ? stepTokens : stepDuration,
@@ -203,7 +189,7 @@ function layoutSingleTrace(
 
   const cx = cols.agent.center;
   const sortedNodes = [...traceNodes].filter(n => !n.hidden).sort((a, b) => a.x - b.x);
-  const thinkingAreaNodes = buildThinkingAreaNodes(trace.id, sortedNodes, cx, yAxisMode);
+  const thinkingAreaNodes = buildThinkingAreaNodes(trace.id, sortedNodes, cx, yAxisMode, selectedTokenTypes);
   const backboneLines = buildBackboneLines(trace.id, cx, waitingRects, compressedMaxX, agentColor, sortedNodes);
 
   return {
