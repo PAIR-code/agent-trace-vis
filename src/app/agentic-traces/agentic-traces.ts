@@ -464,11 +464,32 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   // Drag and drop track reordering
   draggedTrackIndex = signal<number | null>(null);
   dropIndex = signal<number | null>(null);
+  private lastMouseDownTarget: EventTarget | null = null;
+
+  isInteractiveElement(target: EventTarget | null): boolean {
+    if (!target || !(target instanceof Element)) return false;
+    return !!(
+      target.closest('.vis-node') ||
+      target.closest('.thinking-area-path') ||
+      target.closest('.thinking-areas') ||
+      target.closest('.file-marker-clickable') ||
+      target.closest('.file-label-clickable') ||
+      target.closest('.file-gantt-toggle-btn') ||
+      target.closest('.file-gantt-header') ||
+      target.closest('button') ||
+      target.closest('input') ||
+      target.closest('select') ||
+      target.closest('a')
+    );
+  }
+
+  onMouseDown(event: MouseEvent) {
+    this.lastMouseDownTarget = event.target;
+  }
 
   onTrackDragStart(event: DragEvent, index: number) {
-    // Don't start track drag when clicking on interactive nodes
-    const target = event.target as HTMLElement;
-    if (target.closest('.vis-node') || target.closest('.track-nodes-layer svg') || target.closest('.track-lines-layer')) {
+    // Don't start track drag when clicking on interactive nodes or markers
+    if (this.isInteractiveElement(event.target) || this.isInteractiveElement(this.lastMouseDownTarget)) {
       event.preventDefault();
       return;
     }
@@ -504,6 +525,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   onTrackDragEnd(event: DragEvent) {
     this.draggedTrackIndex.set(null);
     this.dropIndex.set(null);
+    this.lastMouseDownTarget = null;
   }
 
   executeDropReorder(fromIndex: number, targetDropIndex: number) {
@@ -569,7 +591,11 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   /** Returns the highlighted text for a message. */
   getHighlightedTextForViewer = (msg: any) => getHighlightedTextForViewer(msg, this.layersService, this.sanitizer, this.highlightedChunkId());
 
-  getNodeBorderColor = getNodeBorderColor;
+  getNodeBorderColor = (node: any) => {
+    if (node._cachedBorderColor !== undefined) return node._cachedBorderColor;
+    node._cachedBorderColor = getNodeBorderColor(node);
+    return node._cachedBorderColor;
+  };
   /** Selects a node in the visualization by its ID. */
   selectNodeById(id: string) {
     const node = this.nodes().find((n) => n.id === id);
@@ -641,7 +667,9 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
 
   /** Returns the visual configuration for a node. */
   getNodeVisualConfig(node: any) {
-    return getNodeVisualConfig(node);
+    if (node.visualConfig) return node.visualConfig;
+    node.visualConfig = getNodeVisualConfig(node);
+    return node.visualConfig;
   }
 
   /** Sets the Y-axis mode (time or tokens). */
@@ -1045,7 +1073,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   selectTrack(traceId: string, event?: Event) {
     if (event) {
       const target = event.target as HTMLElement;
-      if (target.closest('.vis-node') || target.closest('.track-lines-layer') || target.closest('.track-nodes-layer')) {
+      if (this.isInteractiveElement(target)) {
         return;
       }
     }
@@ -1063,10 +1091,32 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   }
 
   /** Selects a node. */
-  selectNode(node: any) {
+  selectNode(node: any, event?: Event) {
+    if (event) {
+      event.stopPropagation();
+    }
+    if (!node) return;
+
+    if (node.type === TraceNodeType.THINKING_AREA || node.type === 'thinking_area') {
+      const stepNode = node.nodeIds && node.nodeIds.length > 0
+        ? this.nodes().find(n => n.id === node.nodeIds[0])
+        : null;
+      const targetNode = stepNode || node;
+      this.selectedNode.set(targetNode);
+      if (targetNode.id) {
+        this.highlightedChunkId.set(targetNode.id);
+        setTimeout(() => {
+          if (this.highlightedChunkId() === targetNode.id) {
+            this.highlightedChunkId.set(null);
+          }
+        }, 2000);
+      }
+      return;
+    }
+
     this.selectedNode.set(node);
 
-    if (node.type === "thinking") {
+    if (node.type === "thinking" || node.type === TraceNodeType.THINKING) {
       // Highlight the specific chunk
       this.highlightedChunkId.set(node.id);
       setTimeout(() => {
@@ -1096,19 +1146,47 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     const hId = this.hoveredNodeId();
     if (!hId || !area) return false;
     if (hId === area.id) return true;
-    if (area.nodeIds && Array.isArray(area.nodeIds) && area.nodeIds.includes(hId)) return true;
+    if (area.nodeIdsSet) return area.nodeIdsSet.has(hId);
+    if (area.nodeIds && Array.isArray(area.nodeIds)) {
+      area.nodeIdsSet = new Set(area.nodeIds);
+      return area.nodeIdsSet.has(hId);
+    }
+    return false;
+  }
+
+  /** Returns true if a thinking area node or any of its contained thinking steps is selected. */
+  isThinkingAreaSelected(area: any): boolean {
+    const sNode = this.selectedNode();
+    if (!sNode || !area) return false;
+    if (sNode.id === area.id) return true;
+    if (area.nodeIdsSet) return area.nodeIdsSet.has(sNode.id);
+    if (area.nodeIds && Array.isArray(area.nodeIds)) {
+      area.nodeIdsSet = new Set(area.nodeIds);
+      return area.nodeIdsSet.has(sNode.id);
+    }
     return false;
   }
 
   /** Returns true if any view or edit node in a row is currently hovered or selected. */
   isRowHoveredOrSelected(row: any): boolean {
+    const hId = this.hoveredNodeId();
+    const sNode = this.selectedNode();
+    if (!hId && !sNode) return false;
     if (!row) return false;
-    for (const v of row.views || []) {
-      if (this.isFileNodeHovered(v.node) || this.isFileNodeSelected(v.node)) return true;
+
+    if (!row.nodeIdsSet) {
+      const set = new Set<string>();
+      for (const v of row.views || []) {
+        if (v.node?.id) set.add(v.node.id);
+      }
+      for (const e of row.edits || []) {
+        if (e.node?.id) set.add(e.node.id);
+      }
+      row.nodeIdsSet = set;
     }
-    for (const e of row.edits || []) {
-      if (this.isFileNodeHovered(e.node) || this.isFileNodeSelected(e.node)) return true;
-    }
+
+    if (hId && row.nodeIdsSet.has(hId)) return true;
+    if (sNode && row.nodeIdsSet.has(sNode.id)) return true;
     return false;
   }
 

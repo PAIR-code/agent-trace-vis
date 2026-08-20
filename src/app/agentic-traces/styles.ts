@@ -507,13 +507,19 @@ export const AGENTIC_TRACES_STYLES: string[] = [
 
     .vis-node {
       position: absolute;
-      cursor: pointer;
+      cursor: pointer !important;
+      pointer-events: auto !important;
       z-index: 10;
       border-radius: 6px;
       transition: opacity 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
       outline: none;
       -webkit-user-drag: none;
+      user-select: none;
       opacity: 0.65;
+    }
+
+    .vis-node * {
+      pointer-events: none;
     }
 
     .vis-node.hidden {
@@ -531,12 +537,19 @@ export const AGENTIC_TRACES_STYLES: string[] = [
     }
 
     /* Thinking area SVG blocks */
-    .thinking-areas path {
-      cursor: pointer;
+    .thinking-areas path,
+    .thinking-area-path {
+      cursor: pointer !important;
+      pointer-events: auto !important;
+      -webkit-user-drag: none;
       transition: opacity 0.2s ease, filter 0.2s ease;
     }
     .thinking-areas path:hover,
-    .thinking-areas path.is-hovered {
+    .thinking-areas path.is-hovered,
+    .thinking-areas path.selected,
+    .thinking-area-path:hover,
+    .thinking-area-path.is-hovered,
+    .thinking-area-path.selected {
       opacity: 1 !important;
       filter: brightness(0.95);
     }

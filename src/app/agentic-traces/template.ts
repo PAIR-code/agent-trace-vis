@@ -216,6 +216,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
                    [class.is-dragging]="draggedTrackIndex() === i"
                    [class.is-active]="activeTraceId() === t.id"
                    draggable="true"
+                   (mousedown)="onMouseDown($event)"
                    (click)="selectTrack(t.id, $event)"
                    (dragstart)="onTrackDragStart($event, i)"
                    (dragover)="onContainerDragOver($event)"
@@ -250,10 +251,15 @@ export const AGENTIC_TRACES_TEMPLATE = `
                             [attr.fill]="area.fill"
                             [attr.stroke]="area.stroke"
                             [attr.stroke-width]="area.strokeWidth"
-                            [attr.opacity]="isThinkingAreaHovered(area) ? 1 : (area.opacity || 0.65)"
+                            [attr.opacity]="(isThinkingAreaHovered(area) || isThinkingAreaSelected(area)) ? 1 : (area.opacity || 0.65)"
                             [class.is-hovered]="isThinkingAreaHovered(area)"
+                            [class.selected]="isThinkingAreaSelected(area)"
+                            draggable="false"
+                            (dragstart)="$event.preventDefault(); $event.stopPropagation()"
+                            (click)="selectNode(area, $event)"
                             (mouseenter)="hoveredNodeId.set(area.id)"
-                            (mouseleave)="hoveredNodeId.set(null)" />
+                            (mouseleave)="hoveredNodeId.set(null)"
+                            [title]="'Thinking process'" />
                     </g>
                   </svg>
 
@@ -291,6 +297,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
                    [class.is-dragging]="draggedTrackIndex() === i"
                    [class.is-active]="activeTraceId() === t.id"
                    draggable="true"
+                   (mousedown)="onMouseDown($event)"
                    (click)="selectTrack(t.id, $event)"
                    (dragstart)="onTrackDragStart($event, i)"
                    (dragover)="onContainerDragOver($event)"
@@ -330,10 +337,15 @@ export const AGENTIC_TRACES_TEMPLATE = `
                               [attr.fill]="area.fill"
                               [attr.stroke]="area.stroke"
                               [attr.stroke-width]="area.strokeWidth"
-                              [attr.opacity]="isThinkingAreaHovered(area) ? 1 : (area.opacity || 0.65)"
+                              [attr.opacity]="(isThinkingAreaHovered(area) || isThinkingAreaSelected(area)) ? 1 : (area.opacity || 0.65)"
                               [class.is-hovered]="isThinkingAreaHovered(area)"
+                              [class.selected]="isThinkingAreaSelected(area)"
+                              draggable="false"
+                              (dragstart)="$event.preventDefault(); $event.stopPropagation()"
+                              (click)="selectNode(area, $event)"
                               (mouseenter)="hoveredNodeId.set(area.id)"
-                              (mouseleave)="hoveredNodeId.set(null)" />
+                              (mouseleave)="hoveredNodeId.set(null)"
+                              [title]="'Thinking process'" />
                       </g>
                     </svg>
 
@@ -426,7 +438,9 @@ export const AGENTIC_TRACES_TEMPLATE = `
            [class.hidden]="node.hidden"
            [class.layer-match]="isHighlight"
            [style.box-shadow]="isHighlight ? layersService.getNodeShadow(node.id) : 'none'"
-           (click)="selectNode(node)"
+           draggable="false"
+           (dragstart)="$event.preventDefault(); $event.stopPropagation()"
+           (click)="selectNode(node, $event)"
            (mouseenter)="hoveredNodeId.set(node.id)"
            (mouseleave)="hoveredNodeId.set(null)"
            [class.selected]="selectedNode()?.id === node.id"

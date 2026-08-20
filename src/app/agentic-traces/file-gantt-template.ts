@@ -75,6 +75,8 @@ export const FILE_GANTT_TEMPLATE = `
           [attr.fill]="isRowHoveredOrSelected(row) ? '#0f172a' : '#334155'"
           [attr.font-weight]="isRowHoveredOrSelected(row) ? '700' : '500'"
           class="file-label-clickable"
+          draggable="false"
+          (dragstart)="$event.preventDefault(); $event.stopPropagation()"
           [style.opacity]="isFilesCollapsed(t.id) ? 0 : 1"
           [style.pointer-events]="isFilesCollapsed(t.id) ? 'none' : 'auto'"
           (click)="selectFileNode(row.edits[0]?.node || row.views[0]?.node, $event)"
@@ -104,6 +106,8 @@ export const FILE_GANTT_TEMPLATE = `
           class="file-marker-clickable"
           [class.is-hovered]="isFileNodeHovered(view.node)"
           [class.selected]="isFileNodeSelected(view.node)"
+          draggable="false"
+          (dragstart)="$event.preventDefault(); $event.stopPropagation()"
           (click)="selectFileNode(view.node, $event)"
           (mouseenter)="hoveredNodeId.set(view.node?.id)"
           (mouseleave)="hoveredNodeId.set(null)"
@@ -123,6 +127,8 @@ export const FILE_GANTT_TEMPLATE = `
             class="file-marker-clickable"
             [class.is-hovered]="isFileNodeHovered(edit.node)"
             [class.selected]="isFileNodeSelected(edit.node)"
+            draggable="false"
+            (dragstart)="$event.preventDefault(); $event.stopPropagation()"
             (click)="selectFileNode(edit.node, $event)"
             (mouseenter)="hoveredNodeId.set(edit.node?.id)"
             (mouseleave)="hoveredNodeId.set(null)"
@@ -149,6 +155,7 @@ export const FILE_GANTT_STYLES = `
     border-top: none;
     background: #ffffff;
     z-index: 10;
+    cursor: default;
     transition: filter 0.3s ease, opacity 0.3s ease;
   }
 
@@ -196,7 +203,7 @@ export const FILE_GANTT_STYLES = `
     font-size: 0.6rem;
     font-weight: 600;
     color: #64748b;
-    cursor: pointer;
+    cursor: pointer !important;
     transition: all 0.15s ease;
     user-select: none;
     pointer-events: auto !important;
@@ -218,6 +225,7 @@ export const FILE_GANTT_STYLES = `
     display: block;
     overflow: visible;
     pointer-events: auto !important;
+    cursor: default;
     transition: height 0.3s ease;
   }
 
@@ -242,8 +250,9 @@ export const FILE_GANTT_STYLES = `
   }
 
   .file-marker-clickable {
-    cursor: pointer;
+    cursor: pointer !important;
     pointer-events: auto !important;
+    -webkit-user-drag: none;
   }
 
   .file-marker-clickable:hover,
@@ -256,9 +265,10 @@ export const FILE_GANTT_STYLES = `
   }
 
   .file-label-clickable {
-    cursor: pointer;
+    cursor: pointer !important;
     pointer-events: auto !important;
     user-select: none;
+    -webkit-user-drag: none;
   }
 
   .file-label-clickable:hover {

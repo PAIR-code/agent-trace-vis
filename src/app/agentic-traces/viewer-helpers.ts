@@ -215,6 +215,9 @@ export function renderMarkdownWithHighlights(
   return html;
 }
 
+const highlightCache = new Map<string, SafeHtml>();
+const MAX_CACHE_SIZE = 1000;
+
 export function getHighlightedTextForViewer(
   msg: any,
   layersService: AnalysisLayersService,
@@ -238,6 +241,21 @@ export function getHighlightedTextForViewer(
     }
   }
 
+  const spansKey = matchingSpans.length > 0
+    ? matchingSpans.map(s => s.text + ':' + s.color).join('|')
+    : '';
+  const chunkKey = (msg.type === 'thinking' && highlightedChunkId?.startsWith(msg.id))
+    ? highlightedChunkId
+    : '';
+  const cacheKey = `${msg.id}_${msg.type}_${text.length}_${spansKey}_${chunkKey}`;
+
+  const cached = highlightCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  let resultHtml: SafeHtml;
+
   if (msg.type === 'thinking') {
     const paragraphs = text.split('\n\n');
     const html = paragraphs
@@ -249,9 +267,15 @@ export function getHighlightedTextForViewer(
         return `<div id="chunk-${fullChunkId}" class="text-chunk ${isHighlighted ? 'is-highlighted' : ''}">${rendered}</div>`;
       })
       .join('');
-    return sanitizer.bypassSecurityTrustHtml(html);
+    resultHtml = sanitizer.bypassSecurityTrustHtml(html);
+  } else {
+    const finalHtml = renderMarkdownWithHighlights(text, matchingSpans);
+    resultHtml = sanitizer.bypassSecurityTrustHtml(finalHtml);
   }
 
-  const finalHtml = renderMarkdownWithHighlights(text, matchingSpans);
-  return sanitizer.bypassSecurityTrustHtml(finalHtml);
+  if (highlightCache.size > MAX_CACHE_SIZE) {
+    highlightCache.clear();
+  }
+  highlightCache.set(cacheKey, resultHtml);
+  return resultHtml;
 }
