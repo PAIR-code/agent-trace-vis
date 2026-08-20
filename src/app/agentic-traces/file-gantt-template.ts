@@ -35,35 +35,33 @@ export const FILE_GANTT_TEMPLATE = `
        [class.layer-dimmed]="layersService.anyLayerEnabled()"
        [style.width.px]="contentWidth()">
 
-    <!-- Top-right Header: Lane Label + Toggle Button stacked vertically -->
-    <div class="file-gantt-header">
-      <div class="file-gantt-label-stack">
-        <span class="file-gantt-lane-label" *ngIf="i === 0">files</span>
-        <button class="file-gantt-toggle-btn"
-                type="button"
-                (click)="toggleTraceFiles(t.id, $event)"
-                [title]="isFilesCollapsed(t.id) ? 'Show all files' : 'Hide files'">
-          <span class="file-gantt-toggle-text">{{ isFilesCollapsed(t.id) ? 'show files (' + t.fileGanttData.rows.length + ')' : 'hide files' }}</span>
-          <svg *ngIf="!isFilesCollapsed(t.id)" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="18 15 12 9 6 15"></polyline>
-          </svg>
-          <svg *ngIf="isFilesCollapsed(t.id)" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="6 9 12 15 18 9"></polyline>
-          </svg>
-        </button>
-      </div>
+    <!-- Top-right Header: Lane Label + Toggle Button inline next to each other -->
+    <div class="file-gantt-header" [class.is-collapsed]="isFilesCollapsed(t.id)">
+      <span class="file-gantt-lane-label" *ngIf="i === 0">files</span>
+      <button class="file-gantt-toggle-btn"
+              type="button"
+              (click)="toggleTraceFiles(t.id, $event)"
+              [title]="isFilesCollapsed(t.id) ? 'Show all files (' + t.fileGanttData.rows.length + ')' : 'Hide files'">
+        <span class="file-gantt-toggle-text">{{ isFilesCollapsed(t.id) ? 'show all' : 'hide all' }}</span>
+        <svg *ngIf="!isFilesCollapsed(t.id)" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="18 15 12 9 6 15"></polyline>
+        </svg>
+        <svg *ngIf="isFilesCollapsed(t.id)" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </button>
     </div>
 
     <!-- Unified File Gantt SVG (smoothly transitions between collapsed summary and expanded multi-row) -->
     <svg class="file-gantt-svg"
          [attr.width]="contentWidth()"
-         [attr.height]="isFilesCollapsed(t.id) ? fileRowHeight : t.fileGanttData.totalHeight"
+         [attr.height]="isFilesCollapsed(t.id) ? fileLaneHeight : t.fileGanttData.totalHeight"
          style="display:block; overflow: visible;">
 
-      <!-- One group per file row (slides vertically to 0 when collapsed) -->
+      <!-- One group per file row (slides vertically to center when collapsed) -->
       <g *ngFor="let row of t.fileGanttData.rows; let rowIndex = index; trackBy: trackByFileRow"
          class="file-row-group"
-         [attr.transform]="'translate(0,' + (isFilesCollapsed(t.id) ? 0 : (rowIndex * fileRowHeight)) + ')'">
+         [attr.transform]="'translate(0,' + (isFilesCollapsed(t.id) ? (fileLaneHeight / 2 - 14) : (rowIndex * fileRowHeight)) + ')'">
 
         <!-- File label above the line (fades out when collapsed) -->
         <text
@@ -82,16 +80,16 @@ export const FILE_GANTT_TEMPLATE = `
           (click)="selectFileNode(row.edits[0]?.node || row.views[0]?.node, $event)"
           [attr.title]="row.filePath">{{ row.basename }}</text>
 
-        <!-- Continuous dotted light gray track for the whole file lifespan (fades out when collapsed) -->
+        <!-- Continuous dotted track for the whole file lifespan (fades out when collapsed) -->
         <line
           class="file-row-track-line"
           [attr.x1]="row.startX"
           [attr.x2]="row.endX"
           y1="14" y2="14"
-          [attr.stroke]="isRowHoveredOrSelected(row) ? '#475569' : '#cbd5e1'"
+          [attr.stroke]="isRowHoveredOrSelected(row) ? '#0f172a' : '#64748b'"
           [attr.stroke-width]="isRowHoveredOrSelected(row) ? 2 : 1.5"
           stroke-dasharray="3,3"
-          [style.opacity]="isFilesCollapsed(t.id) ? 0 : (isRowHoveredOrSelected(row) ? 1 : 0.65)" />
+          [style.opacity]="isFilesCollapsed(t.id) ? 0 : (isRowHoveredOrSelected(row) ? 1 : 0.75)" />
 
         <!-- View/Grep event dots on the line -->
         <circle
@@ -150,12 +148,13 @@ export const FILE_GANTT_STYLES = `
     flex-shrink: 0;
     pointer-events: auto !important; /* Enable clicks since .row-lanes has pointer-events: none */
     box-sizing: border-box;
-    padding-top: 4px;
-    padding-bottom: 8px;
+    padding: 0;
     border-top: none;
-    background: #ffffff;
+    background: #cfd7e0;
+    border-radius: 0 0 8px 8px;
     z-index: 10;
     cursor: default;
+    min-height: 46.67px;
     transition: filter 0.3s ease, opacity 0.3s ease;
   }
 
@@ -165,60 +164,60 @@ export const FILE_GANTT_STYLES = `
   }
 
   .file-gantt-header {
+    position: absolute;
+    right: 8px;
+    top: 0;
+    height: 46.67px;
     display: flex;
-    justify-content: flex-end;
-    align-items: flex-start;
-    padding: 0 8px;
-    height: auto;
-    margin-bottom: 2px;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    z-index: 20;
     pointer-events: auto !important;
+    transition: height 0.3s ease;
   }
 
-  .file-gantt-label-stack {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 1px;
+  .file-gantt-header:not(.is-collapsed) {
+    height: 24px;
   }
 
   .file-gantt-lane-label {
     font-size: 0.55rem;
     font-weight: 500;
-    color: #94a3b8;
+    color: #64748b;
     letter-spacing: 0.02em;
     pointer-events: none;
     white-space: nowrap;
-    text-align: right;
-    line-height: 1.1;
+    line-height: 1;
   }
 
   .file-gantt-toggle-btn {
     display: inline-flex;
     align-items: center;
-    gap: 3px;
+    gap: 2px;
     background: transparent;
-    border: 1px solid transparent;
-    border-radius: 4px;
-    padding: 1px 4px;
-    font-size: 0.6rem;
-    font-weight: 600;
+    border: none;
+    padding: 1px 3px;
+    border-radius: 3px;
+    font-size: 0.55rem;
+    font-weight: 500;
     color: #64748b;
     cursor: pointer !important;
     transition: all 0.15s ease;
     user-select: none;
     pointer-events: auto !important;
+    line-height: 1;
   }
 
   .file-gantt-toggle-btn:hover {
-    background: #e2e8f0;
+    background: rgba(0, 0, 0, 0.08);
     color: #0f172a;
-    border-color: #cbd5e1;
   }
 
   .file-gantt-toggle-text {
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.02em;
     font-size: 0.55rem;
+    font-weight: 500;
   }
 
   .file-gantt-svg {

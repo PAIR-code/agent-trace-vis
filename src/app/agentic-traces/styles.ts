@@ -494,7 +494,7 @@ export const AGENTIC_TRACES_STYLES: string[] = [
     }
 
     .lane-user {
-      background: #e2e6ea;
+      background: #f4f7f9;
     }
 
     .lane-agent {
@@ -502,7 +502,7 @@ export const AGENTIC_TRACES_STYLES: string[] = [
     }
 
     .lane-tools {
-      background: #f4f7f9;
+      background: #dde3ea;
     }
 
 
@@ -1182,7 +1182,7 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       z-index: 20;
       font-size: 0.55rem;
       font-weight: 500;
-      color: #94a3b8;
+      color: #64748b;
       letter-spacing: 0.02em;
       pointer-events: none;
       white-space: nowrap;

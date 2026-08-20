@@ -316,9 +316,9 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     return messages;
   });
 
-  sanitizeId = sanitizeId;
   /** Exposed for template use in file-gantt rendering. */
   readonly fileRowHeight = FILE_ROW_HEIGHT;
+  readonly fileLaneHeight = 140 / 3;
 
   constructor(
     private http: HttpClient,
