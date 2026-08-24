@@ -135,7 +135,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   hideGaps = signal<boolean>(false);
   timeUnitLabel = signal<string>("");
   isLegendCollapsed = signal<boolean>(false);
-  selectedTokenTypes = signal<Set<string>>(new Set(['input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens']));
+  selectedTokenTypes = signal<Set<string>>(new Set(['input_tokens', 'output_tokens']));
   tokenMetricOptions = signal<Array<{ id: string; label: string }>>([
     { id: 'input_tokens', label: 'Input Tokens' },
     { id: 'output_tokens', label: 'Output Tokens' },
