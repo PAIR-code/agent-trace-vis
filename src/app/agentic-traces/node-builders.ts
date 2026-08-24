@@ -104,7 +104,7 @@ export function buildThinkingNode(
     height,
     label: truncate(text, 80),
     text,
-    data: ctx.step,
+    data: an.data, stepRef: ctx.step,
     traceId: ctx.traceId,
     timestamp: an.timestamp,
     isWaiting: text.toLowerCase().includes('wait'),
@@ -177,7 +177,7 @@ export function buildResponseNode(
     height,
     label: truncate(text, 80),
     text,
-    data: ctx.step,
+    data: an.data, stepRef: ctx.step,
     traceId: ctx.traceId,
     timestamp: an.timestamp,
     color: stepAgentColor,
@@ -263,7 +263,7 @@ export function buildDefaultNode(
     height,
     label: truncate(text, 80),
     text,
-    data: ctx.step,
+    data: an.data, stepRef: ctx.step,
     traceId: ctx.traceId,
     timestamp: an.timestamp,
     color: null,
@@ -332,49 +332,24 @@ export function buildThinkingAreaNodes(
   yAxisMode: 'time' | 'tokens' = 'time',
   selectedTokenTypes?: Set<string>
 ): ThinkingAreaNode[] {
-  // Find contiguous blocks of thinking nodes
-  const thinkingBlocks: ThinkingStepNode[][] = [];
-  let currentBlock: ThinkingStepNode[] = [];
+  // Each thinking node renders as its own individual reasoning rectangle
+  const thinkingNodes: ThinkingStepNode[] = sortedNodes.filter(
+    n => n.type === TraceNodeType.THINKING
+  ) as ThinkingStepNode[];
 
-  sortedNodes.forEach(n => {
-    if (n.type === TraceNodeType.THINKING) {
-      currentBlock.push(n as ThinkingStepNode);
-    } else {
-      if (currentBlock.length > 0) {
-        thinkingBlocks.push(currentBlock);
-        currentBlock = [];
-      }
-    }
-  });
-  if (currentBlock.length > 0) {
-    thinkingBlocks.push(currentBlock);
-  }
+  if (thinkingNodes.length === 0) return [];
 
-  // Compute tokens per block for proportional sizing based on selected token types
-  const blockTokens: number[] = thinkingBlocks.map(block => {
-    const uniqueSteps = new Set<any>();
-    block.forEach(n => {
-      if (n.data) uniqueSteps.add(n.data);
-    });
-    let totalTokens = 0;
-    let hasUsage = false;
-    uniqueSteps.forEach(step => {
-      if (step.token_usage) {
-        hasUsage = true;
-        totalTokens += getStepTokens(step.token_usage, selectedTokenTypes);
-      }
-    });
-    // Fallback to word count if no token data available on steps
-    if (!hasUsage && totalTokens === 0) {
-      totalTokens = block.reduce(
-        (sum, n) => sum + n.text.split(/\s+/).filter((w: string) => w.length > 0).length,
-        0
-      );
+  // Compute tokens per thinking node for proportional sizing based on selected token types
+  const nodeTokens: number[] = thinkingNodes.map(n => {
+    const step = (n as any).stepRef as ReasoningTraceStep | undefined;
+    if (step && step.token_usage) {
+      return getStepTokens(step.token_usage, selectedTokenTypes);
     }
-    return totalTokens;
+    // Fallback to word count
+    return n.text ? n.text.split(/\s+/).filter((w: string) => w.length > 0).length : 0;
   });
 
-  const maxTokens = Math.max(...blockTokens, 1);
+  const maxTokens = Math.max(...nodeTokens, 1);
   const MAX_BLOCK_WIDTH = 40;
   const MIN_BLOCK_WIDTH = 8;
   const CONSTANT_WIDTH = 30; // Used in tokens mode
@@ -382,29 +357,24 @@ export function buildThinkingAreaNodes(
 
   const result: ThinkingAreaNode[] = [];
 
-  // Generate rectangular blocks as ThinkingAreaNodes
-  thinkingBlocks.forEach((block, blockIndex) => {
-    if (block.length === 0) return;
-
-    // Use step-level time positions for block bounds.
-    const minX = Math.min(...block.map(n => (n as any).timeBasedX ?? n.x));
-    const maxX = Math.max(...block.map(n => (n as any).timeBasedEndX ?? n.x + n.width));
+  thinkingNodes.forEach((n, idx) => {
+    const minX = (n as any).timeBasedX ?? n.x;
+    const maxX = (n as any).timeBasedEndX ?? (n.x + n.width);
     const blockWidth = Math.max(1, maxX - minX);
 
     let blockHeight: number;
     if (yAxisMode === 'tokens') {
       blockHeight = CONSTANT_WIDTH;
     } else {
-      // Proportional to selected tokens, normalized against max across all blocks
+      // Proportional to selected tokens, normalized against max across all thinking steps
       blockHeight = MIN_BLOCK_WIDTH +
-        (MAX_BLOCK_WIDTH - MIN_BLOCK_WIDTH) * (blockTokens[blockIndex] / maxTokens);
+        (MAX_BLOCK_WIDTH - MIN_BLOCK_WIDTH) * (nodeTokens[idx] / maxTokens);
     }
 
     // Clamp corner radius to avoid degenerate paths
     const r = Math.min(CORNER_RADIUS, blockHeight, blockWidth / 2);
 
-    // Rectangular path with rounded corners on the bottom side only (away from
-    // backbone at cy=70).
+    // Rectangular path with rounded corners on the bottom side only (away from backbone)
     const path = [
       `M ${minX} ${cy}`,
       `L ${minX} ${cy + blockHeight - r}`,
@@ -415,10 +385,10 @@ export function buildThinkingAreaNodes(
       'Z'
     ].join(' ');
 
-    const blockColor = (block[0] as any).color || (block[0].data as ReasoningTraceStep)?.color || COLORS.AGENT;
+    const blockColor = (n as any).color || ((n as any).stepRef as ReasoningTraceStep)?.color || COLORS.AGENT;
 
     result.push({
-      id: `${traceId}_area_chart_${blockIndex}`,
+      id: `${traceId}_area_chart_${idx}`,
       traceId,
       type: TraceNodeType.THINKING_AREA,
       x: minX,
@@ -426,15 +396,15 @@ export function buildThinkingAreaNodes(
       width: blockWidth,
       height: blockHeight,
       label: '',
-      text: '',
-      data: null,
+      text: n.text || '',
+      data: n.data,
       color: blockColor,
       path: path,
       fill: blockColor,
       stroke: 'none',
       strokeWidth: 0,
       opacity: 0.65,
-      nodeIds: block.map(n => n.id)
+      nodeIds: [n.id]
     });
   });
 

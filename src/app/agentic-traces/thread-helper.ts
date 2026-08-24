@@ -16,10 +16,15 @@
 
 /**
  * @fileoverview Groups trace nodes into threaded messages for the conversation panel.
+ *
+ * Conversational grouping:
+ * - User inputs and System checkpoints are standalone top-level cards.
+ * - All consecutive agent actions (thinking, tools, responses) between user turns
+ *   are grouped into a single Agent Turn parent card with aggregate stats.
  */
 
 import { VisNode } from './layout-helper';
-import { TraceNodeType } from './layout-types';
+import { TraceNodeType, ReasoningTraceStep } from './layout-types';
 
 export interface ThreadMessage {
   id: string;
@@ -45,37 +50,77 @@ export function groupThreadMessages(activeTraceId: string, nodes: VisNode[]): Th
   });
 
   const groups: ThreadMessage[] = [];
-  let currentParent: ThreadMessage | null = null;
-  const nestable = new Set<string>([
-    TraceNodeType.TOOL_CALL,
-    TraceNodeType.TOOL_DATA,
-    TraceNodeType.SYSTEM,
-    TraceNodeType.ERROR
-  ]);
+
+  // Track the current agent turn
+  let currentTurnChildren: VisNode[] = [];
+  let currentTurnSteps = new Set<ReasoningTraceStep>();
+  let turnStartNode: VisNode | null = null;
+
+  const flushAgentTurn = () => {
+    if (currentTurnChildren.length === 0 || !turnStartNode) return;
+
+    // Aggregate token usage across all steps in this turn
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+    let totalCacheReadTokens = 0;
+    let modelName: string | undefined = undefined;
+    let agentName = 'Agent';
+    let turnColor: string | null = null;
+
+    currentTurnSteps.forEach(step => {
+      if (step.agentName) agentName = step.agentName;
+      if (step.model) modelName = step.model;
+      if (step.color && !turnColor) turnColor = step.color;
+      if (step.token_usage) {
+        totalInputTokens += step.token_usage.input_tokens || 0;
+        totalOutputTokens += step.token_usage.output_tokens || 0;
+        totalCacheReadTokens += step.token_usage.cache_read_tokens || 0;
+      }
+    });
+
+    if (!turnColor && (turnStartNode as any).color) {
+      turnColor = (turnStartNode as any).color;
+    }
+
+    const firstStep = currentTurnSteps.values().next().value;
+    const turnData = {
+      agentName,
+      model: modelName,
+      actionCount: currentTurnChildren.length,
+      stepCount: currentTurnSteps.size,
+      token_usage: (totalInputTokens > 0 || totalOutputTokens > 0) ? {
+        input_tokens: totalInputTokens,
+        output_tokens: totalOutputTokens,
+        cache_read_tokens: totalCacheReadTokens
+      } : undefined,
+      steps: Array.from(currentTurnSteps)
+    };
+
+    groups.push({
+      id: `${turnStartNode.id}_turn`,
+      traceId: turnStartNode.traceId,
+      type: 'turn',
+      label: agentName,
+      text: '',
+      data: turnData,
+      timestamp: turnStartNode.timestamp,
+      color: turnColor,
+      children: [...currentTurnChildren]
+    });
+
+    currentTurnChildren = [];
+    currentTurnSteps.clear();
+    turnStartNode = null;
+  };
 
   for (const node of filteredNodes) {
+    const nodeStepRef = (node as any).stepRef as ReasoningTraceStep | undefined;
 
-    if (nestable.has(node.type)) {
-      // Nest under the previous agent parent
-      if (currentParent) {
-        if (!currentParent.children) currentParent.children = [];
-        currentParent.children.push(node);
-      } else {
-        groups.push({
-          id: node.id,
-          traceId: node.traceId,
-          type: node.type,
-          label: (node as any).label || '',
-          text: (node as any).text || '',
-          data: node.data,
-          timestamp: node.timestamp,
-          color: (node as any).color || null,
-          children: []
-        });
-      }
-    } else {
-      // user_input, response, thinking — top-level items
-      const group: ThreadMessage = {
+    // User input or System message breaks the agent turn
+    if (node.type === TraceNodeType.USER_INPUT || node.type === TraceNodeType.SYSTEM) {
+      flushAgentTurn();
+
+      groups.push({
         id: node.id,
         traceId: node.traceId,
         type: node.type,
@@ -85,17 +130,22 @@ export function groupThreadMessages(activeTraceId: string, nodes: VisNode[]): Th
         timestamp: node.timestamp,
         color: (node as any).color || null,
         children: []
-      };
-      groups.push(group);
-      
-      // Only agent turns (thinking/response) can be parents for nesting
-      if (node.type === TraceNodeType.THINKING || node.type === TraceNodeType.RESPONSE) {
-        currentParent = group;
-      } else {
-        currentParent = null;
-      }
+      });
+      continue;
     }
+
+    // Agent actions (thinking, tools, responses, errors)
+    if (!turnStartNode) {
+      turnStartNode = node;
+    }
+    if (nodeStepRef) {
+      currentTurnSteps.add(nodeStepRef);
+    }
+    currentTurnChildren.push(node);
   }
+
+  // Flush any trailing agent turn
+  flushAgentTurn();
 
   return groups;
 }

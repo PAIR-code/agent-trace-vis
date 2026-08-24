@@ -128,6 +128,7 @@ export interface InteractiveNodeBase extends BaseVisNode {
   label: string;
   text: string;
   data: any; // original trace step JSON
+  stepRef?: ReasoningTraceStep; // reference to parent step for step-level data
   timestamp?: string;
   color: string | null;
   borderColor?: string;

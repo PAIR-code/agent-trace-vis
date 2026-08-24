@@ -36,11 +36,14 @@ export function getRoleLabel(type: string): string {
     case TraceNodeType.TOOL_CALL:
       return 'Tool Call';
     case TraceNodeType.TOOL_DATA:
-      return 'Tool Data';
+      return 'Tool';
     case TraceNodeType.SYSTEM:
       return 'Harness';
     case TraceNodeType.ERROR:
       return 'Error';
+    case 'turn':
+    case 'step':
+      return 'Agent Turn';
     default:
       return type;
   }
@@ -48,7 +51,7 @@ export function getRoleLabel(type: string): string {
 
 export function getNodeBorderColor(node: any): string {
   if (node.type === TraceNodeType.SYSTEM || node.type === 'system') {
-    return node.borderColor || (node.data as any)?.color || (node.data as any)?.agentColor || COLORS.AGENT;
+    return node.borderColor || (node as any).stepRef?.color || (node.data as any)?.color || (node.data as any)?.agentColor || COLORS.AGENT;
   }
   if (
     node.type !== TraceNodeType.TOOL_CALL &&
@@ -60,7 +63,7 @@ export function getNodeBorderColor(node: any): string {
 }
 
 export function getSpeakerColorForViewer(msg: any, activeTraceId: string | undefined, traces: any[]): string {
-  if (msg.type === 'response' || msg.type === 'thinking') {
+  if (msg.type === 'response' || msg.type === 'thinking' || msg.type === 'step' || msg.type === 'turn') {
     if (msg.color) return msg.color;
     const traceId = msg.traceId || activeTraceId;
     const trace = traces.find((t) => t.id === traceId);
@@ -71,7 +74,7 @@ export function getSpeakerColorForViewer(msg: any, activeTraceId: string | undef
 }
 
 export function getSpeakerBgColorForViewer(msg: any, activeTraceId: string | undefined, traces: any[]): string {
-  if (msg.type === 'response' || msg.type === 'thinking') {
+  if (msg.type === 'response' || msg.type === 'thinking' || msg.type === 'step' || msg.type === 'turn') {
     const color = msg.color || (traces.find((t) => t.id === (msg.traceId || activeTraceId)) as any)?.agentColor;
     if (color) {
       return createStyle(color).bg;
@@ -87,7 +90,7 @@ export function getSpeakerBorderForViewer(msg: any, activeTraceId: string | unde
       return `1.5px solid ${borderColor}`;
     }
   }
-  if (msg.type === 'response' || msg.type === 'thinking') {
+  if (msg.type === 'response' || msg.type === 'thinking' || msg.type === 'step' || msg.type === 'turn') {
     const color = msg.color || (traces.find((t) => t.id === (msg.traceId || activeTraceId)) as any)?.agentColor;
     if (color) {
       return createStyle(color).border;

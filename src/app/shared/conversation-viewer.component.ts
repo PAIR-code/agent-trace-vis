@@ -86,9 +86,15 @@ export interface ConversationMessage {
 
               <div class="message-meta">
                 <span class="role-badge" [style.color]="getSpeakerColor(msg)">{{ getSpeakerLabel(msg) }}</span>
+                <span class="step-model" *ngIf="msg.data?.model" style="font-size: 11px; color: #6b7280; margin-left: 6px;">{{ msg.data.model }}</span>
                 <span class="timestamp" *ngIf="msg.timestamp">{{ formatTime(msg.timestamp) }}</span>
               </div>
-              <div class="message-body" [innerHTML]="getHighlightedText(msg)"></div>
+              <div class="message-body" *ngIf="msg.text" [innerHTML]="getHighlightedText(msg)"></div>
+              <div class="step-tokens" *ngIf="msg.data?.actionCount || msg.data?.token_usage" style="font-size: 11px; color: #9ca3af; margin-top: 2px;">
+                <span *ngIf="msg.data?.actionCount">{{ msg.data.actionCount }} actions</span>
+                <span *ngIf="msg.data?.actionCount && msg.data?.token_usage"> · </span>
+                <span *ngIf="msg.data?.token_usage">{{ msg.data.token_usage.input_tokens || 0 }} in · {{ msg.data.token_usage.output_tokens || 0 }} out tokens</span>
+              </div>
 
               <!-- Raw JSON Section -->
               <div class="raw-json-section" *ngIf="msg.data">

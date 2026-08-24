@@ -244,7 +244,7 @@ export class TraceLoaderService {
     } else if (step.role === 'agent') {
       // 1. Thinking Content
       if (step.reasoning_content) {
-        nodes.push(createNode(`${stepId}_thinking`, TraceNodeType.THINKING, TraceNodeColumn.AGENT, step.reasoning_content, ReasoningStepType.PLANNER_RESPONSE, step));
+        nodes.push(createNode(`${stepId}_thinking`, TraceNodeType.THINKING, TraceNodeColumn.AGENT, step.reasoning_content, ReasoningStepType.PLANNER_RESPONSE, { reasoning_content: step.reasoning_content, timestamp: step.timestamp, model }));
       }
 
       // 2. Tool Calls & Observations
@@ -257,20 +257,30 @@ export class TraceLoaderService {
 
           // Find observation corresponding to this tool call
           const obs = step.observations?.find(o => o.source_call_id === tc.tool_call_id);
+          const combinedData = { toolCall: tc, observation: obs || null };
+          
+          let toolText = toolLabel;
           if (obs) {
+            if (obs.error) {
+              toolText += `\n\n❌ Error: ${obs.error}`;
+            } else if (obs.output_summary) {
+              toolText += `\n\n${obs.output_summary}`;
+            } else if (obs.content) {
+              const preview = obs.content.length > 300 ? obs.content.slice(0, 300) + '...' : obs.content;
+              toolText += `\n\n${preview}`;
+            }
             const obsId = `${stepId}_obs_${tcIdx}`;
-            const combinedData = { toolCall: tc, observation: obs };
-            nodes.push(createNode(obsId, TraceNodeType.TOOL_DATA, TraceNodeColumn.TOOLS, obs.output_summary || getObservationLabel(tc, obs), stepType, combinedData));
+            nodes.push(createNode(obsId, TraceNodeType.TOOL_DATA, TraceNodeColumn.TOOLS, toolText, stepType, combinedData));
           } else {
-            // Create Tool Call node in the AGENT column only if there is no observation
-            nodes.push(createNode(tcId, TraceNodeType.TOOL_CALL, TraceNodeColumn.AGENT, toolLabel, stepType, tc));
+            // Tool call with no observation yet
+            nodes.push(createNode(tcId, TraceNodeType.TOOL_CALL, TraceNodeColumn.AGENT, toolLabel, stepType, combinedData));
           }
         });
       }
 
       // 3. Response Content
       if (step.content) {
-        nodes.push(createNode(`${stepId}_response`, TraceNodeType.RESPONSE, TraceNodeColumn.USER, step.content, ReasoningStepType.PLANNER_RESPONSE, step));
+        nodes.push(createNode(`${stepId}_response`, TraceNodeType.RESPONSE, TraceNodeColumn.USER, step.content, ReasoningStepType.PLANNER_RESPONSE, { content: step.content, timestamp: step.timestamp, model }));
       }
     }
 

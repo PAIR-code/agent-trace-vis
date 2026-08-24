@@ -33,7 +33,7 @@ function getSegmentColor(x: number, traceNodes?: VisNode[], defaultColor: string
   for (const n of traceNodes) {
     if (n.hidden) continue;
     // Look up the step's primary color
-    const stepColor = (n.data as ReasoningTraceStep)?.color;
+    const stepColor = ((n as any).stepRef as ReasoningTraceStep)?.color || (n.data as ReasoningTraceStep)?.color;
     if (stepColor && n.x <= x && n.x >= maxNodeX) {
       maxNodeX = n.x;
       activeColor = stepColor;
