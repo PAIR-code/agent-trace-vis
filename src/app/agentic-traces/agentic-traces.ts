@@ -30,7 +30,6 @@ import {
 } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
-import { DomSanitizer } from "@angular/platform-browser";
 import { HttpClient } from "@angular/common/http";
 import { ActivatedRoute } from "@angular/router";
 import { UrlParamService } from "../shared/url-param.service";
@@ -324,7 +323,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     private http: HttpClient,
     public layersService: AnalysisLayersService,
     private traceLoaderService: TraceLoaderService,
-    private sanitizer: DomSanitizer,
     private route: ActivatedRoute,
     private urlParamService: UrlParamService,
   ) { }
@@ -589,7 +587,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   /** Returns the border style for a message type. */
   getSpeakerBorderForViewer = (msg: any) => getSpeakerBorderForViewer(msg, this.activeTraceId(), this.traces());
   /** Returns the highlighted text for a message. */
-  getHighlightedTextForViewer = (msg: any) => getHighlightedTextForViewer(msg, this.layersService, this.sanitizer, this.highlightedChunkId());
+  getHighlightedTextForViewer = (msg: any) => getHighlightedTextForViewer(msg, this.layersService, this.highlightedChunkId());
 
   getNodeBorderColor = (node: any) => {
     if (node._cachedBorderColor !== undefined) return node._cachedBorderColor;

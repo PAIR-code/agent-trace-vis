@@ -759,7 +759,7 @@ export class ConversationViewerComponent implements OnChanges {
     if (typeof obj === 'boolean') return `<span class="json-boolean">${obj}</span>`;
     if (typeof obj === 'number') return `<span class="json-number">${obj}</span>`;
     if (typeof obj === 'string') {
-      const escaped = obj.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const escaped = obj.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
       return `<span class="json-string-val">${escaped}</span>`;
     }
 
@@ -782,13 +782,14 @@ export class ConversationViewerComponent implements OnChanges {
       for (let i = 0; i < keys.length; i++) {
         const key = keys[i];
         const val = obj[key];
-        html += `${indent}  <span class="json-key">"${key}"</span>: ${this.formatJson(val, depth + 1)}${i < keys.length - 1 ? ',' : ''}\n`;
+        const escapedKey = key.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        html += `${indent}  <span class="json-key">"${escapedKey}"</span>: ${this.formatJson(val, depth + 1)}${i < keys.length - 1 ? ',' : ''}\n`;
       }
       html += `${indent}}`;
       return html;
     }
 
-    return String(obj);
+    return String(obj).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
   // Full screen JSON view state

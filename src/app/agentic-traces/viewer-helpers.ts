@@ -18,9 +18,7 @@
  * @fileoverview Formatting and highlighting helper functions for conversation viewer.
  */
 
-import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { marked } from 'marked';
-import katex from 'katex';
 import { AnalysisLayersService } from './analysis-layers.service';
 import { SPEAKER_STYLES, createStyle, COLORS } from './colors';
 import { TraceNodeType } from './layout-types';
@@ -107,6 +105,26 @@ function escapeHtml(str: string): string {
     .replace(/"/g, '&quot;');
 }
 
+const COLOR_CLASS_MAP: Record<string, string> = {
+  '#8b5cf6': 'hl-violet',
+  '#38bdf8': 'hl-sky',
+  '#4f46e5': 'hl-indigo',
+  '#a855f7': 'hl-purple',
+  '#3b82f6': 'hl-blue',
+  '#06b6d4': 'hl-cyan',
+  '#6366f1': 'hl-indigo-med',
+  '#0ea5e9': 'hl-sky-bright',
+  '#0d9488': 'hl-teal-dark',
+  '#eab308': 'hl-yellow',
+  '#22c55e': 'hl-green',
+  '#a3e635': 'hl-lime',
+  '#14b8a6': 'hl-teal',
+  '#f59e0b': 'hl-amber',
+  '#10b981': 'hl-emerald',
+  '#84cc16': 'hl-lime-green',
+  'rgb(255, 150, 50)': 'hl-orange',
+};
+
 /**
  * Renders raw text as markdown (with LaTeX math support) and search span highlighting.
  */
@@ -123,55 +141,7 @@ export function renderMarkdownWithHighlights(
     return `\n\n<div class="think-block"><div class="think-label">💭 Thinking</div>\n\n${inner.trim()}\n\n</div>\n\n`;
   });
 
-  // 2. Protect LaTeX math from markdown parsing
-  const mathPlaceholders: string[] = [];
-  const mathPlaceholder = (idx: number) => `%%MATH_PLACEHOLDER_${idx}%%`;
-
-  // Display math: \[...\]
-  text = text.replace(/\\\[([\s\S]*?)\\\]/g, (_m, latex) => {
-    const idx = mathPlaceholders.length;
-    try {
-      mathPlaceholders.push(katex.renderToString(latex.trim(), { displayMode: true, throwOnError: false }));
-    } catch {
-      mathPlaceholders.push(`<span class="katex-error">${escapeHtml(latex)}</span>`);
-    }
-    return mathPlaceholder(idx);
-  });
-
-  // Display math: $$...$$
-  text = text.replace(/\$\$([\s\S]*?)\$\$/g, (_m, latex) => {
-    const idx = mathPlaceholders.length;
-    try {
-      mathPlaceholders.push(katex.renderToString(latex.trim(), { displayMode: true, throwOnError: false }));
-    } catch {
-      mathPlaceholders.push(`<span class="katex-error">${escapeHtml(latex)}</span>`);
-    }
-    return mathPlaceholder(idx);
-  });
-
-  // Inline math: \(...\)
-  text = text.replace(/\\\(([\s\S]*?)\\\)/g, (_m, latex) => {
-    const idx = mathPlaceholders.length;
-    try {
-      mathPlaceholders.push(katex.renderToString(latex.trim(), { displayMode: false, throwOnError: false }));
-    } catch {
-      mathPlaceholders.push(`<span class="katex-error">${escapeHtml(latex)}</span>`);
-    }
-    return mathPlaceholder(idx);
-  });
-
-  // Inline math: $...$ (single dollar)
-  text = text.replace(/(?<!\$)\$(?!\$)([^$\n]+?)\$(?!\$)/g, (_m, latex) => {
-    const idx = mathPlaceholders.length;
-    try {
-      mathPlaceholders.push(katex.renderToString(latex.trim(), { displayMode: false, throwOnError: false }));
-    } catch {
-      mathPlaceholders.push(`<span class="katex-error">${escapeHtml(latex)}</span>`);
-    }
-    return mathPlaceholder(idx);
-  });
-
-  // 3. Mark search spans with placeholders before markdown parsing
+  // 2. Mark search spans with placeholders before markdown parsing
   const spanHighlightConfigs: Array<{ color: string }> = [];
 
   if (matchingSpans.length > 0) {
@@ -192,24 +162,14 @@ export function renderMarkdownWithHighlights(
     }
   }
 
-  // 4. Render Markdown
+  // 3. Render Markdown
   let html = marked.parse(text, { breaks: true, async: false }) as string;
 
-  // 5. Restore math placeholders
-  for (let i = 0; i < mathPlaceholders.length; i++) {
-    html = html.replace(mathPlaceholder(i), mathPlaceholders[i]);
-  }
-
-  // 6. Restore search span highlights
+  // 4. Restore search span highlights
   for (let i = 0; i < spanHighlightConfigs.length; i++) {
     const color = spanHighlightConfigs[i].color;
-    let highlightBg = color;
-    if (highlightBg.startsWith('rgb')) {
-      highlightBg = highlightBg.replace('rgb(', 'rgba(').replace(')', ', 0.35)');
-    } else if (highlightBg.startsWith('#')) {
-      highlightBg = highlightBg + '55';
-    }
-    const markTag = `<mark class="search-span-highlight" style="background-color: ${highlightBg}; color: inherit; padding: 1px 3px; border-radius: 3px; border-bottom: 1.5px solid ${color}; font-weight: 500;">`;
+    const colorClass = COLOR_CLASS_MAP[color] || 'hl-orange';
+    const markTag = `<mark class="search-span-highlight ${colorClass}">`;
 
     html = html.split(`%%HL_START_${i}%%`).join(markTag);
     html = html.split(`%%HL_END_${i}%%`).join('</mark>');
@@ -218,15 +178,14 @@ export function renderMarkdownWithHighlights(
   return html;
 }
 
-const highlightCache = new Map<string, SafeHtml>();
+const highlightCache = new Map<string, string>();
 const MAX_CACHE_SIZE = 1000;
 
 export function getHighlightedTextForViewer(
   msg: any,
   layersService: AnalysisLayersService,
-  sanitizer: DomSanitizer,
   highlightedChunkId: string | null
-): SafeHtml {
+): string {
   const text = msg.text || '';
 
   // Collect all matching search spans for this node ID
@@ -257,7 +216,7 @@ export function getHighlightedTextForViewer(
     return cached;
   }
 
-  let resultHtml: SafeHtml;
+  let resultHtml: string;
 
   if (msg.type === 'thinking') {
     const paragraphs = text.split('\n\n');
@@ -270,10 +229,10 @@ export function getHighlightedTextForViewer(
         return `<div id="chunk-${fullChunkId}" class="text-chunk ${isHighlighted ? 'is-highlighted' : ''}">${rendered}</div>`;
       })
       .join('');
-    resultHtml = sanitizer.bypassSecurityTrustHtml(html);
+    resultHtml = html;
   } else {
     const finalHtml = renderMarkdownWithHighlights(text, matchingSpans);
-    resultHtml = sanitizer.bypassSecurityTrustHtml(finalHtml);
+    resultHtml = finalHtml;
   }
 
   if (highlightCache.size > MAX_CACHE_SIZE) {
