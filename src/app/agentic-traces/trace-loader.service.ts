@@ -363,7 +363,7 @@ function extractFilePathFromInput(input: Record<string, any> | string | undefine
   let obj: Record<string, any> = {};
   if (typeof input === 'string') {
     try {
-      obj = JSON.parse(input);
+      obj = JSON.parse(input) as Record<string, any>;
     } catch {
       return null;
     }

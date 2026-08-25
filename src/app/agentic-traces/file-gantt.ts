@@ -146,7 +146,7 @@ export function extractFilePaths(
   let obj: Record<string, any> = {};
   if (typeof input === 'string') {
     try {
-      obj = JSON.parse(input);
+      obj = JSON.parse(input) as Record<string, any>;
     } catch {
       obj = {};
     }
@@ -169,7 +169,7 @@ export function extractFilePaths(
       const trimmed = line.trim();
       if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
         try {
-          const parsed = JSON.parse(trimmed);
+          const parsed = JSON.parse(trimmed) as any;
           const f = parsed.File || parsed.file || parsed.filename || parsed.path || parsed.data?.path?.text;
           if (typeof f === 'string' && f.trim()) {
             obsFilePaths.push(f.trim().replace(/^['"`\s]+|['"`\s]+$/g, ''));
@@ -277,7 +277,7 @@ function computeEditLines(stepType: ReasoningStepType, input: Record<string, any
   let obj: Record<string, any> = {};
   if (typeof input === 'string') {
     try {
-      obj = JSON.parse(input);
+      obj = JSON.parse(input) as Record<string, any>;
     } catch {
       return 5;
     }

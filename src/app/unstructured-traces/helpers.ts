@@ -20,7 +20,7 @@
  */
 
 import { marked } from 'marked';
-import katex from 'katex';
+import * as katex from 'katex';
 import { segmentReasoningTrace, tokenize } from './tokenizer';
 
 /** Process a raw text string: handle <think> blocks, render LaTeX, then markdown. */

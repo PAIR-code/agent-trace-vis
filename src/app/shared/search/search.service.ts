@@ -96,7 +96,7 @@ export class SearchService {
           const val = localStorage.getItem(key);
           if (val) {
             try {
-              const parsed = JSON.parse(val);
+              const parsed = JSON.parse(val) as any;
               const ts = typeof parsed.timestamp === 'number' ? parsed.timestamp : 0;
               cacheEntries.push({ key, timestamp: ts });
             } catch {
@@ -134,7 +134,7 @@ export class SearchService {
     const trimmed = query.trim();
 
     if (!trimmed && referenceChips.length === 0) {
-      return of(new Map());
+      return of(new Map<string, SearchResult>());
     }
 
     if (mode === 'semantic') {
@@ -159,7 +159,7 @@ export class SearchService {
         }
 
         if (observables.length === 0) {
-          return of(new Map());
+          return of(new Map<string, SearchResult>());
         }
 
         return forkJoin(observables).pipe(
@@ -218,7 +218,7 @@ export class SearchService {
   ): Observable<Map<string, SearchResult>> {
     if (!apiKey) {
       console.warn('SearchService: No Gemini API key provided, falling back to fuzzy match.');
-      return of(query ? this.fuzzyMatch(query, nodes) : new Map());
+      return of(query ? this.fuzzyMatch(query, nodes) : new Map<string, SearchResult>());
     }
 
     const prompt = this.buildPrompt(query, referenceChips, nodes);
@@ -236,7 +236,7 @@ export class SearchService {
       const cachedData = localStorage.getItem(cacheKey);
       if (cachedData) {
         console.log('[Search] Cache hit (localStorage) for query:', query);
-        const parsed = JSON.parse(cachedData);
+        const parsed = JSON.parse(cachedData) as any;
         // Supports both older format (direct results object) and new format ({timestamp, results}):
         const resultsObj = parsed && parsed.results ? parsed.results : parsed;
         const resultsMap = new Map<string, SearchResult>(Object.entries(resultsObj));
@@ -430,7 +430,7 @@ ${searchInstruction}
         return results;
       }
 
-      const parsed = JSON.parse(jsonMatch[0]);
+      const parsed = JSON.parse(jsonMatch[0]) as any;
       console.log('[Search] Parsed JSON object:', parsed);
       const scoreObj = parsed.scores || parsed;
 

@@ -715,7 +715,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   private loadImportedDatasets(): DatasetItem[] {
     try {
       const data = localStorage.getItem('imported_datasets');
-      return data ? JSON.parse(data) : [];
+      return data ? (JSON.parse(data) as any[]) : [];
     } catch (e) {
       console.error('Failed to load imported datasets from localStorage', e);
       return [];

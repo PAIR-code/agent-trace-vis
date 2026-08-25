@@ -34,12 +34,12 @@ export function lightenColor(colorStr: string, factor: number): string {
   rgb.r = Math.floor(rgb.r + (255 - rgb.r) * factor);
   rgb.g = Math.floor(rgb.g + (255 - rgb.g) * factor);
   rgb.b = Math.floor(rgb.b + (255 - rgb.b) * factor);
-  return rgb.formatHex();
+  return rgb.toString();
 }
 
 export function darkenColor(colorStr: string, factor: number = 1): string {
   const c = d3Color(colorStr);
-  return c ? c.darker(factor).formatHex() : colorStr;
+  return c ? c.darker(factor).toString() : colorStr;
 }
 
 export function createStyle(color: string, bgLightness: 'very-light' | 'white' = 'very-light', borderStyle: string = 'solid'): SpeakerStyle {
