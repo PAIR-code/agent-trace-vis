@@ -15,20 +15,18 @@
  */
 
 /**
- * @fileoverview Top-level layout orchestrator — computes node positions natively
- * in horizontal (row) layout, backbone lines, and SVG dimensions for the trace visualization.
+ * @fileoverview Top-level layout orchestrator — computes node positions
+ * (x = time), backbone lines, and content dimensions for the trace visualization.
  */
 
 import { TraceNodeType, TraceNodeColumn, ReasoningTrace, ReasoningTraceStep, ReasoningTraceNode, ReasoningStepType, BASE_OFFSET } from './layout-types';
-import { getAgentColor, COLORS } from './colors';
-import { getNodeVisualConfig } from './node-rendering-helper';
+import { getAgentColor } from './colors';
 import { LayoutOutput, LayoutParams, VisNode, BackboneLine } from './layout-types';
-import { sanitizeId, getStepTokens } from './layout-utils';
+import { getStepTokens } from './layout-utils';
 import { NodeBuildContext, buildThinkingNode, buildResponseNode, buildDefaultNode, buildRateLimitNode, buildThinkingAreaNodes } from './node-builders';
 import { buildBackboneLines } from './backbone-builder';
 import { computeTimeAxis } from './time-axis';
 import { compressGaps } from './gap-compressor';
-import { applyRowLayout } from './row-layout';
 
 export * from './layout-types';
 export { sanitizeId } from './layout-utils';
@@ -147,9 +145,6 @@ function layoutSingleTrace(
     step.nodes.forEach((an: ReasoningTraceNode, nodeIndex: number) => {
       if (an.text?.includes("servers are experiencing high traffic") ||
           an.text?.includes("retryable error from model provider")) {
-        if (traceNodes.length > 0) {
-          (traceNodes[traceNodes.length - 1] as any).followedByRateLimit = true;
-        }
         const result = buildRateLimitNode(ctx, currentY, an);
         traceNodes.push(result.node);
         currentY = result.nextY;
@@ -202,18 +197,18 @@ function layoutSingleTrace(
 }
 
 export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
-  const { traces, selectedTraceIds, yAxisMode, layoutMode, hideGaps, selectedTokenTypes, containerWidth, stretch } = params;
+  const { traces, selectedTraceIds, yAxisMode, hideGaps, selectedTokenTypes, containerWidth, stretch } = params;
 
   const allNodes: VisNode[] = [];
   const backboneLines: BackboneLine[] = [];
   const idsArray = [...selectedTraceIds];
 
-  const timeAxis = computeTimeAxis(traces, selectedTraceIds, yAxisMode, hideGaps, selectedTokenTypes, layoutMode, containerWidth, !!stretch);
+  const timeAxis = computeTimeAxis(traces, selectedTraceIds, yAxisMode, hideGaps, selectedTokenTypes, containerWidth, !!stretch);
   const { scale, baseScale } = timeAxis;
   let { timeTicks, intervalLabel } = timeAxis;
 
   const avail = containerWidth && containerWidth > 0 ? containerWidth : 1000;
-  const targetSpan = layoutMode === 'row' ? Math.max(400, avail - BASE_OFFSET - 140) : 800;
+  const targetSpan = Math.max(400, avail - BASE_OFFSET - 140);
 
   // 1. Gather metadata and initial scales for each trace
   const traceItems = idsArray.map(id => {
@@ -317,26 +312,17 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
     }
   }
 
-  // 5. Normalize icon dimensions and apply row/column mode transformations
-  allNodes.forEach(n => {
-    if (n.hidden) return;
-    const vc = getNodeVisualConfig(n);
-    if (['diff', 'view', 'search'].includes(vc.type)) {
-      n.width = 16;
-      n.height = 16;
-    }
-  });
-
-  const { contentWidth, maxContentHeight } = applyRowLayout({
-    allNodes,
-    backboneLines,
-    timeTicks,
-    yAxisMode,
-    traces,
-    selectedTraceIds,
-    layoutMode,
-    maxContentHeight: maxContentWidth,
-    containerWidth,
+  // 5. Compute content dimensions from visible nodes
+  const visibleNodes = allNodes.filter(n => !n.hidden);
+  const contentWidth = visibleNodes.length > 0
+    ? Math.max(Math.max(...visibleNodes.map(n => n.x + n.width)) + 140, avail)
+    : avail;
+  const maxContentHeight = visibleNodes.length > 0
+    ? Math.max(140, Math.max(...visibleNodes.map(n => n.y + n.height)))
+    : 140;
+  traceItems.forEach(item => {
+    const tn = visibleNodes.filter(n => n.traceId === item.id);
+    if (tn.length > 0) item.trace.maxTraceX = Math.max(...tn.map(n => n.x + n.width)) + 20;
   });
 
   return {

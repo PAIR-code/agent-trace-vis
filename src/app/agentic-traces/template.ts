@@ -79,19 +79,6 @@ export const AGENTIC_TRACES_TEMPLATE = `
         </app-multi-select-dropdown>
       </div>
 
-      <!-- Layout Toggle -->
-      <div class="selector-group">
-        <label class="selector-label">Layout</label>
-        <div class="timeline-toggle">
-          <button class="timeline-btn" [class.active]="layoutMode() === 'column'" (click)="setLayoutMode('column')">
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><rect x="1" y="0" width="3" height="12" rx="0.5"/><rect x="5" y="2" width="3" height="10" rx="0.5" opacity="0.6"/><rect x="9" y="1" width="3" height="11" rx="0.5" opacity="0.4"/></svg>
-          </button>
-          <button class="timeline-btn" [class.active]="layoutMode() === 'row'" (click)="setLayoutMode('row')">
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><rect x="0" y="1" width="12" height="3" rx="0.5"/><rect x="2" y="5" width="10" height="3" rx="0.5" opacity="0.6"/><rect x="1" y="9" width="11" height="3" rx="0.5" opacity="0.4"/></svg>
-          </button>
-        </div>
-      </div>
-
 
 
     </div>
@@ -149,145 +136,23 @@ export const AGENTIC_TRACES_TEMPLATE = `
 
           <!-- Scrollable area for headers and SVG -->
           <div class="vis-scroll-area" #visScrollArea (dragover)="onContainerDragOver($event)" (drop)="onTrackDrop($event)">
-          <!-- Column mode headers (at top) -->
-          <div class="col-headers" *ngIf="layoutMode() === 'column'" [style.width.px]="contentWidth()" [style.min-width.px]="contentWidth()">
-            <ng-container *ngFor="let t of selectedTraces(); let i = index">
-              <div class="trace-header"
-                   draggable="true"
-                   (dragstart)="onTrackDragStart($event, i)"
-                   (dragover)="onContainerDragOver($event)"
-                   (drop)="onTrackDrop($event)"
-                   (dragend)="onTrackDragEnd($event)"
-                   [style.left.px]="60 + i * 160"
-                   title="Drag track to reorder">
-                <div class="trace-title" [title]="t.title">{{ t.title }}</div>
-                <div class="model-list">
-                  <div class="model-item" *ngFor="let a of (t.agents || t.models)">
-                    <span class="model-name" [title]="a.name" [style.color]="a.color">{{ a.name }}</span>
-                  </div>
-                </div>
-              </div>
-              <div class="col-header" [style.left.px]="60 + i * 160 + 23.33">U</div>
-              <div class="col-header" [style.left.px]="60 + i * 160 + 70">A</div>
-              <div class="col-header" [style.left.px]="60 + i * 160 + 116.66">T</div>
-            </ng-container>
-          </div>
-
           <div class="vis-content"
                (dragover)="onContainerDragOver($event)"
                (drop)="onTrackDrop($event)"
-               [class.row-layout]="layoutMode() === 'row'"
                [style.width.px]="contentWidth()"
                [style.min-width.px]="contentWidth()"
                [style.height.px]="contentHeight()"
                [style.margin-left.px]="0">
-            <!-- Time Axis (column mode: left side) -->
-            <div class="time-axis" *ngIf="!stretch() && layoutMode() === 'column'">
-              <div class="time-tick" *ngFor="let tick of timeTicks()" [style.top.px]="tick.y">
-                <span class="time-tick-label">{{ tick.label }}</span>
-                <div class="time-tick-line"></div>
-              </div>
-              <div class="unit-bracket" *ngIf="hideGaps() && timeTicks().length > 1" 
-                   [style.top.px]="timeTicks()[0].y!" 
-                   [style.height.px]="(timeTicks()[1].y! - timeTicks()[0].y!)" 
-                   style="position: absolute; left: 50px; width: 5px; border: 1px solid #cbd5e1; border-right: none; pointer-events: none;">
-                <span style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 10px; color: #6b7280; font-weight: 600; white-space: nowrap;">
-                  {{ timeUnitLabel() }}
-                </span>
-              </div>
-            </div>
-
-            <!-- Time Axis (row mode: top side) -->
-            <div class="time-axis-horizontal" *ngIf="!stretch() && layoutMode() === 'row'">
+            <!-- Time Axis -->
+            <div class="time-axis-horizontal" *ngIf="!stretch()">
               <div class="time-tick-h" *ngFor="let tick of timeTicks()" [style.left.px]="tick.x">
                 <div class="time-tick-line-h"></div>
                 <span class="time-tick-label-h">{{ tick.label }}</span>
               </div>
             </div>
 
-            <!-- Column Lanes (column mode) -->
-            <div class="col-lanes" *ngIf="layoutMode() === 'column'" [style.height.px]="contentHeight()" [style.padding-left.px]="60">
-              <div class="drop-indicator-col"
-                   *ngIf="draggedTrackIndex() !== null && dropIndex() !== null"
-                   [style.left.px]="getColDropIndicatorLeft()">
-              </div>
-              <div class="trace-background"
-                   *ngFor="let t of selectedTraces(); let i = index"
-                   [class.is-dragging]="draggedTrackIndex() === i"
-                   [class.is-active]="activeTraceId() === t.id"
-                   draggable="true"
-                   (mousedown)="onMouseDown($event)"
-                   (click)="selectTrack(t.id, $event)"
-                   (dragstart)="onTrackDragStart($event, i)"
-                   (dragover)="onContainerDragOver($event)"
-                   (drop)="onTrackDrop($event)"
-                   (dragend)="onTrackDragEnd($event)"
-                   title="Drag track to reorder">
-                <!-- Base track layer: lanes, lines, and base nodes (dimmed & grayscaled when search active) -->
-                <div class="track-base-layer" [class.layer-dimmed]="layersService.anyLayerEnabled()">
-                  <div class="col-lane lane-user" [style.height.px]="t.maxTraceY"></div>
-                  <div class="col-lane lane-agent" [style.height.px]="t.maxTraceY"></div>
-                  <div class="col-lane lane-tools" [style.height.px]="t.maxTraceY"></div>
-
-                  <!-- Track SVG layer -->
-                  <svg class="track-lines-layer" [attr.width]="140" [attr.height]="contentHeight()"
-                       draggable="false"
-                       (dragstart)="$event.stopPropagation(); $event.preventDefault()">
-                    <!-- Agent Backbone Lines -->
-                    <g class="backbone-lines">
-                      <path *ngFor="let backbone of t.backboneLines; trackBy: trackByLineId"
-                            [attr.d]="backbone.path"
-                            [attr.stroke]="backbone.stroke"
-                            [attr.stroke-width]="backbone.strokeWidth"
-                            [attr.stroke-dasharray]="backbone.strokeDasharray || 'none'"
-                            [attr.opacity]="backbone.opacity"
-                            fill="none" />
-                    </g>
-                    <!-- Thinking Area SVG Nodes -->
-                    <g class="thinking-areas">
-                      <path *ngFor="let area of t.thinkingAreaNodes; trackBy: trackByNodeId"
-                            class="thinking-area-path"
-                            [attr.d]="area.path"
-                            [attr.fill]="area.fill"
-                            [attr.stroke]="area.stroke"
-                            [attr.stroke-width]="area.strokeWidth"
-                            [attr.opacity]="(isThinkingAreaHovered(area) || isThinkingAreaSelected(area)) ? 1 : (area.opacity || 0.65)"
-                            [class.is-hovered]="isThinkingAreaHovered(area)"
-                            [class.selected]="isThinkingAreaSelected(area)"
-                            draggable="false"
-                            (dragstart)="$event.preventDefault(); $event.stopPropagation()"
-                            (click)="selectNode(area, $event)"
-                            (mouseenter)="hoveredNodeId.set(area.id)"
-                            (mouseleave)="hoveredNodeId.set(null)"
-                            [title]="'Thinking process'" />
-                    </g>
-                  </svg>
-
-                  <!-- Track Nodes layer -->
-                  <div class="track-nodes-layer"
-                       draggable="false"
-                       (dragstart)="$event.stopPropagation(); $event.preventDefault()">
-                    <ng-container *ngFor="let node of t.nodes; trackBy: trackByNodeId">
-                      <ng-container *ngTemplateOutlet="visNodeTemplate; context: { node: node, isHighlight: false }"></ng-container>
-                    </ng-container>
-                  </div>
-                </div>
-
-                <!-- Highlight layer for matching nodes (rendered in full color & opacity on top) -->
-                <div class="track-highlight-layer" *ngIf="layersService.anyLayerEnabled()"
-                     draggable="false"
-                     (dragstart)="$event.stopPropagation(); $event.preventDefault()">
-                  <ng-container *ngFor="let node of t.nodes; trackBy: trackByNodeId">
-                    <ng-container *ngIf="layersService.isNodeMatch(node.id)">
-                      <ng-container *ngTemplateOutlet="visNodeTemplate; context: { node: node, isHighlight: true }"></ng-container>
-                    </ng-container>
-                  </ng-container>
-                </div>
-              </div>
-            </div>
-
-            <!-- Row Lanes (row mode) -->
-            <div class="row-lanes" *ngIf="layoutMode() === 'row'" [style.width.px]="contentWidth()" [style.padding-top.px]="60 + 18">
+            <!-- Row Lanes -->
+            <div class="row-lanes" [style.width.px]="contentWidth()" [style.padding-top.px]="60 + 18">
               <div class="drop-indicator-row"
                    *ngIf="draggedTrackIndex() !== null && dropIndex() !== null"
                    [style.top.px]="getRowDropIndicatorTop()">
@@ -375,13 +240,11 @@ export const AGENTIC_TRACES_TEMPLATE = `
               </div>
             </div>
 
-            <!-- Row mode: channel labels on first trace -->
-            <ng-container *ngIf="layoutMode() === 'row'">
-              <ng-container *ngIf="selectedTraces().length > 0">
-                <span class="row-channel-label" [style.top.px]="60 + 18 + 23.33">user / agent conversation</span>
-                <span class="row-channel-label" [style.top.px]="60 + 18 + 46.66 + 23.33">agent internal processes</span>
-                <span class="row-channel-label" [style.top.px]="60 + 18 + 93.33 + 23.33">tools</span>
-              </ng-container>
+            <!-- Channel labels on first trace -->
+            <ng-container *ngIf="selectedTraces().length > 0">
+              <span class="row-channel-label" [style.top.px]="60 + 18 + 23.33">user / agent conversation</span>
+              <span class="row-channel-label" [style.top.px]="60 + 18 + 46.66 + 23.33">agent internal processes</span>
+              <span class="row-channel-label" [style.top.px]="60 + 18 + 93.33 + 23.33">tools</span>
             </ng-container>
           </div>
           </div>
@@ -433,7 +296,6 @@ export const AGENTIC_TRACES_TEMPLATE = `
            [style.border-color]="getNodeBorderColor(node)"
            [style.background-color]="node.color"
            [ngClass]="[node.type, getNodeVisualConfig(node).shape, getNodeVisualConfig(node).type]"
-           [class.is-waiting]="node.isWaiting"
            [class.is-failed]="node.isFailed"
            [class.hidden]="node.hidden"
            [class.layer-match]="isHighlight"
@@ -447,29 +309,6 @@ export const AGENTIC_TRACES_TEMPLATE = `
            [class.is-hovered]="hoveredNodeId() === node.id"
            [title]="node.label">
         <ng-container [ngSwitch]="getNodeVisualConfig(node).type">
-          <div *ngSwitchCase="'diff'" class="diff-content">
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6z" />
-              <path d="M14 2v4c0 1.1.9 2 2 2h4L14 2z" fill="#94a3b8" />
-              <rect x="7" y="12" width="10" height="2" fill="#10b981" rx="0.5"/>
-              <rect x="7" y="16" width="7" height="2" fill="#ef4444" rx="0.5"/>
-            </svg>
-          </div>
-          <div *ngSwitchCase="'view'" class="view-content">
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6z" />
-              <path d="M14 2v4c0 1.1.9 2 2 2h4L14 2z" fill="#94a3b8" />
-              <rect x="7" y="12" width="10" height="2" fill="#64748b" rx="0.5"/>
-              <rect x="7" y="16" width="7" height="2" fill="#64748b" rx="0.5"/>
-            </svg>
-          </div>
-          <div *ngSwitchCase="'search'" class="search-content">
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6z" />
-              <path d="M14 2v4c0 1.1.9 2 2 2h4L14 2z" fill="#94a3b8" />
-              <rect x="7" y="14" width="10" height="3" fill="#f59e0b" rx="0.5"/>
-            </svg>
-          </div>
           <div *ngSwitchCase="'command'" class="command-content">
             {{ getNodeVisualConfig(node).content }}
           </div>

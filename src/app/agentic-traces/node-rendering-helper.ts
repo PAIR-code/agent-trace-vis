@@ -22,7 +22,7 @@ import { TraceNodeType, ReasoningStepType } from './layout-types';
 
 export interface NodeVisualConfig {
   shape?: 'circle' | 'rect' | '';
-  type: 'diff' | 'view' | 'search' | 'command' | 'external-search' | 'default';
+  type: 'command' | 'external-search' | 'default';
   content?: string;
   shouldShift?: boolean;
 }
@@ -43,42 +43,8 @@ export function getNodeVisualConfig(node: any): NodeVisualConfig {
     return { shape: '', type: 'default' };
   }
 
-  // Group 1: File Edits
-  const isFileEdit = stepType === ReasoningStepType.REPLACE_FILE_CONTENT ||
-                     stepType === ReasoningStepType.WRITE_TO_FILE ||
-                     stepType === ReasoningStepType.MULTI_REPLACE_FILE_CONTENT ||
-                     stepType === ReasoningStepType.NOTEBOOK_EDIT ||
-                     stepType === ReasoningStepType.CODE_ACTION ||
-                     textLower.includes('replace file content') ||
-                     textLower.includes('write to file') ||
-                     textLower.includes('multi replace file content') ||
-                     textLower.includes('notebook edit') ||
-                     textLower.startsWith('edit:') ||
-                     textLower.startsWith('write:');
-
-  if (isFileEdit) {
-    return { shape: 'rect', type: 'diff', shouldShift: true };
-  }
-
-  // Group 2: View Local Files
-  const isView = stepType === ReasoningStepType.VIEW_FILE ||
-                 stepType === ReasoningStepType.VIEW_CONTENT_CHUNK ||
-                 stepType === ReasoningStepType.VIEW_FILE_OUTLINE ||
-                 textLower.startsWith('view:');
-
-  if (isView) {
-    return { shape: 'rect', type: 'view', shouldShift: true };
-  }
-
-  // Group 3: Local Search
-  const isLocalSearch = stepType === ReasoningStepType.GREP_SEARCH ||
-                        stepType === ReasoningStepType.FIND_BY_NAME ||
-                        textLower.startsWith('grep:') ||
-                        textLower.startsWith('find:');
-
-  if (isLocalSearch) {
-    return { shape: 'rect', type: 'search', shouldShift: true };
-  }
+  // File edits / views / searches are hidden here (see isFileEventNode) and
+  // rendered in the files lane instead, so they need no visual config.
 
   // Group 4: Commands
   const isCommand = stepType === ReasoningStepType.RUN_COMMAND ||
@@ -95,7 +61,7 @@ export function getNodeVisualConfig(node: any): NodeVisualConfig {
       shape: 'rect', 
       type: 'command', 
       content: '>_', 
-      shouldShift: isListDir // Keep shifting for list_dir as in original request
+      shouldShift: isListDir
     };
   }
 

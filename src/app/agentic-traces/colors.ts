@@ -61,7 +61,6 @@ export const COLORS = {
   AGENT_BORDER_LIGHT: '#e5e7eb', // Light border
   
   THINKING: '#fbd38d',      // Muted Yellow for nodes/legend
-  THINKING_WAITING: '#b45309', // Darker brown/orange when waiting
   
   // Viewer-specific conversation bubble colors
   VIEWER_USER: '#374151',

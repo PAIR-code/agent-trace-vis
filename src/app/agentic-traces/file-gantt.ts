@@ -48,7 +48,7 @@ export interface FileEvent {
    * Amount of lines written / modified in this edit (0 for view events).
    */
   linesCount: number;
-  /** Horizontal position in the rendered SVG (pixels), already in row-layout x space. */
+  /** Horizontal position in the rendered SVG (pixels). */
   x: number;
   /** The corresponding layout VisNode for click navigation. */
   node: any;
@@ -339,7 +339,7 @@ export function isPlanPath(filePath: string, input?: Record<string, any>): boole
  *
  * @param trace         The parsed ReasoningTrace containing step/node data.
  * @param layoutNodes   The post-layout VisNodes for this trace (with x already
- *                      set to the time-axis position after row-layout x↔y swap).
+ *                      set to the time-axis position).
  *                      Pass `trace.nodes` from the trace wrapper object.
  * @param contentWidth  The total SVG width in pixels (end-of-trace x position).
  */
@@ -350,7 +350,7 @@ export function buildFileGanttData(
 ): FileGanttData {
   const traceNodes: any[] = layoutNodes;
 
-  // Build a map from node id → x position and VisNode (after row-layout swap)
+  // Build a map from node id → x position and VisNode
   const nodeXMap = new Map<string, number>();
   const nodeMap = new Map<string, any>();
   for (const n of traceNodes) {

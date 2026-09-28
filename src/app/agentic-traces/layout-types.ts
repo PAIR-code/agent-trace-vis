@@ -133,7 +133,6 @@ export interface InteractiveNodeBase extends BaseVisNode {
   color: string | null;
   borderColor?: string;
   hidden?: boolean;
-  isWaiting?: boolean;
   isFailed?: boolean;
   stepType?: ReasoningStepType;
 }
@@ -151,7 +150,6 @@ export interface ResponseNode extends InteractiveNodeBase {
 export interface ThinkingStepNode extends InteractiveNodeBase {
   type: TraceNodeType.THINKING;
   column: 'agent';
-  isWaiting: boolean;
   timeBasedY: number; // step start y position (for area block bounds)
   timeBasedEndY: number; // step end y position (for area block bounds)
 }
@@ -174,7 +172,6 @@ export interface SystemNode extends InteractiveNodeBase {
 export interface ErrorNode extends InteractiveNodeBase {
   type: TraceNodeType.ERROR;
   column: 'agent';
-  followedByRateLimit?: boolean;
 }
 
 export type VisNode =
@@ -212,7 +209,7 @@ export interface LayoutOutput {
   backboneLines: BackboneLine[];
   contentWidth: number;
   contentHeight: number;
-  timeTicks: Array<{ label: string, x: number, y?: number }>;
+  timeTicks: Array<{ label: string, x: number }>;
   timeUnitLabel: string;
 }
 
@@ -220,7 +217,6 @@ export interface LayoutParams {
   traces: any[];
   selectedTraceIds: Set<string>;
   yAxisMode: 'time' | 'tokens';
-  layoutMode: 'column' | 'row';
   hideGaps: boolean;
   selectedTokenTypes?: Set<string>;
   containerWidth?: number;

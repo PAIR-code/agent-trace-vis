@@ -29,7 +29,7 @@ export interface TimeAxisConfig {
   scale: number;
   baseScale: number;
   maxDuration: number; // represents maxDuration in 'time' mode, maxCumulativeTokens in 'tokens' mode
-  timeTicks: { label: string; x: number; y?: number }[];
+  timeTicks: { label: string; x: number }[];
   intervalLabel: string;
 }
 
@@ -39,7 +39,6 @@ export function computeTimeAxis(
   yAxisMode: 'time' | 'tokens',
   hideGaps: boolean,
   selectedTokenTypes?: Set<string>,
-  layoutMode: string = 'column',
   containerWidth?: number,
   stretch: boolean = false
 ): TimeAxisConfig {
@@ -75,18 +74,15 @@ export function computeTimeAxis(
     });
   }
 
-  let targetSpan = 800;
-  if (layoutMode === 'row') {
-    const avail = containerWidth && containerWidth > 0 ? containerWidth : 1000;
-    // Leave room for BASE_OFFSET on left (24px) and channel labels / end buffer on right (140px)
-    targetSpan = Math.max(400, avail - BASE_OFFSET - 140);
-  }
+  const avail = containerWidth && containerWidth > 0 ? containerWidth : 1000;
+  // Leave room for BASE_OFFSET on left (24px) and channel labels / end buffer on right (140px)
+  const targetSpan = Math.max(400, avail - BASE_OFFSET - 140);
 
   const baseScale = targetSpan / maxDuration;
   const scale = baseScale;
   const durationForInterval = maxDuration;
 
-  const timeTicks: { label: string; x: number; y?: number }[] = [];
+  const timeTicks: { label: string; x: number }[] = [];
   let intervalLabel = '';
 
   if (!stretch) {

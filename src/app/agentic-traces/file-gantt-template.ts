@@ -30,8 +30,8 @@
  */
 
 export const FILE_GANTT_TEMPLATE = `
-  <!-- File Gantt Sub-Track (row layout only) -->
-  <div class="file-gantt-container" *ngIf="layoutMode() === 'row' && t.fileGanttData && t.fileGanttData.rows.length > 0"
+  <!-- File Gantt Sub-Track -->
+  <div class="file-gantt-container" *ngIf="t.fileGanttData && t.fileGanttData.rows.length > 0"
        [class.layer-dimmed]="layersService.anyLayerEnabled()"
        [style.width.px]="contentWidth()">
 

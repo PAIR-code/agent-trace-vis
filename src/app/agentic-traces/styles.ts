@@ -276,123 +276,10 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       font-weight: normal;
     }
 
-    .col-headers {
-      position: sticky;
-      top: 0;
-      z-index: 20;
-      height: 90px;
-      background: rgba(248,250,252,0.95);
-      border-bottom: 1px solid #e2e8f0;
-      backdrop-filter: blur(4px);
-      flex-shrink: 0;
-    }
-
-    .trace-header {
-      position: absolute;
-      top: 4px;
-      width: 140px;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      padding: 4px 8px;
-      box-sizing: border-box;
-      transition: left 0.3s ease, background 0.15s, outline 0.15s, opacity 0.15s;
-      cursor: grab;
-      border-radius: 6px;
-      user-select: none;
-    }
-
-    .trace-header:hover {
-      background: rgba(226, 232, 240, 0.6);
-    }
-
-    .trace-header.is-dragging {
-      cursor: grabbing;
-      opacity: 0.25;
-    }
-
-    .drag-handle {
-      position: absolute;
-      top: 2px;
-      right: 4px;
-      font-size: 0.7rem;
-      color: #94a3b8;
-      opacity: 0.5;
-      cursor: grab;
-    }
-
-    .trace-header:hover .drag-handle {
-      opacity: 1;
-      color: #3b82f6;
-    }
-
-    .trace-title {
-      font-size: 0.75rem;
-      font-weight: 700;
-      color: #1e293b;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      line-height: 1rem;
-      text-align: left;
-    }
-
-    .model-list {
-      display: flex;
-      flex-direction: column;
-      gap: 1px;
-    }
-
-    .model-name {
-      font-size: 0.6rem;
-      font-weight: 600;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .col-header {
-      position: absolute;
-      top: 75px;
-      transform: translateX(-50%);
-      font-size: 0.75rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: #64748b;
-      transition: left 0.3s ease;
-    }
-
-    .col-lanes {
-      position: absolute;
-      top: 0;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      display: flex;
-      pointer-events: none;
-      z-index: 0;
-      transition: padding-left 0.3s ease;
-    }
-
-    .trace-background {
-      position: relative;
-      display: flex;
-      width: 140px;
-      margin-right: 20px;
-      height: 100%;
-      flex-shrink: 0;
-      align-items: flex-start;
-      pointer-events: auto;
-      cursor: grab;
-      border-radius: 8px;
-      box-sizing: border-box;
-      transition: opacity 0.15s, outline 0.15s, box-shadow 0.15s, background 0.15s;
-    }
-
     .track-base-layer {
       position: relative;
       display: flex;
+      flex-direction: column;
       width: 100%;
       height: 100%;
       transition: filter 0.3s ease, opacity 0.3s ease;
@@ -407,8 +294,8 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       position: absolute;
       top: 0;
       left: 0;
-      width: 140px;
-      height: 100%;
+      width: 100%;
+      height: 140px;
       pointer-events: none;
       z-index: 5;
     }
@@ -421,8 +308,8 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       position: absolute;
       top: 0;
       left: 0;
-      width: 140px;
-      height: 100%;
+      width: 100%;
+      height: 140px;
       pointer-events: none;
       z-index: 10;
     }
@@ -435,40 +322,14 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       position: absolute;
       top: 0;
       left: 0;
-      width: 140px;
-      height: 100%;
+      width: 100%;
+      height: 140px;
       pointer-events: none;
       z-index: 15;
     }
 
     .track-highlight-layer .vis-node {
       pointer-events: auto;
-    }
-
-    .trace-background.is-dragging {
-      cursor: grabbing;
-      opacity: 0.25;
-      background: #eff6ff;
-      outline: 2px solid #3b82f6;
-      outline-offset: 4px;
-      box-shadow: 0 4px 20px rgba(59, 130, 246, 0.25);
-    }
-
-    .trace-background.is-active {
-      border-bottom: 3px solid #3b82f6;
-    }
-
-    .drop-indicator-col {
-      position: absolute;
-      top: 0;
-      width: 4px;
-      height: 100%;
-      background: #3b82f6;
-      border-radius: 2px;
-      z-index: 50;
-      pointer-events: none;
-      transform: translateX(-50%);
-      transition: left 0.08s ease-out;
     }
 
     .drop-indicator-row {
@@ -482,15 +343,6 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       pointer-events: none;
       transform: translateY(-50%);
       transition: top 0.08s ease-out;
-    }
-
-    .trace-background:last-child {
-      margin-right: 0;
-    }
-
-    .col-lane {
-      flex: 1;
-      position: relative;
     }
 
     .lane-user {
@@ -564,7 +416,6 @@ export const AGENTIC_TRACES_STYLES: string[] = [
     .vis-node.user_input { background: ${COLORS.USER_BG}; border: 1.5px solid ${COLORS.USER_BORDER}; border-radius: 3px; }
     .vis-node.response { background: ${COLORS.AGENT}; border-radius: 3px; }
     .vis-node.thinking { background: ${COLORS.THINKING}; border-top-left-radius: 0; border-bottom-left-radius: 0; transform-origin: left center; }
-    .vis-node.thinking.is-waiting { background: ${COLORS.THINKING_WAITING}; }
     .vis-node.error { background: ${COLORS.ERROR_LIGHT}; }
 
 
@@ -587,22 +438,6 @@ export const AGENTIC_TRACES_STYLES: string[] = [
     }
     .vis-node.circle {
       border-radius: 50%;
-    }
-    
-    /* Remove default styling for SVG icons to avoid double borders */
-    .vis-node.diff, .vis-node.view, .vis-node.search {
-      background: transparent !important;
-      border: none !important;
-      box-shadow: none !important;
-      transform: translate(-2px, -2px);
-    }
-    
-    /* Make SVGs fill the container */
-    .diff-content svg, .view-content svg, .search-content svg {
-      width: 100%;
-      height: 100%;
-      display: block;
-      color: #cbd5e1; /* Gray for file body */
     }
     
     /* Command nodes: gray background with white text */
@@ -1090,49 +925,6 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       cursor: not-allowed;
     }
 
-    /* ── Time Axis ── */
-    .time-axis {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 60px;
-      height: 100%;
-      pointer-events: none;
-      z-index: 4;
-      border-right: 1px solid #e2e8f0;
-    }
-
-    .time-tick {
-      position: absolute;
-      left: 0;
-      width: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      transform: translateY(-50%);
-      gap: 4px;
-      padding-right: 4px;
-      box-sizing: border-box;
-    }
-
-    .time-tick-label {
-      font-size: 0.65rem;
-      font-weight: 600;
-      color: #64748b;
-      white-space: nowrap;
-      background: rgba(248,250,252,0.9);
-      padding: 1px 4px;
-      border-radius: 3px;
-      line-height: 1.2;
-    }
-
-    .time-tick-line {
-      width: 6px;
-      height: 1px;
-      background: #cbd5e1;
-      flex-shrink: 0;
-    }
-
     /* ── Chunk Highlighting ── */
     ::ng-deep .text-chunk {
       transition: background-color 0.3s;
@@ -1225,25 +1017,6 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       height: 140px;
       width: 100%;
       flex-shrink: 0;
-    }
-
-    .row-main-track .track-base-layer {
-      flex-direction: column;
-    }
-
-    .row-main-track .track-lines-layer {
-      width: 100%;
-      height: 140px;
-    }
-
-    .row-main-track .track-nodes-layer {
-      width: 100%;
-      height: 140px;
-    }
-
-    .row-main-track .track-highlight-layer {
-      width: 100%;
-      height: 140px;
     }
 
     .trace-background-row.is-dragging {

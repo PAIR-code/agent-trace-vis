@@ -18,11 +18,7 @@
  * @fileoverview Drag-and-drop calculation helpers for track reordering.
  */
 
-export function calculateDropIndex(
-  event: DragEvent,
-  count: number,
-  layoutMode: 'column' | 'row'
-): number | null {
+export function calculateDropIndex(event: DragEvent, count: number): number | null {
   if (count === 0) return null;
 
   const visContent =
@@ -30,50 +26,22 @@ export function calculateDropIndex(
     (event.currentTarget as HTMLElement);
   const rect = visContent.getBoundingClientRect();
 
-  if (layoutMode === 'column') {
-    const axisOffset = 60;
-    const mouseX = event.clientX - rect.left;
+  const axisOffset = 60 + 18;
+  const mouseY = event.clientY - rect.top;
 
-    let dropIdx = 0;
-    if (mouseX <= axisOffset + 70) {
-      dropIdx = 0;
-    } else if (mouseX >= axisOffset + (count - 1) * 160 + 70) {
-      dropIdx = count;
-    } else {
-      const approxIndex = Math.floor((mouseX - axisOffset) / 160);
-      const trackLeft = axisOffset + approxIndex * 160;
-      const isAfter = mouseX > trackLeft + 70;
-      dropIdx = isAfter ? approxIndex + 1 : approxIndex;
-    }
-
-    if (dropIdx < 0) dropIdx = 0;
-    if (dropIdx > count) dropIdx = count;
-    return dropIdx;
+  let dropIdx = 0;
+  if (mouseY <= axisOffset + 70) {
+    dropIdx = 0;
+  } else if (mouseY >= axisOffset + (count - 1) * 160 + 70) {
+    dropIdx = count;
   } else {
-    const axisOffset = 60 + 18;
-    const mouseY = event.clientY - rect.top;
-
-    let dropIdx = 0;
-    if (mouseY <= axisOffset + 70) {
-      dropIdx = 0;
-    } else if (mouseY >= axisOffset + (count - 1) * 160 + 70) {
-      dropIdx = count;
-    } else {
-      const approxIndex = Math.floor((mouseY - axisOffset) / 160);
-      const trackTop = axisOffset + approxIndex * 160;
-      const isAfter = mouseY > trackTop + 70;
-      dropIdx = isAfter ? approxIndex + 1 : approxIndex;
-    }
-
-    if (dropIdx < 0) dropIdx = 0;
-    if (dropIdx > count) dropIdx = count;
-    return dropIdx;
+    const approxIndex = Math.floor((mouseY - axisOffset) / 160);
+    const trackTop = axisOffset + approxIndex * 160;
+    const isAfter = mouseY > trackTop + 70;
+    dropIdx = isAfter ? approxIndex + 1 : approxIndex;
   }
-}
 
-export function getColDropIndicatorLeft(dropIndex: number | null): number {
-  if (dropIndex === null) return -9999;
-  return 60 + dropIndex * 160 - 10;
+  return Math.max(0, Math.min(count, dropIdx));
 }
 
 export function getRowDropIndicatorTop(dropIndex: number | null): number {

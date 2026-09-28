@@ -107,7 +107,6 @@ export function buildThinkingNode(
     data: an.data, stepRef: ctx.step,
     traceId: ctx.traceId,
     timestamp: an.timestamp,
-    isWaiting: text.toLowerCase().includes('wait'),
     timeBasedY: y,
     timeBasedEndY: y + height,
     timeBasedX,

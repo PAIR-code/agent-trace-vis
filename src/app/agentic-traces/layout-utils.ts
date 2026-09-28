@@ -19,7 +19,6 @@
  * 
  * Includes:
  * - Time formatters (turning milliseconds to label like "+1m 20s")
- * - Layout adapters (flipping SVG drawing coordinates when rotating row to column layout)
  * - Text measurement approximations (deciding node heights based on string lengths)
  */
 
@@ -52,29 +51,6 @@ export function formatElapsedTime(ms: number): string {
     return `+${minutes}m ${remainingSeconds}s`;
   }
   return `+${remainingSeconds}s`;
-}
-
-/** Swaps x↔y coordinates in an SVG path string. */
-export function swapPathCoords(pathStr: string): string {
-  const result: string[] = [];
-  const re = /([MCLQSTAHVZmclqstahvz])([^MCLQSTAHVZmclqstahvz]*)/g;
-  let m;
-  while ((m = re.exec(pathStr)) !== null) {
-    const cmd = m[1];
-    const args = m[2].trim();
-    if (cmd === 'Z' || cmd === 'z') { result.push(cmd); continue; }
-    if (cmd === 'H' || cmd === 'h') { result.push(cmd === 'H' ? 'V' : 'v'); result.push(args); continue; }
-    if (cmd === 'V' || cmd === 'v') { result.push(cmd === 'V' ? 'H' : 'h'); result.push(args); continue; }
-    const nums = args.match(/[-+]?[\d]*\.?[\d]+(?:[eE][-+]?\d+)?/g);
-    if (!nums || nums.length === 0) { result.push(cmd); continue; }
-    const swapped: string[] = [];
-    for (let i = 0; i < nums.length - 1; i += 2) {
-      swapped.push(nums[i + 1], nums[i]);
-    }
-    if (nums.length % 2 === 1) swapped.push(nums[nums.length - 1]);
-    result.push(cmd + ' ' + swapped.join(' '));
-  }
-  return result.join(' ');
 }
 
 export function truncate(text: string, max: number): string {

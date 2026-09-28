@@ -72,11 +72,7 @@ import {
   getSpeakerBorderForViewer,
   getHighlightedTextForViewer,
 } from "./viewer-helpers";
-import {
-  calculateDropIndex,
-  getColDropIndicatorLeft,
-  getRowDropIndicatorTop,
-} from "./drag-drop-helper";
+import { calculateDropIndex, getRowDropIndicatorTop } from "./drag-drop-helper";
 import { buildFileGanttData, FILE_ROW_HEIGHT } from "./file-gantt";
 
 interface LegendEntry {
@@ -129,8 +125,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   selectedTraceIds = signal<Set<string>>(new Set());
   yAxisMode = signal<"time" | "tokens">("time");
   stretch = signal<boolean>(false);
-  layoutMode = signal<"column" | "row">("row");
-  timeTicks = signal<{ label: string; x: number; y?: number }[]>([]);
+  timeTicks = signal<{ label: string; x: number }[]>([]);
   hideGaps = signal<boolean>(false);
   timeUnitLabel = signal<string>("");
   isLegendCollapsed = signal<boolean>(false);
@@ -249,14 +244,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     ];
   });
 
-  /** Column-mode width of the vis (trace count dimension). */
-  svgWidth = computed(() => {
-    const count = this.selectedTraceIds().size;
-    const baseWidth = count * 140 + (count > 1 ? (count - 1) * 20 : 0);
-    const axisWidth = 60;
-    return Math.max(130, baseWidth + axisWidth);
-  });
-
   // Group nodes into thread messages: tool/system/error nest under agent turns
   activeTraceId = computed(() => {
     const selectedNode = this.selectedNode();
@@ -311,7 +298,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     };
     annotateMatches(messages);
     
-    console.log('Thread messages about to render:', messages);
     return messages;
   });
 
@@ -338,7 +324,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
       target.classList.contains('vis-container') ||
       target.classList.contains('vis-scroll-area') ||
       target.classList.contains('vis-content') ||
-      target.classList.contains('col-lane') ||
       target.classList.contains('row-lane') ||
       target.classList.contains('vis-page-container');
 
@@ -505,7 +490,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     if (event.dataTransfer) {
       event.dataTransfer.dropEffect = 'move';
     }
-    const dropIdx = calculateDropIndex(event, this.selectedTraceIds().size, this.layoutMode());
+    const dropIdx = calculateDropIndex(event, this.selectedTraceIds().size);
     this.dropIndex.set(dropIdx);
   }
 
@@ -549,10 +534,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     this.selectedTraceIds.set(new Set(currentIds));
     this.processTraces();
     this.updateUrlParams();
-  }
-
-  getColDropIndicatorLeft(): number {
-    return getColDropIndicatorLeft(this.dropIndex());
   }
 
   getRowDropIndicatorTop(): number {
@@ -635,9 +616,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
             .get(trace.file)
             .toPromise()
             .then((data: any) => {
-              console.log('Thread data loaded (raw JSON):', data);
               const parsedTrace = this.traceLoaderService.parseTrace(data, trace.id);
-              console.log('Thread data parsed:', parsedTrace);
               trace.data = parsedTrace;
 
               if (parsedTrace.title) {
@@ -678,12 +657,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
 
   onTokenMetricSelectionChange(newSelection: Set<string>) {
     this.selectedTokenTypes.set(newSelection);
-    this.processTraces();
-  }
-
-  /** Sets the layout mode (column or row). */
-  setLayoutMode(mode: "column" | "row") {
-    this.layoutMode.set(mode);
     this.processTraces();
   }
 
@@ -1005,14 +978,12 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
       traces: this.traces(),
       selectedTraceIds: selectedIds,
       yAxisMode: this.yAxisMode(),
-      layoutMode: this.layoutMode(),
       hideGaps: this.hideGaps(),
       selectedTokenTypes: this.selectedTokenTypes(),
       containerWidth: this.containerWidth(),
       stretch: this.stretch(),
     });
 
-    console.log('Nodes about to render:', layout.nodes);
     this.nodes.set(layout.nodes);
     this.layersService.reRunAllEnabledLayers(layout.nodes);
     this.backboneLines.set(layout.backboneLines);
@@ -1021,13 +992,13 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     this.timeTicks.set(layout.timeTicks);
     this.timeUnitLabel.set(layout.timeUnitLabel);
 
-    // Compute file gantt data for each trace (row layout only; harmless in column mode).
+    // Compute file gantt data for each trace.
     const cw = layout.contentWidth;
     for (const id of idsArray) {
       const trace = this.traces().find(t => t.id === id);
       if (trace && trace.data) {
-        // Pass trace.nodes (VisNodes with post-row-layout x positions) so the
-        // gantt builder can look up each event's time-axis x coordinate.
+        // Pass trace.nodes (laid-out VisNodes) so the gantt builder can look up
+        // each event's time-axis x coordinate.
         trace.fileGanttData = buildFileGanttData(trace.data, trace.nodes ?? [], cw);
       }
     }
