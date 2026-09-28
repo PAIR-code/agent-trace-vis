@@ -208,8 +208,9 @@ export const AGENTIC_TRACES_TEMPLATE = `
                        (dragstart)="$event.stopPropagation(); $event.preventDefault()">
                     <ng-container *ngFor="let node of t.marks; trackBy: trackByNodeId">
                       <div *ngIf="!node.hidden"
-                           class="vis-node"
-                           [ngClass]="[node.type, node.look.icon ?? '', markSearchState(node.id)]"
+                           class="vis-node {{ node.type }} {{ node.look.icon ?? '' }}"
+                           [class.matched]="markGlow().has(node.id)"
+                           [class.dimmed]="layersService.anyLayerEnabled() && !markGlow().has(node.id)"
                            [class.is-failed]="node.look.failed"
                            [class.selected]="selectedNode()?.id === node.id"
                            [class.is-hovered]="hoveredNodeId() === node.id"
@@ -217,8 +218,8 @@ export const AGENTIC_TRACES_TEMPLATE = `
                            [style.top.px]="node.y"
                            [style.width.px]="node.width"
                            [style.height.px]="node.height"
-                           [style.background-color]="node.color"
-                           [style.border-color]="node.look.borderColor"
+                           [style.--mark-fill]="node.color"
+                           [style.--mark-border]="node.look.borderColor"
                            [style.filter]="markGlow().get(node.id)"
                            [title]="node.label"
                            draggable="false"

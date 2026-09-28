@@ -340,7 +340,7 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       outline: none;
       user-select: none;
       -webkit-user-drag: none;
-      transition: opacity 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+      transition: opacity 0.2s ease, box-shadow 0.2s ease;
     }
     .vis-node * { pointer-events: none; }
     .vis-node:hover, .vis-node.is-hovered, .vis-node.selected {
@@ -350,15 +350,11 @@ export const AGENTIC_TRACES_STYLES: string[] = [
     }
     .vis-node.selected { box-shadow: 0 0 0 3px #3b82f6; }
 
-    /* Search: matches keep their color and glow (glow filter is set inline); the rest fade. */
-    .vis-node.matched { z-index: 15; opacity: 1; }
-    .vis-node.dimmed { opacity: 0.2; filter: grayscale(1); }
-
-    /* Per type. Response/thinking fill and the system border use the step's agent color (inline). */
+    /* Per type. --mark-fill / --mark-border carry the step's agent color (set inline). */
     .vis-node.user_input { background: ${COLORS.USER_BG}; border: 1.5px solid ${COLORS.USER_BORDER}; border-radius: 2px; }
-    .vis-node.response { border-radius: 2px; }
-    .vis-node.thinking { border-radius: 0 0 3px 3px; z-index: 5; }
-    .vis-node.system { background: ${COLORS.USER_BG}; border: 1.5px solid; transform: rotate(45deg); }
+    .vis-node.response { background: var(--mark-fill); border-radius: 2px; }
+    .vis-node.thinking { background: var(--mark-fill); border-radius: 0 0 3px 3px; z-index: 5; }
+    .vis-node.system { background: ${COLORS.USER_BG}; border: 1.5px solid var(--mark-border); transform: rotate(45deg); }
     .vis-node.tool_call,
     .vis-node.tool_data { background: ${COLORS.USER_BG}; border: 1.5px solid ${COLORS.TOOL_LINE}; border-radius: 50%; }
     .vis-node.error { background: ${COLORS.ERROR_LIGHT}; border-radius: 50%; }
@@ -383,6 +379,14 @@ export const AGENTIC_TRACES_STYLES: string[] = [
     .vis-node.search { background: transparent; border: none; }
     .vis-node.search svg { display: block; width: 100%; height: 100%; color: #000000; }
     .vis-node.search.is-failed svg { color: ${COLORS.ERROR}; }
+
+    /*
+     * Search: matches keep their color and glow (drop-shadow filter set inline);
+     * the rest fade to gray. Graying swaps colors rather than using a per-mark
+     * grayscale filter, which is costly to repaint across hundreds of marks.
+     */
+    .vis-node.matched { z-index: 15; opacity: 1; }
+    .vis-node.dimmed { opacity: 0.2; --mark-fill: #9ca3af; border-color: #9ca3af; }
 
     .sidebar-resizer {
       width: 8px;

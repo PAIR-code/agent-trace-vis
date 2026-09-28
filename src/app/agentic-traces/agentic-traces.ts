@@ -149,12 +149,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     }
     return glow;
   });
-
-  /** CSS class for a mark's search state: '' (no search), 'matched', or 'dimmed'. */
-  markSearchState(id: string): string {
-    if (!this.layersService.anyLayerEnabled()) return '';
-    return this.markGlow().has(id) ? 'matched' : 'dimmed';
-  }
   contentHeight = signal<number>(1000);
   contentWidth = signal<number>(500);
   sidebarWidth = signal<number>(420);
