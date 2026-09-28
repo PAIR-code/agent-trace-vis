@@ -20,7 +20,7 @@
 
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { ReasoningTrace, ReasoningTraceStep, ReasoningTraceNode, TraceNodeColumn, TraceNodeType, ReasoningStepType } from './layout-helper';
+import { ReasoningTrace, ReasoningTraceStep, ReasoningTraceNode, TraceNodeType, ReasoningStepType } from './layout';
 import { TraceRecord, Step, ToolCall, Observation, Agent } from './trace';
 import { getAgentColor, darkenColor } from './colors';
 import { hashString } from './layout-utils';
@@ -223,14 +223,12 @@ export class TraceLoaderService {
     const createNode = (
       nid: string,
       type: TraceNodeType,
-      column: TraceNodeColumn,
       text: string,
       stepType: ReasoningStepType,
       nodeData: any
     ): ReasoningTraceNode => ({
       id: nid,
       type,
-      column,
       text,
       stepType,
       data: nodeData,
@@ -238,13 +236,13 @@ export class TraceLoaderService {
     });
 
     if (step.role === 'user') {
-      nodes.push(createNode(stepId, TraceNodeType.USER_INPUT, TraceNodeColumn.USER, step.content || 'User Input', ReasoningStepType.USER_INPUT, step));
+      nodes.push(createNode(stepId, TraceNodeType.USER_INPUT, step.content || 'User Input', ReasoningStepType.USER_INPUT, step));
     } else if (step.role === 'system') {
-      nodes.push(createNode(stepId, TraceNodeType.SYSTEM, TraceNodeColumn.AGENT, step.content || 'System Message', ReasoningStepType.SYSTEM_MESSAGE, step));
+      nodes.push(createNode(stepId, TraceNodeType.SYSTEM, step.content || 'System Message', ReasoningStepType.SYSTEM_MESSAGE, step));
     } else if (step.role === 'agent') {
       // 1. Thinking Content
       if (step.reasoning_content) {
-        nodes.push(createNode(`${stepId}_thinking`, TraceNodeType.THINKING, TraceNodeColumn.AGENT, step.reasoning_content, ReasoningStepType.PLANNER_RESPONSE, { reasoning_content: step.reasoning_content, timestamp: step.timestamp, model }));
+        nodes.push(createNode(`${stepId}_thinking`, TraceNodeType.THINKING, step.reasoning_content, ReasoningStepType.PLANNER_RESPONSE, { reasoning_content: step.reasoning_content, timestamp: step.timestamp, model }));
       }
 
       // 2. Tool Calls & Observations
@@ -270,17 +268,17 @@ export class TraceLoaderService {
               toolText += `\n\n${preview}`;
             }
             const obsId = `${stepId}_obs_${tcIdx}`;
-            nodes.push(createNode(obsId, TraceNodeType.TOOL_DATA, TraceNodeColumn.TOOLS, toolText, stepType, combinedData));
+            nodes.push(createNode(obsId, TraceNodeType.TOOL_DATA, toolText, stepType, combinedData));
           } else {
             // Tool call with no observation yet
-            nodes.push(createNode(tcId, TraceNodeType.TOOL_CALL, TraceNodeColumn.AGENT, toolLabel, stepType, combinedData));
+            nodes.push(createNode(tcId, TraceNodeType.TOOL_CALL, toolLabel, stepType, combinedData));
           }
         });
       }
 
       // 3. Response Content
       if (step.content) {
-        nodes.push(createNode(`${stepId}_response`, TraceNodeType.RESPONSE, TraceNodeColumn.USER, step.content, ReasoningStepType.PLANNER_RESPONSE, { content: step.content, timestamp: step.timestamp, model }));
+        nodes.push(createNode(`${stepId}_response`, TraceNodeType.RESPONSE, step.content, ReasoningStepType.PLANNER_RESPONSE, { content: step.content, timestamp: step.timestamp, model }));
       }
     }
 

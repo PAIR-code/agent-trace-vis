@@ -1,0 +1,149 @@
+<div class="row-trace-title">
+  <span class="row-trace-title-text" [title]="trace().title">{{ trace().title }}</span>
+</div>
+
+<!-- Channel lanes, backbone and marks -->
+<div class="row-main-track" [style.width.px]="width()" [style.height.px]="trackHeight">
+  @if (showLabels()) {
+    @for (ch of channels; track ch.id) {
+      <span class="lane-label" [style.top.px]="channelCenter(ch.id)">{{ ch.label }}</span>
+    }
+  }
+
+  <!-- Lanes and backbone (faded while a search is active) -->
+  <div class="track-base-layer" [class.layer-dimmed]="searching()">
+    @for (ch of channels; track ch.id) {
+      <div class="row-lane" [style.height.px]="ch.height" [style.background]="ch.background"></div>
+    }
+    <svg class="track-lines-layer" [attr.width]="width()" [attr.height]="trackHeight"
+         draggable="false" (dragstart)="blockDrag($event)">
+      @for (line of trace().backbone; track line.id) {
+        <path [attr.d]="line.path"
+              [attr.stroke]="line.stroke"
+              [attr.stroke-width]="line.strokeWidth"
+              [attr.stroke-dasharray]="line.strokeDasharray || 'none'"
+              [attr.opacity]="line.opacity"
+              fill="none" />
+      }
+    </svg>
+  </div>
+
+  <!-- Marks: one div per drawn trace node (see marks.ts) -->
+  <div class="track-nodes-layer" draggable="false" (dragstart)="blockDrag($event)">
+    @for (node of trace().marks; track node.id) {
+      @if (!node.hidden) {
+        <div class="vis-node {{ node.type }} {{ node.look.icon ?? '' }}"
+             [class.matched]="glow().has(node.id)"
+             [class.dimmed]="searching() && !glow().has(node.id)"
+             [class.is-failed]="node.look.failed"
+             [class.selected]="selectedId() === node.id"
+             [class.is-hovered]="hoveredId() === node.id"
+             [style.left.px]="node.x"
+             [style.top.px]="node.y"
+             [style.width.px]="node.width"
+             [style.height.px]="node.height"
+             [style.--mark-fill]="node.color"
+             [style.--mark-border]="node.look.borderColor"
+             [style.box-shadow]="glow().get(node.id)"
+             [title]="node.label"
+             draggable="false"
+             (dragstart)="blockDrag($event)"
+             (click)="onSelect(node, $event)"
+             (mouseenter)="markHover.emit(node.id)"
+             (mouseleave)="markHover.emit(null)">
+          @if (node.look.icon === 'command') {
+            <div class="command-content">&gt;_</div>
+          } @else if (node.look.icon === 'search') {
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+          }
+        </div>
+      }
+    }
+  </div>
+</div>
+
+<!-- Files lane: one row per file (see file-lane.ts); collapsed, rows overlap in one lane -->
+@if (trace().files.rows.length > 0) {
+  <div class="files-lane" [class.collapsed]="!filesExpanded()"
+       [style.width.px]="width()" [style.min-height.px]="filesLane.height">
+    <!-- Background only, so dimming it during search leaves markers untouched -->
+    <div class="files-lane-bg" [style.background]="filesLane.background"
+         [class.layer-dimmed]="searching()"></div>
+
+    <div class="files-header" [style.height.px]="filesExpanded() ? fileRowHeight : filesLane.height">
+      @if (showLabels()) {
+        <span class="files-label">{{ filesLane.label }}</span>
+      }
+      <button class="files-toggle" type="button" (click)="onToggleFiles($event)"
+              [title]="filesExpanded() ? 'Hide files' : 'Show all files (' + trace().files.rows.length + ')'">
+        {{ filesExpanded() ? 'hide all' : 'show all' }}
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline [attr.points]="filesExpanded() ? '18 15 12 9 6 15' : '6 9 12 15 18 9'"></polyline>
+        </svg>
+      </button>
+    </div>
+
+    <svg class="files-svg" [attr.width]="width()"
+         [attr.height]="filesExpanded() ? trace().files.totalHeight : filesLane.height">
+      @for (row of trace().files.rows; track row.filePath; let r = $index) {
+        <g class="file-row" [class.active]="isRowActive(row)"
+           [attr.opacity]="isRowDimmed(row) ? 0.3 : null"
+           [attr.transform]="'translate(0,' + (filesExpanded() ? r * fileRowHeight : filesLane.height / 2 - 14) + ')'">
+          <text class="file-label" [attr.x]="row.startX" y="10"
+                draggable="false" (dragstart)="blockDrag($event)"
+                (click)="onSelect(row.edits[0]?.node ?? row.views[0]?.node, $event)"
+                [attr.title]="row.filePath">{{ row.basename }}</text>
+
+          <!-- Dotted line over the file's lifespan -->
+          <line class="file-line" [attr.x1]="row.startX" [attr.x2]="row.endX" y1="14" y2="14" />
+
+          <!-- Search halos behind matched markers (no filters: they're slow to paint) -->
+          @for (view of row.views; track view.node.id) {
+            @if (searchColor(view.node.id); as c) {
+              <circle class="file-search-halo" [attr.cx]="view.x" cy="14" r="8" [attr.fill]="c" />
+            }
+          }
+          @for (edit of row.edits; track edit.node.id) {
+            @if (searchColor(edit.node.id); as c) {
+              <rect class="file-search-halo" rx="4" [attr.fill]="c"
+                    [attr.x]="edit.x - 4" y="10" [attr.width]="edit.width + 8" [attr.height]="edit.barHeight + 8" />
+            }
+          }
+
+          <!-- A dot per view / search -->
+          @for (view of row.views; track view.node.id) {
+            <circle class="file-marker view" cy="14" [attr.cx]="view.x"
+                    [attr.r]="selectedId() === view.node.id ? 5 : hoveredId() === view.node.id ? 4.5 : 3"
+                    [class.search]="view.isSearch"
+                    [class.is-hovered]="hoveredId() === view.node.id"
+                    [class.selected]="selectedId() === view.node.id"
+                    [class.dimmed]="searching() && !searchColor(view.node.id)"
+                    draggable="false" (dragstart)="blockDrag($event)"
+                    (click)="onSelect(view.node, $event)"
+                    (mouseenter)="markHover.emit(view.node.id)"
+                    (mouseleave)="markHover.emit(null)"
+                    [attr.title]="view.label" />
+          }
+
+          <!-- A downward bar per edit, taller for more lines written -->
+          @for (edit of row.edits; track edit.node.id) {
+            <rect class="file-marker edit" rx="1.5" y="14"
+                  [attr.x]="edit.x" [attr.width]="edit.width" [attr.height]="edit.barHeight"
+                  [class.plan]="row.isPlan"
+                  [class.is-hovered]="hoveredId() === edit.node.id"
+                  [class.selected]="selectedId() === edit.node.id"
+                  [class.dimmed]="searching() && !searchColor(edit.node.id)"
+                  draggable="false" (dragstart)="blockDrag($event)"
+                  (click)="onSelect(edit.node, $event)"
+                  (mouseenter)="markHover.emit(edit.node.id)"
+                  (mouseleave)="markHover.emit(null)"
+                  [attr.title]="edit.label" />
+          }
+        </g>
+      }
+    </svg>
+  </div>
+}

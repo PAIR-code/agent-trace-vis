@@ -22,7 +22,7 @@
  * and lane labels are all derived from it — to add a channel, add an entry here.
  */
 
-/** Channel ids. These match the `column` field on parsed trace nodes. */
+/** Channel ids. Which channel a mark sits in is decided by MARK_SPECS in marks.ts. */
 export type ChannelId = 'user' | 'agent' | 'tools';
 
 export interface Channel {

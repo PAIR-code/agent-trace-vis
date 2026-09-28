@@ -43,12 +43,10 @@ import {
   createStyle,
   COLORS,
 } from "./colors";
-import { AGENTIC_TRACES_TEMPLATE } from "./template";
-import { AGENTIC_TRACES_STYLES } from "./styles";
 import { MultiSelectDropdownComponent, DropdownItem } from "../shared/multi-select-dropdown.component";
 import { AnalysisToolbarComponent } from "./analysis-toolbar.component";
 import { ConversationViewerComponent } from "../shared/conversation-viewer.component";
-import { layoutTraces, TraceLayout, TraceNodeType } from "./layout-helper";
+import { layoutTraces, TraceLayout, TraceNodeType } from "./layout";
 import { groupThreadMessages } from "./thread-helper";
 import { HuggingFaceImportComponent } from "./hugging-face-import.component";
 import {
@@ -59,8 +57,7 @@ import {
   getHighlightedTextForViewer,
 } from "./viewer-helpers";
 import { measureDrop } from "./drag-drop-helper";
-import { FILE_ROW_HEIGHT, FileRow } from "./file-lane";
-import { CHANNELS, FILES_LANE, TRACK_HEIGHT, channelCenter } from "./channels";
+import { TraceTrackComponent } from "./trace-track";
 
 interface LegendEntry {
   label: string;
@@ -83,10 +80,11 @@ interface LegendEntry {
     AnalysisToolbarComponent,
     ConversationViewerComponent,
     HuggingFaceImportComponent,
+    TraceTrackComponent,
   ],
   providers: [AnalysisLayersService],
-  template: AGENTIC_TRACES_TEMPLATE,
-  styles: AGENTIC_TRACES_STYLES,
+  templateUrl: './agentic-traces.html',
+  styleUrls: ['./agentic-traces.css'],
 })
 export class AgenticTracesComponent implements OnInit, OnDestroy {
   datasets = signal<DatasetItem[]>([]);
@@ -138,21 +136,8 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   /** Every mark across all rows. */
   marks = computed(() => this.traceLayouts().flatMap(t => t.marks));
 
-  /**
-   * Search glow for each mark matched by an enabled search layer: a box-shadow
-   * in the layer's color, stacked when several layers match.
-   * Avoid filter: drop-shadow here; it's far slower to paint across hundreds of marks.
-   */
   /** Colors of the enabled search layers that match each mark id. */
   searchColors = computed(() => this.layersService.getLayerColorMap());
-
-  markGlow = computed(() => {
-    const glow = new Map<string, string>();
-    for (const [id, colors] of this.searchColors()) {
-      glow.set(id, colors.map(c => `0 0 12px 6px ${c}`).join(', '));
-    }
-    return glow;
-  });
   contentHeight = signal<number>(1000);
   contentWidth = signal<number>(500);
   sidebarWidth = signal<number>(420);
@@ -290,13 +275,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     return messages;
   });
 
-  /** Channel geometry, exposed for the template. */
-  readonly channels = CHANNELS;
-  readonly trackHeight = TRACK_HEIGHT;
-  readonly channelCenter = channelCenter;
-
-  readonly filesLane = FILES_LANE;
-  readonly fileRowHeight = FILE_ROW_HEIGHT;
 
   constructor(
     private http: HttpClient,
@@ -445,17 +423,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
 
   isInteractiveElement(target: EventTarget | null): boolean {
     if (!target || !(target instanceof Element)) return false;
-    return !!(
-      target.closest('.vis-node') ||
-      target.closest('.file-marker-clickable') ||
-      target.closest('.file-label-clickable') ||
-      target.closest('.file-gantt-toggle-btn') ||
-      target.closest('.file-gantt-header') ||
-      target.closest('button') ||
-      target.closest('input') ||
-      target.closest('select') ||
-      target.closest('a')
-    );
+    return !!target.closest('.vis-node, .file-marker, .file-label, .files-header, button, input, select, a');
   }
 
   onMouseDown(event: MouseEvent) {
@@ -637,30 +605,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     this.processTraces();
   }
 
-  /** TrackBy function for nodes in the template. */
-  trackByNodeId(index: number, node: any): string {
-    return node.id;
-  }
-
-  /** TrackBy function for lines in the template. */
-  trackByLineId(index: number, line: any): string {
-    return line.id;
-  }
-
-  /** TrackBy function for file rows in file gantt. */
-  trackByFileRow(index: number, row: any): string {
-    return row.filePath || row.basename || String(index);
-  }
-
-  /** TrackBy function for file view markers. */
-  trackByFileView(index: number, view: any): string {
-    return view.node?.id || `${view.label}_${index}`;
-  }
-
-  /** TrackBy function for file edit segments. */
-  trackByFileEdit(index: number, edit: any): string {
-    return edit.node?.id || `${edit.label}_${index}`;
-  }
 
   private loadImportedDatasets(): DatasetItem[] {
     try {
@@ -969,27 +913,14 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     this.selectedNode.set(null);
   }
 
-  /** Set of trace IDs whose file gantt sub-track is expanded. */
+  /** Trace ids whose files lane is expanded. */
   readonly expandedFileTraceIds = signal<Set<string>>(new Set<string>());
 
-  /** Returns whether files for a specific trace ID are currently collapsed. */
-  isFilesCollapsed(traceId: string): boolean {
-    return !this.expandedFileTraceIds().has(traceId);
-  }
-
-  /** Toggles collapse/expand of the files gantt sub-track for a trace. */
-  toggleTraceFiles(traceId: string, event?: Event) {
-    if (event) {
-      event.stopPropagation();
-      event.preventDefault();
-    }
-    const current = new Set(this.expandedFileTraceIds());
-    if (current.has(traceId)) {
-      current.delete(traceId);
-    } else {
-      current.add(traceId);
-    }
-    this.expandedFileTraceIds.set(current);
+  /** Expands or collapses the files lane of a trace. */
+  toggleTraceFiles(traceId: string) {
+    const expanded = new Set(this.expandedFileTraceIds());
+    if (!expanded.delete(traceId)) expanded.add(traceId);
+    this.expandedFileTraceIds.set(expanded);
   }
 
   /** Toggles collapse/minimize state of the legend overlay. */
@@ -1013,15 +944,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     this.manualActiveTraceId.set(traceId);
   }
 
-  /** Selects a node from the file timeline and navigates to it in the conversation viewer. */
-  selectFileNode(node: any, event?: Event) {
-    if (event) {
-      event.stopPropagation();
-    }
-    if (!node) return;
-    this.selectNode(node);
-  }
-
   /** Selects a node. */
   selectNode(node: any, event?: Event) {
     if (event) {
@@ -1040,40 +962,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
         }
       }, 2000);
     }
-  }
-
-  /** Returns true if a file node is currently hovered. */
-  isFileNodeHovered(targetNode: any): boolean {
-    const hId = this.hoveredNodeId();
-    if (!hId || !targetNode?.id) return false;
-    return hId === targetNode.id;
-  }
-
-  /** Returns true if a file node is currently selected. */
-  isFileNodeSelected(targetNode: any): boolean {
-    const sNode = this.selectedNode();
-    if (!sNode || !targetNode?.id) return false;
-    return sNode.id === targetNode.id;
-  }
-
-  /** Returns true if any view or edit node in a row is currently hovered or selected. */
-  isRowHoveredOrSelected(row: FileRow): boolean {
-    const hId = this.hoveredNodeId();
-    const sId = this.selectedNode()?.id;
-    return (!!hId && row.nodeIds.has(hId)) || (!!sId && row.nodeIds.has(sId));
-  }
-
-  /** First matching search-layer color for a mark, if any. */
-  searchColor(id: string): string | undefined {
-    return this.searchColors().get(id)?.[0];
-  }
-
-  /** True while searching if none of the row's markers match. */
-  isFileRowDimmed(row: FileRow): boolean {
-    if (!this.layersService.anyLayerEnabled()) return false;
-    const colors = this.searchColors();
-    for (const id of row.nodeIds) if (colors.has(id)) return false;
-    return true;
   }
 
   openImportModal() {

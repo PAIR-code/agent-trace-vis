@@ -1,0 +1,283 @@
+/* One trace row: title, channel lanes + marks, files lane. */
+:host {
+  display: contents; /* children lay out directly in the parent's row */
+}
+
+.row-trace-title {
+  position: absolute;
+  top: -18px;
+  left: 0;
+  right: 12px;
+  z-index: 20;
+  overflow: hidden;
+  pointer-events: auto;
+  cursor: grab;
+}
+
+.row-trace-title-text {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Lane labels, right-aligned (first row only) */
+.lane-label,
+.files-label {
+  font-size: 0.55rem;
+  font-weight: 500;
+  color: #64748b;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.files-label { line-height: 1; }
+
+.lane-label {
+  position: absolute;
+  right: 8px;
+  z-index: 20;
+  transform: translateY(-50%);
+}
+
+/* ── Channel lanes ── */
+.row-main-track {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.track-base-layer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  transition: filter 0.3s ease, opacity 0.3s ease;
+}
+
+.row-lane {
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* Lane backgrounds fade to gray while searching (one element, so the filter is cheap). */
+.layer-dimmed {
+  opacity: .3;
+  filter: grayscale(1);
+}
+
+.track-lines-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.track-lines-layer path {
+  transition: d 0.3s ease;
+}
+
+.track-nodes-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* ── Marks: one absolutely-positioned div per trace node (see marks.ts) ── */
+.vis-node {
+  position: absolute;
+  z-index: 10;
+  cursor: pointer;
+  pointer-events: auto;
+  opacity: 0.65;
+  outline: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  transition: opacity 0.2s ease, box-shadow 0.2s ease;
+}
+.vis-node * { pointer-events: none; }
+.vis-node:hover, .vis-node.is-hovered, .vis-node.selected {
+  z-index: 20;
+  opacity: 1;
+  filter: brightness(0.95);
+}
+.vis-node.selected { outline: 3px solid #3b82f6; }
+
+/* Per type. --mark-fill / --mark-border carry the step's agent color (set inline). */
+.vis-node.user_input { background: var(--user-bg); border: 1.5px solid var(--user-border); border-radius: 2px; }
+.vis-node.response { background: var(--mark-fill); border-radius: 2px; }
+.vis-node.thinking { background: var(--mark-fill); border-radius: 0 0 3px 3px; z-index: 5; }
+.vis-node.system { background: var(--user-bg); border: 1.5px solid var(--mark-border); transform: rotate(45deg); }
+.vis-node.tool_call,
+.vis-node.tool_data { background: var(--user-bg); border: 1.5px solid var(--tool-line); border-radius: 50%; }
+.vis-node.error { background: var(--error-light); border-radius: 50%; }
+.vis-node.is-failed { border-color: var(--error); background: var(--error-light); }
+
+/* Icons */
+.vis-node.command { background: #6b7280; border: none; border-radius: 3px; }
+.vis-node.command.is-failed { background: var(--error); }
+.command-content {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 1px;
+  font-family: monospace;
+  font-size: 7px;
+  font-weight: bold;
+  color: #ffffff;
+}
+.vis-node.search { background: transparent; border: none; }
+.vis-node.search svg { display: block; width: 100%; height: 100%; color: #000000; }
+.vis-node.search.is-failed svg { color: var(--error); }
+
+/*
+ * Search: matches keep their color and glow (box-shadow set inline);
+ * the rest fade to gray. Graying swaps colors rather than using a per-mark
+ * grayscale filter, which is costly to repaint across hundreds of marks.
+ */
+.vis-node.matched { z-index: 15; opacity: 1; }
+.vis-node.matched.selected { outline-offset: 3px; }
+.vis-node.dimmed { opacity: 0.2; border-color: #9ca3af; }
+.vis-node.dimmed.response,
+.vis-node.dimmed.thinking { background: #9ca3af; }
+.vis-node.dimmed.is-failed { background: #d1d5db; }
+.vis-node.dimmed.is-failed svg { color: #6b7280; }
+
+/* ── Files lane ── */
+.files-lane {
+  position: relative;
+  flex-shrink: 0;
+  pointer-events: auto; /* .row-lanes has pointer-events: none */
+  border-radius: 0 0 8px 8px;
+  z-index: 10;
+  cursor: default;
+}
+
+.files-lane-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  transition: filter 0.3s ease, opacity 0.3s ease;
+}
+
+.files-header {
+  position: absolute;
+  right: 8px;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  z-index: 20;
+  transition: height 0.3s ease;
+}
+
+.files-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: transparent;
+  border: none;
+  padding: 1px 3px;
+  border-radius: 3px;
+  font-size: 0.55rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: #64748b;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+
+.files-toggle:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: #0f172a;
+}
+
+.files-svg {
+  position: relative;
+  display: block;
+  overflow: visible;
+  transition: height 0.3s ease;
+}
+
+.file-row { transition: transform 0.3s ease; }
+
+.file-label {
+  font-size: 9px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 500;
+  fill: #334155;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-drag: none;
+  transition: x 0.3s ease, y 0.3s ease, opacity 0.3s ease, fill 0.15s ease, font-weight 0.15s ease;
+}
+
+.file-line {
+  stroke: #64748b;
+  stroke-width: 1.5;
+  stroke-dasharray: 3, 3;
+  opacity: 0.75;
+  transition: x1 0.3s ease, x2 0.3s ease, opacity 0.3s ease, stroke 0.15s ease, stroke-width 0.15s ease;
+}
+
+.file-row.active .file-label,
+.file-label:hover { fill: #0f172a; font-weight: 700; }
+.file-row.active .file-line { stroke: #0f172a; stroke-width: 2; opacity: 1; }
+
+/* Collapsed: rows overlap in one lane, so hide per-row labels and lines */
+.files-lane.collapsed .file-label,
+.files-lane.collapsed .file-line { opacity: 0; pointer-events: none; }
+
+.file-marker {
+  cursor: pointer;
+  -webkit-user-drag: none;
+  opacity: 0.65;
+}
+
+.file-marker.view {
+  fill: #ffffff;
+  stroke: #334155;
+  stroke-width: 1.5;
+  transition: cx 0.3s ease, r 0.15s ease, stroke 0.15s ease, stroke-width 0.15s ease;
+}
+.file-marker.view.search { stroke: #94a3b8; stroke-width: 1.2; }
+
+.file-marker.edit {
+  fill: #334155;
+  transition: x 0.3s ease, width 0.3s ease, height 0.3s ease, fill 0.15s ease, opacity 0.15s ease;
+}
+.file-marker.edit.plan { fill: #94a3b8; opacity: 0.6; }
+
+.file-marker:hover,
+.file-marker.is-hovered,
+.file-marker.selected { stroke: #0f172a; opacity: 1; }
+/* Same specificity as .search / .plan, and later, so hover/selection wins */
+.file-marker.view.is-hovered { stroke: #0f172a; stroke-width: 2.5; }
+.file-marker.view.selected { stroke: #0f172a; stroke-width: 3; }
+.file-marker.edit.is-hovered,
+.file-marker.edit.selected { fill: #0f172a; opacity: 1; }
+
+.file-marker.dimmed:not(.selected):not(.is-hovered) { opacity: .25; }
+
+.file-search-halo {
+  opacity: .5;
+  pointer-events: none;
+}

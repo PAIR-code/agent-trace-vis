@@ -21,12 +21,6 @@
 import type { Mark } from './marks';
 import type { FileLane } from './file-lane';
 
-export enum TraceNodeColumn {
-  USER = 'user',
-  AGENT = 'agent',
-  TOOLS = 'tools'
-}
-
 export const BASE_OFFSET = 24;
 
 export enum TraceNodeType {
@@ -102,7 +96,6 @@ export interface ReasoningTraceStep {
 export interface ReasoningTraceNode {
   id: string;
   type: TraceNodeType;
-  column: TraceNodeColumn;
   text: string;
   stepType?: ReasoningStepType;
   timestamp?: string;
