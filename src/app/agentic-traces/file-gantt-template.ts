@@ -31,17 +31,21 @@
 
 export const FILE_GANTT_TEMPLATE = `
   <!-- File Gantt Sub-Track -->
-  <div class="file-gantt-container" *ngIf="t.fileGanttData && t.fileGanttData.rows.length > 0"
-       [class.layer-dimmed]="layersService.anyLayerEnabled()"
-       [style.width.px]="contentWidth()">
+  <div class="file-gantt-container" *ngIf="t.files.rows.length > 0"
+       [style.width.px]="contentWidth()"
+       [style.min-height.px]="filesLane.height">
+    <!-- Background only, so dimming it during search leaves markers untouched -->
+    <div class="file-gantt-bg" [style.background]="filesLane.background"
+         [class.layer-dimmed]="layersService.anyLayerEnabled()"></div>
 
     <!-- Top-right Header: Lane Label + Toggle Button inline next to each other -->
-    <div class="file-gantt-header" [class.is-collapsed]="isFilesCollapsed(t.id)">
-      <span class="file-gantt-lane-label" *ngIf="i === 0">files</span>
+    <div class="file-gantt-header"
+         [style.height.px]="isFilesCollapsed(t.id) ? filesLane.height : fileRowHeight">
+      <span class="file-gantt-lane-label" *ngIf="i === 0">{{ filesLane.label }}</span>
       <button class="file-gantt-toggle-btn"
               type="button"
               (click)="toggleTraceFiles(t.id, $event)"
-              [title]="isFilesCollapsed(t.id) ? 'Show all files (' + t.fileGanttData.rows.length + ')' : 'Hide files'">
+              [title]="isFilesCollapsed(t.id) ? 'Show all files (' + t.files.rows.length + ')' : 'Hide files'">
         <span class="file-gantt-toggle-text">{{ isFilesCollapsed(t.id) ? 'show all' : 'hide all' }}</span>
         <svg *ngIf="!isFilesCollapsed(t.id)" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="18 15 12 9 6 15"></polyline>
@@ -55,13 +59,14 @@ export const FILE_GANTT_TEMPLATE = `
     <!-- Unified File Gantt SVG (smoothly transitions between collapsed summary and expanded multi-row) -->
     <svg class="file-gantt-svg"
          [attr.width]="contentWidth()"
-         [attr.height]="isFilesCollapsed(t.id) ? fileLaneHeight : t.fileGanttData.totalHeight"
+         [attr.height]="isFilesCollapsed(t.id) ? filesLane.height : t.files.totalHeight"
          style="display:block; overflow: visible;">
 
       <!-- One group per file row (slides vertically to center when collapsed) -->
-      <g *ngFor="let row of t.fileGanttData.rows; let rowIndex = index; trackBy: trackByFileRow"
+      <g *ngFor="let row of t.files.rows; let rowIndex = index; trackBy: trackByFileRow"
          class="file-row-group"
-         [attr.transform]="'translate(0,' + (isFilesCollapsed(t.id) ? (fileLaneHeight / 2 - 14) : (rowIndex * fileRowHeight)) + ')'">
+         [attr.opacity]="isFileRowDimmed(row) ? 0.3 : null"
+         [attr.transform]="'translate(0,' + (isFilesCollapsed(t.id) ? (filesLane.height / 2 - 14) : (rowIndex * fileRowHeight)) + ')'">
 
         <!-- File label above the line (fades out when collapsed) -->
         <text
@@ -91,6 +96,17 @@ export const FILE_GANTT_TEMPLATE = `
           stroke-dasharray="3,3"
           [style.opacity]="isFilesCollapsed(t.id) ? 0 : (isRowHoveredOrSelected(row) ? 1 : 0.75)" />
 
+        <!-- Search halos behind matched markers (no filters: they're slow to paint) -->
+        <ng-container *ngFor="let view of row.views; trackBy: trackByFileView">
+          <circle *ngIf="searchColor(view.node.id) as c" class="file-search-halo"
+                  [attr.cx]="view.x" cy="14" r="8" [attr.fill]="c" />
+        </ng-container>
+        <ng-container *ngFor="let edit of row.edits; trackBy: trackByFileEdit">
+          <rect *ngIf="searchColor(edit.node.id) as c" class="file-search-halo"
+                [attr.x]="edit.x - 4" y="10" [attr.width]="edit.width + 8" [attr.height]="edit.barHeight + 8"
+                rx="4" [attr.fill]="c" />
+        </ng-container>
+
         <!-- View/Grep event dots on the line -->
         <circle
           *ngFor="let view of row.views; trackBy: trackByFileView"
@@ -104,10 +120,11 @@ export const FILE_GANTT_TEMPLATE = `
           class="file-marker-clickable"
           [class.is-hovered]="isFileNodeHovered(view.node)"
           [class.selected]="isFileNodeSelected(view.node)"
+          [class.dimmed]="layersService.anyLayerEnabled() && !searchColor(view.node.id)"
           draggable="false"
           (dragstart)="$event.preventDefault(); $event.stopPropagation()"
           (click)="selectFileNode(view.node, $event)"
-          (mouseenter)="hoveredNodeId.set(view.node?.id)"
+          (mouseenter)="hoveredNodeId.set(view.node.id)"
           (mouseleave)="hoveredNodeId.set(null)"
           [attr.title]="view.label" />
 
@@ -125,10 +142,11 @@ export const FILE_GANTT_TEMPLATE = `
             class="file-marker-clickable"
             [class.is-hovered]="isFileNodeHovered(edit.node)"
             [class.selected]="isFileNodeSelected(edit.node)"
+            [class.dimmed]="layersService.anyLayerEnabled() && !searchColor(edit.node.id)"
             draggable="false"
             (dragstart)="$event.preventDefault(); $event.stopPropagation()"
             (click)="selectFileNode(edit.node, $event)"
-            (mouseenter)="hoveredNodeId.set(edit.node?.id)"
+            (mouseenter)="hoveredNodeId.set(edit.node.id)"
             (mouseleave)="hoveredNodeId.set(null)"
             [attr.title]="edit.label" />
         </ng-container>
@@ -150,24 +168,22 @@ export const FILE_GANTT_STYLES = `
     box-sizing: border-box;
     padding: 0;
     border-top: none;
-    background: #cfd7e0;
     border-radius: 0 0 8px 8px;
     z-index: 10;
     cursor: default;
-    min-height: 46.67px;
-    transition: filter 0.3s ease, opacity 0.3s ease;
   }
 
-  .file-gantt-container.layer-dimmed {
-    opacity: .3;
-    filter: grayscale(1);
+  .file-gantt-bg {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    transition: filter 0.3s ease, opacity 0.3s ease;
   }
 
   .file-gantt-header {
     position: absolute;
     right: 8px;
     top: 0;
-    height: 46.67px;
     display: flex;
     flex-direction: row;
     align-items: center;
@@ -175,10 +191,6 @@ export const FILE_GANTT_STYLES = `
     z-index: 20;
     pointer-events: auto !important;
     transition: height 0.3s ease;
-  }
-
-  .file-gantt-header:not(.is-collapsed) {
-    height: 24px;
   }
 
   .file-gantt-lane-label {
@@ -221,6 +233,7 @@ export const FILE_GANTT_STYLES = `
   }
 
   .file-gantt-svg {
+    position: relative;
     display: block;
     overflow: visible;
     pointer-events: auto !important;
@@ -261,6 +274,15 @@ export const FILE_GANTT_STYLES = `
 
   .file-marker-clickable.selected {
     stroke: #0f172a !important;
+  }
+
+  .file-marker-clickable.dimmed:not(.selected):not(.is-hovered) {
+    opacity: .25;
+  }
+
+  .file-search-halo {
+    opacity: .5;
+    pointer-events: none;
   }
 
   .file-label-clickable {

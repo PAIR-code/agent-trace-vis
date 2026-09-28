@@ -42,6 +42,13 @@ export const CHANNELS: readonly Channel[] = [
   { id: 'tools', label: 'tools', height: LANE_HEIGHT, background: '#dde3ea' },
 ];
 
+/**
+ * The files lane under the channels. Not a mark channel: it has one row per
+ * file and expands to show them all (see file-lane.ts). Collapsed, it is one
+ * lane tall.
+ */
+export const FILES_LANE = { label: 'files', height: LANE_HEIGHT, background: '#cfd7e0' };
+
 /** Total height of the channels in one trace track. */
 export const TRACK_HEIGHT = CHANNELS.reduce((sum, c) => sum + c.height, 0);
 

@@ -15,36 +15,36 @@
  */
 
 /**
- * @fileoverview Drag-and-drop calculation helpers for track reordering.
+ * @fileoverview Drop-target measurement for reordering trace rows.
+ *
+ * Rows have variable height (the files lane grows with the number of files),
+ * so we measure the rendered rows instead of assuming a fixed pitch.
  */
 
-export function calculateDropIndex(event: DragEvent, count: number): number | null {
-  if (count === 0) return null;
-
-  const visContent =
-    (event.currentTarget as HTMLElement).closest('.vis-scroll-area')?.querySelector('.vis-content') as HTMLElement ||
-    (event.currentTarget as HTMLElement);
-  const rect = visContent.getBoundingClientRect();
-
-  const axisOffset = 60 + 18;
-  const mouseY = event.clientY - rect.top;
-
-  let dropIdx = 0;
-  if (mouseY <= axisOffset + 70) {
-    dropIdx = 0;
-  } else if (mouseY >= axisOffset + (count - 1) * 160 + 70) {
-    dropIdx = count;
-  } else {
-    const approxIndex = Math.floor((mouseY - axisOffset) / 160);
-    const trackTop = axisOffset + approxIndex * 160;
-    const isAfter = mouseY > trackTop + 70;
-    dropIdx = isAfter ? approxIndex + 1 : approxIndex;
-  }
-
-  return Math.max(0, Math.min(count, dropIdx));
+/** Where a dragged row would land, and where to draw the indicator. */
+export interface DropTarget {
+  /** Insertion index among the rows (0..rowCount). */
+  index: number;
+  /** Indicator y, relative to the `.row-lanes` container. */
+  indicatorTop: number;
 }
 
-export function getRowDropIndicatorTop(dropIndex: number | null): number {
-  if (dropIndex === null) return -9999;
-  return 60 + 18 + dropIndex * 160 - 10;
+/** Half the vertical gap between rows (`.trace-background-row` margin-bottom). */
+const HALF_ROW_GAP = 14;
+
+/** Measures the drop target for the pointer position of a dragover event. */
+export function measureDrop(event: DragEvent): DropTarget | null {
+  const lanes = (event.currentTarget as HTMLElement)
+    .closest('.vis-scroll-area')?.querySelector('.row-lanes');
+  if (!lanes) return null;
+  const rows = Array.from(lanes.querySelectorAll(':scope > .trace-background-row'))
+    .map(el => el.getBoundingClientRect());
+  if (rows.length === 0) return null;
+
+  const origin = lanes.getBoundingClientRect().top;
+  const index = rows.filter(r => r.top + r.height / 2 < event.clientY).length;
+  const indicatorTop = index < rows.length
+    ? rows[index].top - origin - HALF_ROW_GAP
+    : rows[rows.length - 1].bottom - origin + HALF_ROW_GAP;
+  return { index, indicatorTop };
 }

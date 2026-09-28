@@ -27,7 +27,8 @@ import { Mark, MarkTraceInput, buildMarks } from './marks';
 import { buildBackboneLines } from './backbone-builder';
 import { channelCenter, TRACK_HEIGHT } from './channels';
 import { buildAxis, findIdleGaps, fillScaleMultiplier, computeTicks } from './x-scale';
-import { buildFileGanttData } from './file-gantt';
+import { extractFileEvents } from './file-events';
+import { buildFileLane } from './file-lane';
 
 export * from './layout-types';
 export { sanitizeId } from './layout-utils';
@@ -140,7 +141,7 @@ export function layoutTraces(params: LayoutParams): LayoutOutput {
     agentColor: meta.agentColor,
     marks,
     backbone,
-    fileGanttData: buildFileGanttData(meta.data, marks, contentWidth),
+    files: buildFileLane(extractFileEvents(meta.data), marks, contentWidth),
   }));
 
   return { traces: layouts, contentWidth, contentHeight, timeTicks };

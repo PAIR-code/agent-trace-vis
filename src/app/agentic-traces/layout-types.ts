@@ -19,7 +19,7 @@
  */
 
 import type { Mark } from './marks';
-import type { FileGanttData } from './file-gantt';
+import type { FileLane } from './file-lane';
 
 export enum TraceNodeColumn {
   USER = 'user',
@@ -128,7 +128,7 @@ export interface TraceLayout {
   agentColor: string;
   marks: Mark[];
   backbone: BackboneLine[];
-  fileGanttData: FileGanttData;
+  files: FileLane;
 }
 
 export interface LayoutOutput {

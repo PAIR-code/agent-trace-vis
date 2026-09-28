@@ -27,6 +27,7 @@ import { getAgentColor } from './colors';
 import { ChannelId, channelCenter } from './channels';
 import { BASE_OFFSET, ReasoningStepType, ReasoningTraceNode, ReasoningTraceStep, TraceNodeType } from './layout-types';
 import { getStepTokens, stepAxisTokens, truncate, wordCount } from './layout-utils';
+import { isFileEventNode } from './file-events';
 import { XAxis } from './x-scale';
 
 /** Styling hints for a mark; shape and base colors come from CSS keyed on `type`. */
@@ -149,19 +150,6 @@ function isExternalSearch(node: ReasoningTraceNode): boolean {
   return hasStepType(node,
     [ReasoningStepType.SEARCH_WEB, ReasoningStepType.CODE_SEARCH, ReasoningStepType.READ_URL_CONTENT],
     ['web:', 'search:', 'code search:']);
-}
-
-/** File edits, views, and grep/find searches. These are drawn in the files lane instead. */
-export function isFileEventNode(node: ReasoningTraceNode): boolean {
-  const text = (node.text || '').toLowerCase();
-  return hasStepType(node, [
-    ReasoningStepType.REPLACE_FILE_CONTENT, ReasoningStepType.WRITE_TO_FILE,
-    ReasoningStepType.MULTI_REPLACE_FILE_CONTENT, ReasoningStepType.NOTEBOOK_EDIT,
-    ReasoningStepType.CODE_ACTION,
-    ReasoningStepType.VIEW_FILE, ReasoningStepType.VIEW_CONTENT_CHUNK, ReasoningStepType.VIEW_FILE_OUTLINE,
-    ReasoningStepType.GREP_SEARCH, ReasoningStepType.FIND_BY_NAME, ReasoningStepType.FIND,
-  ], ['edit:', 'write:', 'chart:', 'view:', 'grep:', 'find:']) ||
-    ['replace file content', 'write to file', 'notebook edit'].some(s => text.includes(s));
 }
 
 function markLook(node: ReasoningTraceNode, stepColor: string): MarkLook {

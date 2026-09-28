@@ -58,9 +58,9 @@ import {
   getSpeakerBorderForViewer,
   getHighlightedTextForViewer,
 } from "./viewer-helpers";
-import { calculateDropIndex, getRowDropIndicatorTop } from "./drag-drop-helper";
-import { FILE_ROW_HEIGHT } from "./file-gantt";
-import { CHANNELS, LANE_HEIGHT, TRACK_HEIGHT, channelCenter } from "./channels";
+import { measureDrop } from "./drag-drop-helper";
+import { FILE_ROW_HEIGHT, FileRow } from "./file-lane";
+import { CHANNELS, FILES_LANE, TRACK_HEIGHT, channelCenter } from "./channels";
 
 interface LegendEntry {
   label: string;
@@ -143,9 +143,12 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
    * in the layer's color, stacked when several layers match.
    * Avoid filter: drop-shadow here; it's far slower to paint across hundreds of marks.
    */
+  /** Colors of the enabled search layers that match each mark id. */
+  searchColors = computed(() => this.layersService.getLayerColorMap());
+
   markGlow = computed(() => {
     const glow = new Map<string, string>();
-    for (const [id, colors] of this.layersService.getLayerColorMap()) {
+    for (const [id, colors] of this.searchColors()) {
       glow.set(id, colors.map(c => `0 0 12px 6px ${c}`).join(', '));
     }
     return glow;
@@ -292,9 +295,8 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   readonly trackHeight = TRACK_HEIGHT;
   readonly channelCenter = channelCenter;
 
-  /** Exposed for template use in file-gantt rendering. */
+  readonly filesLane = FILES_LANE;
   readonly fileRowHeight = FILE_ROW_HEIGHT;
-  readonly fileLaneHeight = LANE_HEIGHT;
 
   constructor(
     private http: HttpClient,
@@ -438,6 +440,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   // Drag and drop track reordering
   draggedTrackIndex = signal<number | null>(null);
   dropIndex = signal<number | null>(null);
+  dropIndicatorTop = signal(0);
   private lastMouseDownTarget: EventTarget | null = null;
 
   isInteractiveElement(target: EventTarget | null): boolean {
@@ -479,8 +482,9 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     if (event.dataTransfer) {
       event.dataTransfer.dropEffect = 'move';
     }
-    const dropIdx = calculateDropIndex(event, this.selectedTraceIds().size);
-    this.dropIndex.set(dropIdx);
+    const target = measureDrop(event);
+    this.dropIndex.set(target?.index ?? null);
+    if (target) this.dropIndicatorTop.set(target.indicatorTop);
   }
 
   onTrackDrop(event: DragEvent) {
@@ -523,10 +527,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     this.selectedTraceIds.set(new Set(currentIds));
     this.processTraces();
     this.updateUrlParams();
-  }
-
-  getRowDropIndicatorTop(): number {
-    return getRowDropIndicatorTop(this.dropIndex());
   }
 
   /** Handles changes in the selected traces. */
@@ -1057,26 +1057,23 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   }
 
   /** Returns true if any view or edit node in a row is currently hovered or selected. */
-  isRowHoveredOrSelected(row: any): boolean {
+  isRowHoveredOrSelected(row: FileRow): boolean {
     const hId = this.hoveredNodeId();
-    const sNode = this.selectedNode();
-    if (!hId && !sNode) return false;
-    if (!row) return false;
+    const sId = this.selectedNode()?.id;
+    return (!!hId && row.nodeIds.has(hId)) || (!!sId && row.nodeIds.has(sId));
+  }
 
-    if (!row.nodeIdsSet) {
-      const set = new Set<string>();
-      for (const v of row.views || []) {
-        if (v.node?.id) set.add(v.node.id);
-      }
-      for (const e of row.edits || []) {
-        if (e.node?.id) set.add(e.node.id);
-      }
-      row.nodeIdsSet = set;
-    }
+  /** First matching search-layer color for a mark, if any. */
+  searchColor(id: string): string | undefined {
+    return this.searchColors().get(id)?.[0];
+  }
 
-    if (hId && row.nodeIdsSet.has(hId)) return true;
-    if (sNode && row.nodeIdsSet.has(sNode.id)) return true;
-    return false;
+  /** True while searching if none of the row's markers match. */
+  isFileRowDimmed(row: FileRow): boolean {
+    if (!this.layersService.anyLayerEnabled()) return false;
+    const colors = this.searchColors();
+    for (const id of row.nodeIds) if (colors.has(id)) return false;
+    return true;
   }
 
   openImportModal() {

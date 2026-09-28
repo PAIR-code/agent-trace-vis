@@ -281,7 +281,7 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       transition: filter 0.3s ease, opacity 0.3s ease;
     }
 
-    .track-base-layer.layer-dimmed {
+    .layer-dimmed {
       opacity: .3;
       filter: grayscale(1);
     }

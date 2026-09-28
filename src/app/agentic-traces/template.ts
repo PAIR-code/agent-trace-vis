@@ -155,7 +155,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
             <div class="row-lanes" [style.width.px]="contentWidth()" [style.padding-top.px]="60 + 18">
               <div class="drop-indicator-row"
                    *ngIf="draggedTrackIndex() !== null && dropIndex() !== null"
-                   [style.top.px]="getRowDropIndicatorTop()">
+                   [style.top.px]="dropIndicatorTop()">
               </div>
               <div *ngFor="let t of traceLayouts(); let i = index"
                    class="trace-background-row"
