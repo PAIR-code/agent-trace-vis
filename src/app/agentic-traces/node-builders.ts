@@ -35,10 +35,9 @@ import {
   UserInputNode, SystemNode, VisNode
 } from './layout-types';
 import { truncate, getStepTokens } from './layout-utils';
+import { channelCenter } from './channels';
 
 export interface NodeBuildContext {
-  cols: { user: { center: number }; agent: { center: number }; tools: { center: number } };
-  rows?: { user: { center: number }; agent: { center: number }; tools: { center: number } };
   yAxisMode: 'time' | 'tokens';
   traceScale: number;
   startTime: number;
@@ -72,8 +71,7 @@ export function buildThinkingNode(
   nodeGap: number,
   an: ReasoningTraceNode
 ): NodeBuildResult {
-  const { traceScale, startTime, stepAgentColor, cols, rows, numNodes, stepDuration, currentTs, completedTs, stepNodeHeight, yAxisMode } = ctx;
-  const channelRows = rows || cols;
+  const { traceScale, startTime, stepAgentColor, numNodes, stepDuration, currentTs, completedTs, stepNodeHeight, yAxisMode } = ctx;
 
   const width = stepNodeHeight;
   const height = 40;
@@ -92,7 +90,7 @@ export function buildThinkingNode(
   const timeBasedX = !isNaN(currentTs) ? BASE_OFFSET + (currentTs - startTime) * traceScale : x;
   const timeBasedEndX = !isNaN(completedTs) ? BASE_OFFSET + (completedTs - startTime) * traceScale : x + width;
 
-  const y = channelRows.agent.center;
+  const y = channelCenter('agent');
 
   const node: ThinkingStepNode = {
     id: nid,
@@ -129,8 +127,7 @@ export function buildResponseNode(
   nodeGap: number,
   an: ReasoningTraceNode
 ): NodeBuildResult {
-  const { traceScale, startTime, stepAgentColor, cols, rows, numNodes, stepDuration, currentTs, yAxisMode, maxTokens } = ctx;
-  const channelRows = rows || cols;
+  const { traceScale, startTime, stepAgentColor, numNodes, stepDuration, currentTs, yAxisMode, maxTokens } = ctx;
   const width = 7;
 
   const MAX_NODE_HEIGHT = 22;
@@ -163,8 +160,7 @@ export function buildResponseNode(
   }
 
   // Agent text goes DOWN from the center line of the row
-  const cy = channelRows[column].center;
-  const y = cy + 1;
+  const y = channelCenter(column) + 1;
 
   const node: ResponseNode = {
     id: nid,
@@ -198,8 +194,7 @@ export function buildDefaultNode(
   nodeGap: number,
   an: ReasoningTraceNode
 ): NodeBuildResult {
-  const { traceScale, startTime, stepAgentColor, cols, rows, nodeW, numNodes, stepDuration, currentTs, stepNodeHeight, yAxisMode, maxTokens } = ctx;
-  const channelRows = rows || cols;
+  const { traceScale, startTime, stepAgentColor, nodeW, numNodes, stepDuration, currentTs, stepNodeHeight, yAxisMode, maxTokens } = ctx;
   const segmentWidth = (type === TraceNodeType.SYSTEM || type === TraceNodeType.ERROR)
     ? nodeW
     : stepNodeHeight;
@@ -237,11 +232,10 @@ export function buildDefaultNode(
     x = currentY;
   }
 
-  let y = channelRows[column].center - height / 2;
+  let y = channelCenter(column) - height / 2;
   if (type === TraceNodeType.USER_INPUT) {
     // User text goes UP from the center line of the row
-    const cy = channelRows[column].center;
-    y = cy - height - 1;
+    y = channelCenter(column) - height - 1;
   }
 
   if (column === 'tools') {

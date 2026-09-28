@@ -295,7 +295,7 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       top: 0;
       left: 0;
       width: 100%;
-      height: 140px;
+      height: 100%;
       pointer-events: none;
       z-index: 5;
     }
@@ -309,7 +309,7 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       top: 0;
       left: 0;
       width: 100%;
-      height: 140px;
+      height: 100%;
       pointer-events: none;
       z-index: 10;
     }
@@ -323,7 +323,7 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       top: 0;
       left: 0;
       width: 100%;
-      height: 140px;
+      height: 100%;
       pointer-events: none;
       z-index: 15;
     }
@@ -345,17 +345,6 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       transition: top 0.08s ease-out;
     }
 
-    .lane-user {
-      background: #f4f7f9;
-    }
-
-    .lane-agent {
-      background: #ebf0f4;
-    }
-
-    .lane-tools {
-      background: #dde3ea;
-    }
 
 
 
@@ -1000,7 +989,6 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       display: flex;
       flex-direction: column;
       height: auto;
-      min-height: 140px;
       margin-bottom: 28px;
       flex-shrink: 0;
       pointer-events: auto;
@@ -1014,7 +1002,6 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       position: relative;
       display: flex;
       flex-direction: column;
-      height: 140px;
       width: 100%;
       flex-shrink: 0;
     }
@@ -1047,8 +1034,8 @@ export const AGENTIC_TRACES_STYLES: string[] = [
     }
 
     .row-lane {
-      flex: 1;
       position: relative;
+      flex-shrink: 0;
     }
 
 

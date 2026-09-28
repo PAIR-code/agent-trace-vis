@@ -173,15 +173,20 @@ export const AGENTIC_TRACES_TEMPLATE = `
                   <span class="row-trace-title-text" [title]="t.title">{{ t.title }}</span>
                 </div>
 
-                <div class="row-main-track" [style.width.px]="contentWidth()">
+                <div class="row-main-track" [style.width.px]="contentWidth()" [style.height.px]="trackHeight">
+                  <!-- Channel labels (first trace only) -->
+                  <ng-container *ngIf="i === 0">
+                    <span class="row-channel-label" *ngFor="let ch of channels" [style.top.px]="channelCenter(ch.id)">{{ ch.label }}</span>
+                  </ng-container>
+
                   <!-- Base track layer: lanes, lines, and base nodes (dimmed & grayscaled when search active) -->
                   <div class="track-base-layer" [class.layer-dimmed]="layersService.anyLayerEnabled()">
-                    <div class="row-lane lane-user" [style.width.px]="contentWidth()"></div>
-                    <div class="row-lane lane-agent" [style.width.px]="contentWidth()"></div>
-                    <div class="row-lane lane-tools" [style.width.px]="contentWidth()"></div>
+                    <div class="row-lane" *ngFor="let ch of channels"
+                         [style.height.px]="ch.height"
+                         [style.background]="ch.background"></div>
 
                     <!-- Track SVG layer -->
-                    <svg class="track-lines-layer" [attr.width]="contentWidth()" [attr.height]="140"
+                    <svg class="track-lines-layer" [attr.width]="contentWidth()" [attr.height]="trackHeight"
                          draggable="false"
                          (dragstart)="$event.stopPropagation(); $event.preventDefault()">
                       <!-- Agent Backbone Lines -->
@@ -239,13 +244,6 @@ export const AGENTIC_TRACES_TEMPLATE = `
 ` + FILE_GANTT_TEMPLATE + `
               </div>
             </div>
-
-            <!-- Channel labels on first trace -->
-            <ng-container *ngIf="selectedTraces().length > 0">
-              <span class="row-channel-label" [style.top.px]="60 + 18 + 23.33">user / agent conversation</span>
-              <span class="row-channel-label" [style.top.px]="60 + 18 + 46.66 + 23.33">agent internal processes</span>
-              <span class="row-channel-label" [style.top.px]="60 + 18 + 93.33 + 23.33">tools</span>
-            </ng-container>
           </div>
           </div>
         </div>

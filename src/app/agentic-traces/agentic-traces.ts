@@ -74,6 +74,7 @@ import {
 } from "./viewer-helpers";
 import { calculateDropIndex, getRowDropIndicatorTop } from "./drag-drop-helper";
 import { buildFileGanttData, FILE_ROW_HEIGHT } from "./file-gantt";
+import { CHANNELS, LANE_HEIGHT, TRACK_HEIGHT, channelCenter } from "./channels";
 
 interface LegendEntry {
   label: string;
@@ -301,9 +302,14 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     return messages;
   });
 
+  /** Channel geometry, exposed for the template. */
+  readonly channels = CHANNELS;
+  readonly trackHeight = TRACK_HEIGHT;
+  readonly channelCenter = channelCenter;
+
   /** Exposed for template use in file-gantt rendering. */
   readonly fileRowHeight = FILE_ROW_HEIGHT;
-  readonly fileLaneHeight = 140 / 3;
+  readonly fileLaneHeight = LANE_HEIGHT;
 
   constructor(
     private http: HttpClient,

@@ -26,6 +26,7 @@ import { getStepTokens } from './layout-utils';
 import { NodeBuildContext, buildThinkingNode, buildResponseNode, buildDefaultNode, buildRateLimitNode, buildThinkingAreaNodes } from './node-builders';
 import { buildBackboneLines } from './backbone-builder';
 import { computeTimeAxis } from './time-axis';
+import { channelCenter, TRACK_HEIGHT } from './channels';
 import { compressGaps } from './gap-compressor';
 
 export * from './layout-types';
@@ -88,7 +89,6 @@ function layoutSingleTrace(
   selectedTokenTypes?: Set<string>
 ) {
   const { steps, agentName, model, agentColor, startTime, maxTokens } = meta;
-  const cols = { user: { center: 23.33 }, agent: { center: 70 }, tools: { center: 116.66 } };
   const traceNodes: VisNode[] = [];
   let currentY = BASE_OFFSET;
   let cumulativeTokens = 0;
@@ -124,8 +124,6 @@ function layoutSingleTrace(
     const stepNodeHeight = stepDuration > 0 ? Math.max(12, (stepDuration * scale) / numNodes) : 12;
 
     const ctx: NodeBuildContext = {
-      cols,
-      rows: cols,
       yAxisMode,
       traceScale: scale,
       startTime,
@@ -182,7 +180,7 @@ function layoutSingleTrace(
     traceMaxX,
   });
 
-  const cx = cols.agent.center;
+  const cx = channelCenter('agent');
   const sortedNodes = [...traceNodes].filter(n => !n.hidden).sort((a, b) => a.x - b.x);
   const thinkingAreaNodes = buildThinkingAreaNodes(trace.id, sortedNodes, cx, yAxisMode, selectedTokenTypes);
   const backboneLines = buildBackboneLines(trace.id, cx, waitingRects, compressedMaxX, agentColor, sortedNodes);
@@ -282,7 +280,6 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
     item.trace.thinkingAreaNodes = result.thinkingAreaNodes;
     item.trace.backboneLines = result.backboneLines;
     item.trace.maxTraceX = result.traceMaxX + 20;
-    item.trace.maxTraceY = 140;
 
     allNodes.push(...result.thinkingAreaNodes, ...result.traceNodes);
     backboneLines.push(...result.backboneLines);
@@ -318,8 +315,8 @@ export function calculateTraceLayout(params: LayoutParams): LayoutOutput {
     ? Math.max(Math.max(...visibleNodes.map(n => n.x + n.width)) + 140, avail)
     : avail;
   const maxContentHeight = visibleNodes.length > 0
-    ? Math.max(140, Math.max(...visibleNodes.map(n => n.y + n.height)))
-    : 140;
+    ? Math.max(TRACK_HEIGHT, Math.max(...visibleNodes.map(n => n.y + n.height)))
+    : TRACK_HEIGHT;
   traceItems.forEach(item => {
     const tn = visibleNodes.filter(n => n.traceId === item.id);
     if (tn.length > 0) item.trace.maxTraceX = Math.max(...tn.map(n => n.x + n.width)) + 20;
