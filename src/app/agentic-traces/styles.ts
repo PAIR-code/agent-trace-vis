@@ -381,7 +381,7 @@ export const AGENTIC_TRACES_STYLES: string[] = [
     .vis-node.search.is-failed svg { color: ${COLORS.ERROR}; }
 
     /*
-     * Search: matches keep their color and get a ring (box-shadow set inline);
+     * Search: matches keep their color and glow (box-shadow set inline);
      * the rest fade to gray. Graying swaps colors rather than using a per-mark
      * grayscale filter, which is costly to repaint across hundreds of marks.
      */

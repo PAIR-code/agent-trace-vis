@@ -139,15 +139,14 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   marks = computed(() => this.traceLayouts().flatMap(t => t.marks));
 
   /**
-   * Search highlight for each mark matched by an enabled search layer: a solid
-   * ring in the layer's color (a spread-only box-shadow, so it doesn't change
-   * the mark's size). Marks matching several layers get nested rings.
+   * Search glow for each mark matched by an enabled search layer: a box-shadow
+   * in the layer's color, stacked when several layers match.
    * Avoid filter: drop-shadow here; it's far slower to paint across hundreds of marks.
    */
   markGlow = computed(() => {
     const glow = new Map<string, string>();
     for (const [id, colors] of this.layersService.getLayerColorMap()) {
-      glow.set(id, colors.map((c, i) => `0 0 0 ${2 * (i + 1)}px ${c}`).join(', '));
+      glow.set(id, colors.map(c => `0 0 12px 6px ${c}`).join(', '));
     }
     return glow;
   });
