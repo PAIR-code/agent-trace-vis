@@ -139,13 +139,15 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   marks = computed(() => this.traceLayouts().flatMap(t => t.marks));
 
   /**
-   * Search glow (a CSS filter) for each mark matched by an enabled search
-   * layer: one stacked drop-shadow per matching layer, in the layer's color.
+   * Search glow (a CSS box-shadow) for each mark matched by an enabled search
+   * layer: one stacked shadow per matching layer, in the layer's color.
+   * (box-shadow rather than filter: drop-shadow, which is far slower to paint
+   * when hundreds of marks match.)
    */
   markGlow = computed(() => {
     const glow = new Map<string, string>();
     for (const [id, colors] of this.layersService.getLayerColorMap()) {
-      glow.set(id, colors.map(c => `drop-shadow(0 0 3px ${c}) drop-shadow(0 0 6px ${c})`).join(' '));
+      glow.set(id, colors.map(c => `0 0 12px 6px ${c}`).join(', '));
     }
     return glow;
   });

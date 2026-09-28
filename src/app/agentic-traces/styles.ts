@@ -348,7 +348,7 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       opacity: 1;
       filter: brightness(0.95);
     }
-    .vis-node.selected { box-shadow: 0 0 0 3px #3b82f6; }
+    .vis-node.selected { outline: 3px solid #3b82f6; }
 
     /* Per type. --mark-fill / --mark-border carry the step's agent color (set inline). */
     .vis-node.user_input { background: ${COLORS.USER_BG}; border: 1.5px solid ${COLORS.USER_BORDER}; border-radius: 2px; }
@@ -381,7 +381,7 @@ export const AGENTIC_TRACES_STYLES: string[] = [
     .vis-node.search.is-failed svg { color: ${COLORS.ERROR}; }
 
     /*
-     * Search: matches keep their color and glow (drop-shadow filter set inline);
+     * Search: matches keep their color and glow (box-shadow set inline);
      * the rest fade to gray. Graying swaps colors rather than using a per-mark
      * grayscale filter, which is costly to repaint across hundreds of marks.
      */
