@@ -128,7 +128,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   stretch = signal<boolean>(false);
   timeTicks = signal<{ label: string; x: number }[]>([]);
   hideGaps = signal<boolean>(false);
-  timeUnitLabel = signal<string>("");
   isLegendCollapsed = signal<boolean>(false);
   selectedTokenTypes = signal<Set<string>>(new Set(['input_tokens', 'output_tokens']));
   tokenMetricOptions = signal<Array<{ id: string; label: string }>>([
@@ -996,7 +995,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     this.contentWidth.set(layout.contentWidth);
     this.contentHeight.set(layout.contentHeight);
     this.timeTicks.set(layout.timeTicks);
-    this.timeUnitLabel.set(layout.timeUnitLabel);
 
     // Compute file gantt data for each trace.
     const cw = layout.contentWidth;

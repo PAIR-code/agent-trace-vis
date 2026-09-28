@@ -210,7 +210,6 @@ export interface LayoutOutput {
   contentWidth: number;
   contentHeight: number;
   timeTicks: Array<{ label: string, x: number }>;
-  timeUnitLabel: string;
 }
 
 export interface LayoutParams {

@@ -74,3 +74,13 @@ export function getStepTokens(usage: any, selectedTypes?: Set<string>): number {
   return sum;
 }
 
+/**
+ * Tokens a step occupies on the tokens-mode axis: its selected token usage, or
+ * (if that is zero/missing) a word count of its text as a stand-in.
+ */
+export function stepAxisTokens(step: any, selectedTypes?: Set<string>): number {
+  const tokens = getStepTokens(step.token_usage, selectedTypes);
+  if (tokens > 0) return tokens;
+  const text = step.nodes?.map((n: any) => n.text).join(' ') || step.content || step.reasoning_content || '';
+  return text.split(/\s+/).filter((w: string) => w.length > 0).length;
+}

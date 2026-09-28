@@ -39,8 +39,8 @@ import { channelCenter } from './channels';
 
 export interface NodeBuildContext {
   yAxisMode: 'time' | 'tokens';
-  traceScale: number;
-  startTime: number;
+  /** Maps a timestamp (time mode) or cumulative token count (tokens mode) to x. */
+  toX: (t: number) => number;
   stepAgentColor: string;
   traceId: string;
   nodeW: number;
@@ -62,6 +62,20 @@ export interface NodeBuildResult {
   column: string;
 }
 
+/**
+ * X position of a node: its own timestamp (time mode), or an even share of its
+ * step's token span (tokens mode). Falls back to a running cursor if unknown.
+ */
+function nodeX(ctx: NodeBuildContext, an: ReasoningTraceNode, nodeIndex: number, cursorX: number): number {
+  if (ctx.yAxisMode === 'time') {
+    const nodeTs = an.timestamp ? new Date(an.timestamp).getTime() : ctx.currentTs;
+    if (!isNaN(nodeTs)) return ctx.toX(nodeTs);
+  } else if (!isNaN(ctx.currentTs)) {
+    return ctx.toX(ctx.currentTs + (nodeIndex / Math.max(ctx.numNodes, 1)) * ctx.stepDuration);
+  }
+  return cursorX;
+}
+
 export function buildThinkingNode(
   ctx: NodeBuildContext,
   currentY: number,
@@ -71,24 +85,15 @@ export function buildThinkingNode(
   nodeGap: number,
   an: ReasoningTraceNode
 ): NodeBuildResult {
-  const { traceScale, startTime, stepAgentColor, numNodes, stepDuration, currentTs, completedTs, stepNodeHeight, yAxisMode } = ctx;
+  const { stepAgentColor, currentTs, completedTs, stepNodeHeight, toX } = ctx;
 
   const width = stepNodeHeight;
   const height = 40;
-
-  const nodeTs = an.timestamp ? new Date(an.timestamp).getTime() : currentTs;
-  let x: number;
-  if (yAxisMode === 'time' && !isNaN(nodeTs)) {
-    x = BASE_OFFSET + (nodeTs - startTime) * traceScale;
-  } else if (yAxisMode === 'tokens' && !isNaN(currentTs)) {
-    x = BASE_OFFSET + (currentTs + (nodeIndex / Math.max(numNodes, 1)) * stepDuration) * traceScale;
-  } else {
-    x = currentY;
-  }
+  const x = nodeX(ctx, an, nodeIndex, currentY);
 
   // Compute step-level x positions for the thinking area block.
-  const timeBasedX = !isNaN(currentTs) ? BASE_OFFSET + (currentTs - startTime) * traceScale : x;
-  const timeBasedEndX = !isNaN(completedTs) ? BASE_OFFSET + (completedTs - startTime) * traceScale : x + width;
+  const timeBasedX = !isNaN(currentTs) ? toX(currentTs) : x;
+  const timeBasedEndX = !isNaN(completedTs) ? toX(completedTs) : x + width;
 
   const y = channelCenter('agent');
 
@@ -127,7 +132,7 @@ export function buildResponseNode(
   nodeGap: number,
   an: ReasoningTraceNode
 ): NodeBuildResult {
-  const { traceScale, startTime, stepAgentColor, numNodes, stepDuration, currentTs, yAxisMode, maxTokens } = ctx;
+  const { stepAgentColor, yAxisMode, maxTokens } = ctx;
   const width = 7;
 
   const MAX_NODE_HEIGHT = 22;
@@ -149,15 +154,7 @@ export function buildResponseNode(
     height = Math.round(Math.max(MIN_NODE_HEIGHT, Math.min(MAX_NODE_HEIGHT, height)));
   }
 
-  const nodeTs = an.timestamp ? new Date(an.timestamp).getTime() : currentTs;
-  let x: number;
-  if (yAxisMode === 'time' && !isNaN(nodeTs)) {
-    x = BASE_OFFSET + (nodeTs - startTime) * traceScale;
-  } else if (yAxisMode === 'tokens' && !isNaN(currentTs)) {
-    x = BASE_OFFSET + (currentTs + (nodeIndex / Math.max(numNodes, 1)) * stepDuration) * traceScale;
-  } else {
-    x = currentY;
-  }
+  const x = nodeX(ctx, an, nodeIndex, currentY);
 
   // Agent text goes DOWN from the center line of the row
   const y = channelCenter(column) + 1;
@@ -194,7 +191,7 @@ export function buildDefaultNode(
   nodeGap: number,
   an: ReasoningTraceNode
 ): NodeBuildResult {
-  const { traceScale, startTime, stepAgentColor, nodeW, numNodes, stepDuration, currentTs, stepNodeHeight, yAxisMode, maxTokens } = ctx;
+  const { stepAgentColor, nodeW, stepNodeHeight, yAxisMode, maxTokens } = ctx;
   const segmentWidth = (type === TraceNodeType.SYSTEM || type === TraceNodeType.ERROR)
     ? nodeW
     : stepNodeHeight;
@@ -222,15 +219,7 @@ export function buildDefaultNode(
     }
   }
 
-  const nodeTs = an.timestamp ? new Date(an.timestamp).getTime() : currentTs;
-  let x: number;
-  if (yAxisMode === 'time' && !isNaN(nodeTs)) {
-    x = BASE_OFFSET + (nodeTs - startTime) * traceScale;
-  } else if (yAxisMode === 'tokens' && !isNaN(currentTs)) {
-    x = BASE_OFFSET + (currentTs + (nodeIndex / Math.max(numNodes, 1)) * stepDuration) * traceScale;
-  } else {
-    x = currentY;
-  }
+  const x = nodeX(ctx, an, nodeIndex, currentY);
 
   let y = channelCenter(column) - height / 2;
   if (type === TraceNodeType.USER_INPUT) {

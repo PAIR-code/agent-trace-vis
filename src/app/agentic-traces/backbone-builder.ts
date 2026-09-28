@@ -25,6 +25,7 @@
 
 import { BackboneLine, BASE_OFFSET, VisNode, ReasoningTraceStep } from './layout-types';
 import { COLORS } from './colors';
+import { GapRect } from './x-scale';
 
 function getSegmentColor(x: number, traceNodes?: VisNode[], defaultColor: string = COLORS.AGENT): string {
   if (!traceNodes || traceNodes.length === 0) return defaultColor;
@@ -45,7 +46,7 @@ function getSegmentColor(x: number, traceNodes?: VisNode[], defaultColor: string
 export function buildBackboneLines(
   traceId: string,
   cy: number,
-  waitingRects: any[],
+  gaps: GapRect[],
   traceMaxX: number,
   lineColor: string = COLORS.AGENT,
   traceNodes?: VisNode[]
@@ -56,14 +57,12 @@ export function buildBackboneLines(
   const backboneSegments: any[] = [];
   let lastX = BASE_OFFSET;
 
-  waitingRects.forEach((rect: any) => {
-    const rx = rect.x ?? rect.y ?? 0;
-    const rw = rect.width ?? rect.height ?? 0;
-    if (rx > lastX) {
-      backboneSegments.push({ x1: lastX, x2: rx, type: 'solid' });
+  gaps.forEach(gap => {
+    if (gap.x > lastX) {
+      backboneSegments.push({ x1: lastX, x2: gap.x, type: 'solid' });
     }
-    backboneSegments.push({ x1: rx, x2: rx + rw, type: rect.isSquiggle ? 'squiggle' : 'dotted' });
-    lastX = rx + rw;
+    backboneSegments.push({ x1: gap.x, x2: gap.x + gap.width, type: gap.compressed ? 'squiggle' : 'dotted' });
+    lastX = gap.x + gap.width;
   });
 
   if (lastX < traceMaxX) {
