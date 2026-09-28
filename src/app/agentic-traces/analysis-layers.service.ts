@@ -214,17 +214,7 @@ export class AnalysisLayersService {
   getNodeShadow(nodeId: string): string {
     const matchingLayers = this.getNodeLayers(nodeId);
     if (matchingLayers.length === 0) return 'none';
-    return matchingLayers
-      .map(l => {
-        let color = l.color;
-        if (color.startsWith('rgb(')) {
-          color = color.replace('rgb(', 'rgba(').replace(')', ', 0.5)');
-        } else if (color.startsWith('#')) {
-          color = color + '80'; // 50% opacity
-        }
-        return `0 0 12px 4px ${color}`;
-      })
-      .join(', ');
+    return matchingLayers.map(l => `0 0 12px 6px ${l.color}`).join(', ');
   }
 
   /**
