@@ -381,12 +381,17 @@ export const AGENTIC_TRACES_STYLES: string[] = [
     .vis-node.search.is-failed svg { color: ${COLORS.ERROR}; }
 
     /*
-     * Search: matches keep their color and glow (box-shadow set inline);
+     * Search: matches keep their color and get a ring (box-shadow set inline);
      * the rest fade to gray. Graying swaps colors rather than using a per-mark
      * grayscale filter, which is costly to repaint across hundreds of marks.
      */
     .vis-node.matched { z-index: 15; opacity: 1; }
-    .vis-node.dimmed { opacity: 0.2; --mark-fill: #9ca3af; border-color: #9ca3af; }
+    .vis-node.matched.selected { outline-offset: 3px; }
+    .vis-node.dimmed { opacity: 0.2; border-color: #9ca3af; }
+    .vis-node.dimmed.response,
+    .vis-node.dimmed.thinking { background: #9ca3af; }
+    .vis-node.dimmed.is-failed { background: #d1d5db; }
+    .vis-node.dimmed.is-failed svg { color: #6b7280; }
 
     .sidebar-resizer {
       width: 8px;
