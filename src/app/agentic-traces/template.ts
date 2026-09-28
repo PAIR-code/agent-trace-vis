@@ -179,7 +179,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
                     <span class="row-channel-label" *ngFor="let ch of channels" [style.top.px]="channelCenter(ch.id)">{{ ch.label }}</span>
                   </ng-container>
 
-                  <!-- Base track layer: lanes, lines, and base nodes (dimmed & grayscaled when search active) -->
+                  <!-- Lanes and backbone (faded while a search is active) -->
                   <div class="track-base-layer" [class.layer-dimmed]="layersService.anyLayerEnabled()">
                     <div class="row-lane" *ngFor="let ch of channels"
                          [style.height.px]="ch.height"
@@ -200,25 +200,38 @@ export const AGENTIC_TRACES_TEMPLATE = `
                               fill="none" />
                       </g>
                     </svg>
-
-                    <!-- Track Nodes layer -->
-                    <div class="track-nodes-layer"
-                         draggable="false"
-                         (dragstart)="$event.stopPropagation(); $event.preventDefault()">
-                      <ng-container *ngFor="let node of t.marks; trackBy: trackByNodeId">
-                        <ng-container *ngTemplateOutlet="visNodeTemplate; context: { node: node, isHighlight: false }"></ng-container>
-                      </ng-container>
-                    </div>
                   </div>
 
-                  <!-- Highlight layer for matching nodes (rendered in full color & opacity on top) -->
-                  <div class="track-highlight-layer" *ngIf="layersService.anyLayerEnabled()"
+                  <!-- Marks: one div per drawn trace node (see marks.ts) -->
+                  <div class="track-nodes-layer"
                        draggable="false"
                        (dragstart)="$event.stopPropagation(); $event.preventDefault()">
                     <ng-container *ngFor="let node of t.marks; trackBy: trackByNodeId">
-                      <ng-container *ngIf="layersService.isNodeMatch(node.id)">
-                        <ng-container *ngTemplateOutlet="visNodeTemplate; context: { node: node, isHighlight: true }"></ng-container>
-                      </ng-container>
+                      <div *ngIf="!node.hidden"
+                           class="vis-node"
+                           [ngClass]="[node.type, node.look.icon ?? '', markSearchState(node.id)]"
+                           [class.is-failed]="node.look.failed"
+                           [class.selected]="selectedNode()?.id === node.id"
+                           [class.is-hovered]="hoveredNodeId() === node.id"
+                           [style.left.px]="node.x"
+                           [style.top.px]="node.y"
+                           [style.width.px]="node.width"
+                           [style.height.px]="node.height"
+                           [style.background-color]="node.color"
+                           [style.border-color]="node.look.borderColor"
+                           [style.filter]="markGlow().get(node.id)"
+                           [title]="node.label"
+                           draggable="false"
+                           (dragstart)="$event.preventDefault(); $event.stopPropagation()"
+                           (click)="selectNode(node, $event)"
+                           (mouseenter)="hoveredNodeId.set(node.id)"
+                           (mouseleave)="hoveredNodeId.set(null)">
+                        <div *ngIf="node.look.icon === 'command'" class="command-content">&gt;_</div>
+                        <svg *ngIf="node.look.icon === 'search'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <circle cx="11" cy="11" r="8"></circle>
+                          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                      </div>
                     </ng-container>
                   </div>
                 </div>
@@ -264,40 +277,6 @@ export const AGENTIC_TRACES_TEMPLATE = `
     </div>
 
 
-
-    <!-- Reusable Vis Node Template -->
-    <ng-template #visNodeTemplate let-node="node" let-isHighlight="isHighlight">
-      <div *ngIf="!node.hidden"
-           class="vis-node"
-           [style.left.px]="node.x"
-           [style.top.px]="node.y"
-           [style.width.px]="node.width"
-           [style.height.px]="node.height"
-           [style.border-color]="node.look.borderColor"
-           [style.background-color]="node.color"
-           [ngClass]="[node.type, node.look.shape ?? '', node.look.icon ?? '']"
-           [class.is-failed]="node.look.failed"
-           [class.layer-match]="isHighlight"
-           [style.box-shadow]="isHighlight ? layersService.getNodeShadow(node.id) : 'none'"
-           draggable="false"
-           (dragstart)="$event.preventDefault(); $event.stopPropagation()"
-           (click)="selectNode(node, $event)"
-           (mouseenter)="hoveredNodeId.set(node.id)"
-           (mouseleave)="hoveredNodeId.set(null)"
-           [class.selected]="selectedNode()?.id === node.id"
-           [class.is-hovered]="hoveredNodeId() === node.id"
-           [title]="node.label">
-        <ng-container [ngSwitch]="node.look.icon">
-          <div *ngSwitchCase="'command'" class="command-content">&gt;_</div>
-          <div *ngSwitchCase="'search'" class="search-content">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="11" cy="11" r="8"></circle>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-            </svg>
-          </div>
-        </ng-container>
-      </div>
-    </ng-template>
 
     <ng-template #loading>
       <div class="loading-container">

@@ -137,6 +137,24 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   traceLayouts = signal<TraceLayout[]>([]);
   /** Every mark across all rows. */
   marks = computed(() => this.traceLayouts().flatMap(t => t.marks));
+
+  /**
+   * Search glow (a CSS filter) for each mark matched by an enabled search
+   * layer: one stacked drop-shadow per matching layer, in the layer's color.
+   */
+  markGlow = computed(() => {
+    const glow = new Map<string, string>();
+    for (const [id, colors] of this.layersService.getLayerColorMap()) {
+      glow.set(id, colors.map(c => `drop-shadow(0 0 3px ${c}) drop-shadow(0 0 6px ${c})`).join(' '));
+    }
+    return glow;
+  });
+
+  /** CSS class for a mark's search state: '' (no search), 'matched', or 'dimmed'. */
+  markSearchState(id: string): string {
+    if (!this.layersService.anyLayerEnabled()) return '';
+    return this.markGlow().has(id) ? 'matched' : 'dimmed';
+  }
   contentHeight = signal<number>(1000);
   contentWidth = signal<number>(500);
   sidebarWidth = signal<number>(420);
@@ -259,32 +277,18 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   // Group nodes into thread messages: tool/system/error nest under agent turns
   threadMessages = computed(() => {
     const messages = groupThreadMessages(this.activeTraceId(), this.marks());
-    
-    // Recursively annotate layer search matches and card glowStyle outlines
+    const layerColors = this.layersService.getLayerColorMap();
+
+    // Annotate search matches (the conversation viewer reads these on each message).
     const annotateMatches = (msgs: any[]) => {
       for (const m of msgs) {
-        const matches = this.layersService.isNodeMatch(m.id);
-        m.isSearchMatch = matches;
-        
-        if (matches) {
-          const colors = this.layersService.getLayerColorMap().get(m.id);
-          if (colors && colors.length > 0) {
-            // Apply outline/glow using the matching search layer's color
-            m.glowStyle = `0 0 0 2px ${colors[0]}, 0 0 8px ${colors[0]}50`;
-          } else {
-            m.glowStyle = undefined;
-          }
-        } else {
-          m.glowStyle = undefined;
-        }
-
-        if (m.children) {
-          annotateMatches(m.children);
-        }
+        const color = layerColors.get(m.id)?.[0];
+        m.isSearchMatch = !!color;
+        m.glowStyle = color ? `0 0 0 2px ${color}, 0 0 8px ${color}50` : undefined;
+        if (m.children) annotateMatches(m.children);
       }
     };
     annotateMatches(messages);
-    
     return messages;
   });
 

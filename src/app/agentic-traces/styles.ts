@@ -90,10 +90,6 @@ export const AGENTIC_TRACES_STYLES: string[] = [
 
 
 
-    .vis-node.layer-match {
-      transform: scale(1.05);
-      z-index: 20;
-    }
     ::ng-deep app-analysis-toolbar {
       position: fixed;
       top: 64px;
@@ -314,24 +310,6 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       z-index: 10;
     }
 
-    .track-nodes-layer .vis-node {
-      pointer-events: auto;
-    }
-
-    .track-highlight-layer {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-      z-index: 15;
-    }
-
-    .track-highlight-layer .vis-node {
-      pointer-events: auto;
-    }
-
     .drop-indicator-row {
       position: absolute;
       left: 0;
@@ -352,107 +330,59 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       position: relative;
     }
 
+    /* ── Marks: one absolutely-positioned div per trace node (see marks.ts) ── */
     .vis-node {
       position: absolute;
-      cursor: pointer !important;
-      pointer-events: auto !important;
       z-index: 10;
-      border-radius: 6px;
-      transition: opacity 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
-      outline: none;
-      -webkit-user-drag: none;
-      user-select: none;
+      cursor: pointer;
+      pointer-events: auto;
       opacity: 0.65;
+      outline: none;
+      user-select: none;
+      -webkit-user-drag: none;
+      transition: opacity 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
     }
-
-    .vis-node * {
-      pointer-events: none;
-    }
-
-    .vis-node.hidden {
-      display: none;
-    }
-
+    .vis-node * { pointer-events: none; }
     .vis-node:hover, .vis-node.is-hovered, .vis-node.selected {
       z-index: 20;
-      opacity: 1 !important;
+      opacity: 1;
       filter: brightness(0.95);
     }
+    .vis-node.selected { box-shadow: 0 0 0 3px #3b82f6; }
 
-    .vis-node.selected {
-      box-shadow: 0 0 0 3px #3b82f6;
-    }
+    /* Search: matches keep their color and glow (glow filter is set inline); the rest fade. */
+    .vis-node.matched { z-index: 15; opacity: 1; }
+    .vis-node.dimmed { opacity: 0.2; filter: grayscale(1); }
 
-    /* ── Filled types ── */
-    .vis-node.user_input { background: ${COLORS.USER_BG}; border: 1.5px solid ${COLORS.USER_BORDER}; border-radius: 3px; }
-    .vis-node.response { background: ${COLORS.AGENT}; border-radius: 3px; }
-    .vis-node.error { background: ${COLORS.ERROR_LIGHT}; }
-
-
-    /* Thinking blocks hang below the agent line, behind the other marks. */
+    /* Per type. Response/thinking fill and the system border use the step's agent color (inline). */
+    .vis-node.user_input { background: ${COLORS.USER_BG}; border: 1.5px solid ${COLORS.USER_BORDER}; border-radius: 2px; }
+    .vis-node.response { border-radius: 2px; }
     .vis-node.thinking { border-radius: 0 0 3px 3px; z-index: 5; }
+    .vis-node.system { background: ${COLORS.USER_BG}; border: 1.5px solid; transform: rotate(45deg); }
+    .vis-node.tool_call,
+    .vis-node.tool_data { background: ${COLORS.USER_BG}; border: 1.5px solid ${COLORS.TOOL_LINE}; border-radius: 50%; }
+    .vis-node.error { background: ${COLORS.ERROR_LIGHT}; border-radius: 50%; }
+    .vis-node.is-failed { border-color: ${COLORS.ERROR}; background: ${COLORS.ERROR_LIGHT}; }
 
-    /* ── Hollow types ── */
-    .vis-node.tool_call { background: ${COLORS.USER_BG}; border: 1.5px solid ${COLORS.TOOL_LINE}; }
-    .vis-node.tool_data { background: ${COLORS.USER_BG}; border: 1.5px solid ${COLORS.TOOL_LINE}; }
-    .vis-node.system { background: ${COLORS.USER_BG}; border: 1.5px solid ${COLORS.AGENT}; border-radius: 0; transform: rotate(45deg); }
-    .vis-node.system:hover, .vis-node.system.is-hovered { transform: rotate(45deg); }
-
-    /* Custom shapes and content for abstracted node rendering */
-    .vis-node.rect {
-      border-radius: 2px;
-    }
-    .vis-node.circle {
-      border-radius: 50%;
-    }
-    
-    /* Command nodes: gray background with white text */
-    .vis-node.command {
-      background: #6b7280 !important;
-      border: none !important;
-      border-radius: 3px !important;
-      box-shadow: none !important;
-    }
-    
+    /* Icons */
+    .vis-node.command { background: #6b7280; border: none; border-radius: 3px; }
+    .vis-node.command.is-failed { background: ${COLORS.ERROR}; }
     .command-content {
       display: flex;
       justify-content: center;
       align-items: center;
       width: 100%;
       height: 100%;
-      font-family: monospace;
-      font-size: 7px; /* Slightly smaller for padding effect */
-      font-weight: bold;
-      color: #ffffff !important;
       box-sizing: border-box;
       padding: 1px;
+      font-family: monospace;
+      font-size: 7px;
+      font-weight: bold;
+      color: #ffffff;
     }
-    
-    /* External Search: just the icon, no circle */
-    .vis-node.search {
-      background: transparent !important;
-      border: none !important;
-      box-shadow: none !important;
-    }
-    
-    .search-content svg {
-      width: 100%;
-      height: 100%;
-      display: block;
-      color: #000000; /* Black instead of purple */
-    }
-
-    /* Failed states for tool nodes */
-    .vis-node.is-failed svg {
-      color: ${COLORS.ERROR} !important;
-    }
-    .vis-node.command.is-failed {
-      background: ${COLORS.ERROR} !important;
-    }
-    .vis-node.circle.is-failed {
-      border-color: ${COLORS.ERROR} !important;
-      background-color: ${COLORS.ERROR_LIGHT} !important;
-    }
+    .vis-node.search { background: transparent; border: none; }
+    .vis-node.search svg { display: block; width: 100%; height: 100%; color: #000000; }
+    .vis-node.search.is-failed svg { color: ${COLORS.ERROR}; }
 
     .sidebar-resizer {
       width: 8px;

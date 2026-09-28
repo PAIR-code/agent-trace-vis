@@ -197,26 +197,6 @@ export class AnalysisLayersService {
 
   // ─── Query helpers (used by template bindings) ────────────────────
 
-  /** Check if a node matches any enabled layer. */
-  isNodeMatch(nodeId: string): boolean {
-    return this.layers().some(l => l.enabled && l.results.has(nodeId));
-  }
-
-  /** Get the enabled layers that match a specific node. */
-  getNodeLayers(nodeId: string): AnalysisLayer[] {
-    return this.layers().filter(l => l.enabled && l.results.has(nodeId));
-  }
-
-  /**
-   * Get a combined CSS box-shadow string for a node's matching layers.
-   * Multiple shadows stack and naturally blend.
-   */
-  getNodeShadow(nodeId: string): string {
-    const matchingLayers = this.getNodeLayers(nodeId);
-    if (matchingLayers.length === 0) return 'none';
-    return matchingLayers.map(l => `0 0 12px 6px ${l.color}`).join(', ');
-  }
-
   /**
    * Build a map of nodeId → matching layer colors.
    * Used by the conversation panel for stacked left borders.

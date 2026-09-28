@@ -23,18 +23,17 @@
  * `buildMarks` walks one trace and places every mark in a single pass.
  */
 
-import { COLORS, getAgentColor } from './colors';
+import { getAgentColor } from './colors';
 import { ChannelId, channelCenter } from './channels';
 import { BASE_OFFSET, ReasoningStepType, ReasoningTraceNode, ReasoningTraceStep, TraceNodeType } from './layout-types';
 import { getStepTokens, stepAxisTokens, truncate, wordCount } from './layout-utils';
 import { XAxis } from './x-scale';
 
-/** Styling hints for a mark (the rest comes from CSS keyed on `type`). */
+/** Styling hints for a mark; shape and base colors come from CSS keyed on `type`. */
 export interface MarkLook {
-  /** Unset: the shape comes from the type's CSS (system = diamond, thinking = block). */
-  shape?: 'rect' | 'circle';
-  /** Glyph drawn inside the mark. */
+  /** Glyph drawn inside the mark (replaces the type's shape). */
   icon?: 'command' | 'search';
+  /** Only set where the border follows the step's agent color (system marks). */
   borderColor?: string;
   /** A tool call whose observation reported an error. */
   failed?: boolean;
@@ -169,22 +168,15 @@ function markLook(node: ReasoningTraceNode, stepColor: string): MarkLook {
   switch (node.type) {
     case TraceNodeType.USER_INPUT:
     case TraceNodeType.RESPONSE:
-      return { shape: 'rect' };
     case TraceNodeType.THINKING:
       return {};
     case TraceNodeType.SYSTEM:
       return { borderColor: stepColor };
   }
-  const look: MarkLook = isCommand(node) ? { shape: 'rect', icon: 'command' }
-    : isExternalSearch(node) ? { shape: 'circle', icon: 'search' }
-    : { shape: 'circle' };
-  if (node.type === TraceNodeType.TOOL_CALL || node.type === TraceNodeType.TOOL_DATA) {
-    look.borderColor = COLORS.TOOL_LINE;
-  }
-  if (node.type === TraceNodeType.TOOL_DATA && node.data?.observation?.error) {
-    look.failed = true;
-  }
-  return look;
+  return {
+    icon: isCommand(node) ? 'command' : isExternalSearch(node) ? 'search' : undefined,
+    failed: (node.type === TraceNodeType.TOOL_DATA && !!node.data?.observation?.error) || undefined,
+  };
 }
 
 // ---------------------------------------------------------------------------
