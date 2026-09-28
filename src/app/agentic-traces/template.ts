@@ -84,7 +84,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
     </div>
 
     <!-- Analysis Toolbar (separate row below header) -->
-    <app-analysis-toolbar [nodes]="nodes()"></app-analysis-toolbar>
+    <app-analysis-toolbar [nodes]="marks()"></app-analysis-toolbar>
 
     <div class="vis-page-container" *ngIf="!isLoading() && activeTrace(); else loading" (click)="onBackgroundClick($event)">
       <div class="main-layout">
@@ -120,7 +120,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
               <div class="legend-item" *ngFor="let entry of legendEntries()">
                 <div class="legend-color" 
                      [style.background-color]="entry.color" 
-                     [style.border]="entry.border ? entry.border : (entry.isDiamond ? ('1.5px solid ' + (selectedTraces()[0]?.agentColor || '#d97706')) : ((entry.isAI || entry.color === '#ffffff') ? '1px solid #9ca3af' : 'none'))"
+                     [style.border]="entry.border || ((entry.isAI || entry.color === '#ffffff') ? '1px solid #9ca3af' : 'none')"
                      [style.border-radius]="entry.isDiamond ? '0' : '50%'"
                      [style.transform]="entry.isDiamond ? 'rotate(45deg)' : 'none'"></div>
                 <span class="legend-label">
@@ -157,7 +157,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
                    *ngIf="draggedTrackIndex() !== null && dropIndex() !== null"
                    [style.top.px]="getRowDropIndicatorTop()">
               </div>
-              <div *ngFor="let t of selectedTraces(); let i = index"
+              <div *ngFor="let t of traceLayouts(); let i = index"
                    class="trace-background-row"
                    [class.is-dragging]="draggedTrackIndex() === i"
                    [class.is-active]="activeTraceId() === t.id"
@@ -191,7 +191,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
                          (dragstart)="$event.stopPropagation(); $event.preventDefault()">
                       <!-- Agent Backbone Lines -->
                       <g class="backbone-lines">
-                        <path *ngFor="let backbone of t.backboneLines; trackBy: trackByLineId"
+                        <path *ngFor="let backbone of t.backbone; trackBy: trackByLineId"
                               [attr.d]="backbone.path"
                               [attr.stroke]="backbone.stroke"
                               [attr.stroke-width]="backbone.strokeWidth"
@@ -199,31 +199,13 @@ export const AGENTIC_TRACES_TEMPLATE = `
                               [attr.opacity]="backbone.opacity"
                               fill="none" />
                       </g>
-                      <!-- Thinking Area SVG Nodes -->
-                      <g class="thinking-areas">
-                        <path *ngFor="let area of t.thinkingAreaNodes; trackBy: trackByNodeId"
-                              class="thinking-area-path"
-                              [attr.d]="area.path"
-                              [attr.fill]="area.fill"
-                              [attr.stroke]="area.stroke"
-                              [attr.stroke-width]="area.strokeWidth"
-                              [attr.opacity]="(isThinkingAreaHovered(area) || isThinkingAreaSelected(area)) ? 1 : (area.opacity || 0.65)"
-                              [class.is-hovered]="isThinkingAreaHovered(area)"
-                              [class.selected]="isThinkingAreaSelected(area)"
-                              draggable="false"
-                              (dragstart)="$event.preventDefault(); $event.stopPropagation()"
-                              (click)="selectNode(area, $event)"
-                              (mouseenter)="hoveredNodeId.set(area.id)"
-                              (mouseleave)="hoveredNodeId.set(null)"
-                              [title]="'Thinking process'" />
-                      </g>
                     </svg>
 
                     <!-- Track Nodes layer -->
                     <div class="track-nodes-layer"
                          draggable="false"
                          (dragstart)="$event.stopPropagation(); $event.preventDefault()">
-                      <ng-container *ngFor="let node of t.nodes; trackBy: trackByNodeId">
+                      <ng-container *ngFor="let node of t.marks; trackBy: trackByNodeId">
                         <ng-container *ngTemplateOutlet="visNodeTemplate; context: { node: node, isHighlight: false }"></ng-container>
                       </ng-container>
                     </div>
@@ -233,7 +215,7 @@ export const AGENTIC_TRACES_TEMPLATE = `
                   <div class="track-highlight-layer" *ngIf="layersService.anyLayerEnabled()"
                        draggable="false"
                        (dragstart)="$event.stopPropagation(); $event.preventDefault()">
-                    <ng-container *ngFor="let node of t.nodes; trackBy: trackByNodeId">
+                    <ng-container *ngFor="let node of t.marks; trackBy: trackByNodeId">
                       <ng-container *ngIf="layersService.isNodeMatch(node.id)">
                         <ng-container *ngTemplateOutlet="visNodeTemplate; context: { node: node, isHighlight: true }"></ng-container>
                       </ng-container>
@@ -285,17 +267,16 @@ export const AGENTIC_TRACES_TEMPLATE = `
 
     <!-- Reusable Vis Node Template -->
     <ng-template #visNodeTemplate let-node="node" let-isHighlight="isHighlight">
-      <div *ngIf="node.type !== 'thinking_area' && !node.hidden"
+      <div *ngIf="!node.hidden"
            class="vis-node"
            [style.left.px]="node.x"
            [style.top.px]="node.y"
            [style.width.px]="node.width"
            [style.height.px]="node.height"
-           [style.border-color]="getNodeBorderColor(node)"
+           [style.border-color]="node.look.borderColor"
            [style.background-color]="node.color"
-           [ngClass]="[node.type, getNodeVisualConfig(node).shape, getNodeVisualConfig(node).type]"
-           [class.is-failed]="node.isFailed"
-           [class.hidden]="node.hidden"
+           [ngClass]="[node.type, node.look.shape ?? '', node.look.icon ?? '']"
+           [class.is-failed]="node.look.failed"
            [class.layer-match]="isHighlight"
            [style.box-shadow]="isHighlight ? layersService.getNodeShadow(node.id) : 'none'"
            draggable="false"
@@ -306,11 +287,9 @@ export const AGENTIC_TRACES_TEMPLATE = `
            [class.selected]="selectedNode()?.id === node.id"
            [class.is-hovered]="hoveredNodeId() === node.id"
            [title]="node.label">
-        <ng-container [ngSwitch]="getNodeVisualConfig(node).type">
-          <div *ngSwitchCase="'command'" class="command-content">
-            {{ getNodeVisualConfig(node).content }}
-          </div>
-          <div *ngSwitchCase="'external-search'" class="external-search-content">
+        <ng-container [ngSwitch]="node.look.icon">
+          <div *ngSwitchCase="'command'" class="command-content">&gt;_</div>
+          <div *ngSwitchCase="'search'" class="search-content">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="11" cy="11" r="8"></circle>
               <line x1="21" y1="21" x2="16.65" y2="16.65"></line>

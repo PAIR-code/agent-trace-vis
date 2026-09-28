@@ -38,42 +38,28 @@ import { catchError, map } from "rxjs/operators";
 import { AnalysisLayersService } from "./analysis-layers.service";
 import { TraceLoaderService, DatasetItem, HF_PRESETS } from "./trace-loader.service";
 import {
-  TraceNodeColumn,
-  TraceNodeType,
-  ReasoningStepType,
-  ReasoningTrace,
-} from "./layout-helper";
-import {
   SPEAKER_STYLES,
   getModelColor,
   createStyle,
   COLORS,
 } from "./colors";
-import { getNodeVisualConfig } from "./node-rendering-helper";
 import { AGENTIC_TRACES_TEMPLATE } from "./template";
 import { AGENTIC_TRACES_STYLES } from "./styles";
 import { MultiSelectDropdownComponent, DropdownItem } from "../shared/multi-select-dropdown.component";
 import { AnalysisToolbarComponent } from "./analysis-toolbar.component";
 import { ConversationViewerComponent } from "../shared/conversation-viewer.component";
-import {
-  calculateTraceLayout,
-  VisNode,
-  ThinkingAreaNode,
-  BackboneLine,
-  sanitizeId,
-} from "./layout-helper";
+import { layoutTraces, TraceLayout, TraceNodeType } from "./layout-helper";
 import { groupThreadMessages } from "./thread-helper";
 import { HuggingFaceImportComponent } from "./hugging-face-import.component";
 import {
   getRoleLabel,
-  getNodeBorderColor,
   getSpeakerColorForViewer,
   getSpeakerBgColorForViewer,
   getSpeakerBorderForViewer,
   getHighlightedTextForViewer,
 } from "./viewer-helpers";
 import { calculateDropIndex, getRowDropIndicatorTop } from "./drag-drop-helper";
-import { buildFileGanttData, FILE_ROW_HEIGHT } from "./file-gantt";
+import { FILE_ROW_HEIGHT } from "./file-gantt";
 import { CHANNELS, LANE_HEIGHT, TRACK_HEIGHT, channelCenter } from "./channels";
 
 interface LegendEntry {
@@ -147,9 +133,10 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   private warmColorIndex = { value: 0 };
   private lastSelectedDataset = '';
 
-  nodes = signal<VisNode[]>([]);
-  thinkingAreaNodes = computed(() => this.nodes().filter((n): n is ThinkingAreaNode => n.type === 'thinking_area' as any));
-  backboneLines = signal<BackboneLine[]>([]);
+  /** One laid-out row per selected trace. */
+  traceLayouts = signal<TraceLayout[]>([]);
+  /** Every mark across all rows. */
+  marks = computed(() => this.traceLayouts().flatMap(t => t.marks));
   contentHeight = signal<number>(1000);
   contentWidth = signal<number>(500);
   sidebarWidth = signal<number>(420);
@@ -260,7 +247,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
 
   activeTraceStepsCount = computed(() => {
     const activeId = this.activeTraceId();
-    return this.nodes().filter((n) => n.traceId === activeId).length;
+    return this.marks().filter((n) => n.traceId === activeId).length;
   });
 
   activeTraceTitle = computed(() => {
@@ -271,7 +258,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
 
   // Group nodes into thread messages: tool/system/error nest under agent turns
   threadMessages = computed(() => {
-    const messages = groupThreadMessages(this.activeTraceId(), this.nodes());
+    const messages = groupThreadMessages(this.activeTraceId(), this.marks());
     
     // Recursively annotate layer search matches and card glowStyle outlines
     const annotateMatches = (msgs: any[]) => {
@@ -458,8 +445,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     if (!target || !(target instanceof Element)) return false;
     return !!(
       target.closest('.vis-node') ||
-      target.closest('.thinking-area-path') ||
-      target.closest('.thinking-areas') ||
       target.closest('.file-marker-clickable') ||
       target.closest('.file-label-clickable') ||
       target.closest('.file-gantt-toggle-btn') ||
@@ -567,22 +552,17 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   /** Returns the speaker label for the viewer. */
   getSpeakerLabelForViewer = (msg: any) => getRoleLabel(msg.type);
   /** Returns the text color for a message type. */
-  getSpeakerColorForViewer = (msg: any) => getSpeakerColorForViewer(msg, this.activeTraceId(), this.traces());
+  getSpeakerColorForViewer = (msg: any) => getSpeakerColorForViewer(msg, this.activeTraceId(), this.traceLayouts());
   /** Returns the background color for a message type. */
-  getSpeakerBgColorForViewer = (msg: any) => getSpeakerBgColorForViewer(msg, this.activeTraceId(), this.traces());
+  getSpeakerBgColorForViewer = (msg: any) => getSpeakerBgColorForViewer(msg, this.activeTraceId(), this.traceLayouts());
   /** Returns the border style for a message type. */
-  getSpeakerBorderForViewer = (msg: any) => getSpeakerBorderForViewer(msg, this.activeTraceId(), this.traces());
+  getSpeakerBorderForViewer = (msg: any) => getSpeakerBorderForViewer(msg, this.activeTraceId(), this.traceLayouts());
   /** Returns the highlighted text for a message. */
   getHighlightedTextForViewer = (msg: any) => getHighlightedTextForViewer(msg, this.layersService, this.highlightedChunkId());
 
-  getNodeBorderColor = (node: any) => {
-    if (node._cachedBorderColor !== undefined) return node._cachedBorderColor;
-    node._cachedBorderColor = getNodeBorderColor(node);
-    return node._cachedBorderColor;
-  };
   /** Selects a node in the visualization by its ID. */
   selectNodeById(id: string) {
-    const node = this.nodes().find((n) => n.id === id);
+    const node = this.marks().find((n) => n.id === id);
     if (node) {
       this.selectNode(node);
     }
@@ -645,13 +625,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     } else {
       this.processTraces();
     }
-  }
-
-  /** Returns the visual configuration for a node. */
-  getNodeVisualConfig(node: any) {
-    if (node.visualConfig) return node.visualConfig;
-    node.visualConfig = getNodeVisualConfig(node);
-    return node.visualConfig;
   }
 
   /** Sets the Y-axis mode (time or tokens). */
@@ -979,7 +952,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
       this.manualActiveTraceId.set(idsArray[0]);
     }
 
-    const layout = calculateTraceLayout({
+    const layout = layoutTraces({
       traces: this.traces(),
       selectedTraceIds: selectedIds,
       yAxisMode: this.yAxisMode(),
@@ -989,24 +962,11 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
       stretch: this.stretch(),
     });
 
-    this.nodes.set(layout.nodes);
-    this.layersService.reRunAllEnabledLayers(layout.nodes);
-    this.backboneLines.set(layout.backboneLines);
+    this.traceLayouts.set(layout.traces);
+    this.layersService.reRunAllEnabledLayers(this.marks());
     this.contentWidth.set(layout.contentWidth);
     this.contentHeight.set(layout.contentHeight);
     this.timeTicks.set(layout.timeTicks);
-
-    // Compute file gantt data for each trace.
-    const cw = layout.contentWidth;
-    for (const id of idsArray) {
-      const trace = this.traces().find(t => t.id === id);
-      if (trace && trace.data) {
-        // Pass trace.nodes (laid-out VisNodes) so the gantt builder can look up
-        // each event's time-axis x coordinate.
-        trace.fileGanttData = buildFileGanttData(trace.data, trace.nodes ?? [], cw);
-      }
-    }
-
     this.selectedNode.set(null);
   }
 
@@ -1070,26 +1030,9 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     }
     if (!node) return;
 
-    if (node.type === TraceNodeType.THINKING_AREA || node.type === 'thinking_area') {
-      const stepNode = node.nodeIds && node.nodeIds.length > 0
-        ? this.nodes().find(n => n.id === node.nodeIds[0])
-        : null;
-      const targetNode = stepNode || node;
-      this.selectedNode.set(targetNode);
-      if (targetNode.id) {
-        this.highlightedChunkId.set(targetNode.id);
-        setTimeout(() => {
-          if (this.highlightedChunkId() === targetNode.id) {
-            this.highlightedChunkId.set(null);
-          }
-        }, 2000);
-      }
-      return;
-    }
-
     this.selectedNode.set(node);
 
-    if (node.type === "thinking" || node.type === TraceNodeType.THINKING) {
+    if (node.type === TraceNodeType.THINKING) {
       // Highlight the specific chunk
       this.highlightedChunkId.set(node.id);
       setTimeout(() => {
@@ -1112,32 +1055,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     const sNode = this.selectedNode();
     if (!sNode || !targetNode?.id) return false;
     return sNode.id === targetNode.id;
-  }
-
-  /** Returns true if a thinking area node or any of its contained thinking steps is hovered. */
-  isThinkingAreaHovered(area: any): boolean {
-    const hId = this.hoveredNodeId();
-    if (!hId || !area) return false;
-    if (hId === area.id) return true;
-    if (area.nodeIdsSet) return area.nodeIdsSet.has(hId);
-    if (area.nodeIds && Array.isArray(area.nodeIds)) {
-      area.nodeIdsSet = new Set(area.nodeIds);
-      return area.nodeIdsSet.has(hId);
-    }
-    return false;
-  }
-
-  /** Returns true if a thinking area node or any of its contained thinking steps is selected. */
-  isThinkingAreaSelected(area: any): boolean {
-    const sNode = this.selectedNode();
-    if (!sNode || !area) return false;
-    if (sNode.id === area.id) return true;
-    if (area.nodeIdsSet) return area.nodeIdsSet.has(sNode.id);
-    if (area.nodeIds && Array.isArray(area.nodeIds)) {
-      area.nodeIdsSet = new Set(area.nodeIds);
-      return area.nodeIdsSet.has(sNode.id);
-    }
-    return false;
   }
 
   /** Returns true if any view or edit node in a row is currently hovered or selected. */

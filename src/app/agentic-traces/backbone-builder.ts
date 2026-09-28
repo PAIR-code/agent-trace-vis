@@ -23,18 +23,17 @@
  * - Squiggle segments: rate limit retry loops.
  */
 
-import { BackboneLine, BASE_OFFSET, VisNode, ReasoningTraceStep } from './layout-types';
-import { COLORS } from './colors';
+import { BackboneLine, BASE_OFFSET } from './layout-types';
+import { Mark } from './marks';
 import { GapRect } from './x-scale';
 
-function getSegmentColor(x: number, traceNodes?: VisNode[], defaultColor: string = COLORS.AGENT): string {
-  if (!traceNodes || traceNodes.length === 0) return defaultColor;
+/** Color of the step whose latest drawn mark starts at or before x. */
+function getSegmentColor(x: number, marks: Mark[], defaultColor: string): string {
   let activeColor = defaultColor;
   let maxNodeX = -1;
-  for (const n of traceNodes) {
+  for (const n of marks) {
     if (n.hidden) continue;
-    // Look up the step's primary color
-    const stepColor = ((n as any).stepRef as ReasoningTraceStep)?.color || (n.data as ReasoningTraceStep)?.color;
+    const stepColor = n.stepRef.color;
     if (stepColor && n.x <= x && n.x >= maxNodeX) {
       maxNodeX = n.x;
       activeColor = stepColor;
@@ -48,8 +47,8 @@ export function buildBackboneLines(
   cy: number,
   gaps: GapRect[],
   traceMaxX: number,
-  lineColor: string = COLORS.AGENT,
-  traceNodes?: VisNode[]
+  lineColor: string,
+  marks: Mark[]
 ): BackboneLine[] {
   const lines: BackboneLine[] = [];
 
@@ -70,7 +69,7 @@ export function buildBackboneLines(
   }
 
   backboneSegments.forEach((seg, segIndex) => {
-    const segColor = getSegmentColor(seg.x1, traceNodes, lineColor);
+    const segColor = getSegmentColor(seg.x1, marks, lineColor);
 
     if (seg.type === 'squiggle') {
       const x1 = seg.x1;

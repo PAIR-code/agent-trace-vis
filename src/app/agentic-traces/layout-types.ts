@@ -15,13 +15,11 @@
  */
 
 /**
- * @fileoverview Defines the data structures and shapes of elements drawn in the visualization.
- * 
- * This includes:
- * - Interactive Nodes (User inputs, model responses, system events, tools)
- * - Thinking Areas (The wide color bands representing model reasoning effort)
- * - Backbone Lines (The vertical/horizontal tracks showing the flow of execution)
+ * @fileoverview Parsed trace data types, and the inputs/outputs of the timeline layout.
  */
+
+import type { Mark } from './marks';
+import type { FileGanttData } from './file-gantt';
 
 export enum TraceNodeColumn {
   USER = 'user',
@@ -39,7 +37,6 @@ export enum TraceNodeType {
   SYSTEM = 'system',
   ERROR = 'error',
   RESPONSE = 'response',
-  THINKING_AREA = 'thinking_area'
 }
 
 export enum ReasoningStepType {
@@ -114,86 +111,6 @@ export interface ReasoningTraceNode {
 }
 
 
-export interface BaseVisNode {
-  id: string;
-  traceId: string;
-  type: TraceNodeType;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-export interface InteractiveNodeBase extends BaseVisNode {
-  label: string;
-  text: string;
-  data: any; // original trace step JSON
-  stepRef?: ReasoningTraceStep; // reference to parent step for step-level data
-  timestamp?: string;
-  color: string | null;
-  borderColor?: string;
-  hidden?: boolean;
-  isFailed?: boolean;
-  stepType?: ReasoningStepType;
-}
-
-export interface UserInputNode extends InteractiveNodeBase {
-  type: TraceNodeType.USER_INPUT;
-  column: 'user';
-}
-
-export interface ResponseNode extends InteractiveNodeBase {
-  type: TraceNodeType.RESPONSE;
-  column: 'user';
-}
-
-export interface ThinkingStepNode extends InteractiveNodeBase {
-  type: TraceNodeType.THINKING;
-  column: 'agent';
-  timeBasedY: number; // step start y position (for area block bounds)
-  timeBasedEndY: number; // step end y position (for area block bounds)
-}
-
-export interface ToolCallNode extends InteractiveNodeBase {
-  type: TraceNodeType.TOOL_CALL;
-  column: 'agent';
-}
-
-export interface ToolDataNode extends InteractiveNodeBase {
-  type: TraceNodeType.TOOL_DATA;
-  column: 'tools';
-}
-
-export interface SystemNode extends InteractiveNodeBase {
-  type: TraceNodeType.SYSTEM;
-  column: 'agent';
-}
-
-export interface ErrorNode extends InteractiveNodeBase {
-  type: TraceNodeType.ERROR;
-  column: 'agent';
-}
-
-export type VisNode =
-  | UserInputNode
-  | ResponseNode
-  | ThinkingStepNode
-  | ToolCallNode
-  | ToolDataNode
-  | SystemNode
-  | ErrorNode
-  | ThinkingAreaNode;
-
-export interface ThinkingAreaNode extends InteractiveNodeBase {
-  type: TraceNodeType.THINKING_AREA;
-  path: string;
-  fill: string;
-  stroke: string;
-  strokeWidth: number;
-  opacity: number;
-  nodeIds?: string[];
-}
-
 export interface BackboneLine {
   id: string;
   traceId: string;
@@ -204,9 +121,18 @@ export interface BackboneLine {
   opacity: number;
 }
 
+/** Everything drawn in one trace row. */
+export interface TraceLayout {
+  id: string;
+  title: string;
+  agentColor: string;
+  marks: Mark[];
+  backbone: BackboneLine[];
+  fileGanttData: FileGanttData;
+}
+
 export interface LayoutOutput {
-  nodes: VisNode[];
-  backboneLines: BackboneLine[];
+  traces: TraceLayout[];
   contentWidth: number;
   contentHeight: number;
   timeTicks: Array<{ label: string, x: number }>;

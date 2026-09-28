@@ -57,6 +57,10 @@ export function truncate(text: string, max: number): string {
   return text.length > max ? text.slice(0, max) + '…' : text;
 }
 
+export function wordCount(text: string | undefined): number {
+  return (text || '').split(/\s+/).filter(w => w.length > 0).length;
+}
+
 /** Computes the total tokens for a step given selected token types. */
 export function getStepTokens(usage: any, selectedTypes?: Set<string>): number {
   if (!usage) return 0;
@@ -81,6 +85,5 @@ export function getStepTokens(usage: any, selectedTypes?: Set<string>): number {
 export function stepAxisTokens(step: any, selectedTypes?: Set<string>): number {
   const tokens = getStepTokens(step.token_usage, selectedTypes);
   if (tokens > 0) return tokens;
-  const text = step.nodes?.map((n: any) => n.text).join(' ') || step.content || step.reasoning_content || '';
-  return text.split(/\s+/).filter((w: string) => w.length > 0).length;
+  return wordCount(step.nodes?.map((n: any) => n.text).join(' ') || step.content || step.reasoning_content);
 }

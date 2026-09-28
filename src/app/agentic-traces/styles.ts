@@ -383,37 +383,14 @@ export const AGENTIC_TRACES_STYLES: string[] = [
       box-shadow: 0 0 0 3px #3b82f6;
     }
 
-    /* Thinking area SVG blocks */
-    .thinking-areas path,
-    .thinking-area-path {
-      cursor: pointer !important;
-      pointer-events: auto !important;
-      -webkit-user-drag: none;
-      transition: opacity 0.2s ease, filter 0.2s ease;
-    }
-    .thinking-areas path:hover,
-    .thinking-areas path.is-hovered,
-    .thinking-areas path.selected,
-    .thinking-area-path:hover,
-    .thinking-area-path.is-hovered,
-    .thinking-area-path.selected {
-      opacity: 1 !important;
-      filter: brightness(0.95);
-    }
-
     /* ── Filled types ── */
     .vis-node.user_input { background: ${COLORS.USER_BG}; border: 1.5px solid ${COLORS.USER_BORDER}; border-radius: 3px; }
     .vis-node.response { background: ${COLORS.AGENT}; border-radius: 3px; }
-    .vis-node.thinking { background: ${COLORS.THINKING}; border-top-left-radius: 0; border-bottom-left-radius: 0; transform-origin: left center; }
     .vis-node.error { background: ${COLORS.ERROR_LIGHT}; }
 
 
-    /* Override for thinking nodes to have flat left edge */
-    .vis-node.thinking {
-      border-radius: 0 !important;
-      background: transparent !important;
-      border: none !important;
-    }
+    /* Thinking blocks hang below the agent line, behind the other marks. */
+    .vis-node.thinking { border-radius: 0 0 3px 3px; z-index: 5; }
 
     /* ── Hollow types ── */
     .vis-node.tool_call { background: ${COLORS.USER_BG}; border: 1.5px solid ${COLORS.TOOL_LINE}; }
@@ -452,13 +429,13 @@ export const AGENTIC_TRACES_STYLES: string[] = [
     }
     
     /* External Search: just the icon, no circle */
-    .vis-node.external-search {
+    .vis-node.search {
       background: transparent !important;
       border: none !important;
       box-shadow: none !important;
     }
     
-    .external-search-content svg {
+    .search-content svg {
       width: 100%;
       height: 100%;
       display: block;

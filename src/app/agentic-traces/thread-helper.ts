@@ -23,7 +23,7 @@
  *   are grouped into a single Agent Turn parent card with aggregate stats.
  */
 
-import { VisNode } from './layout-helper';
+import { Mark } from './marks';
 import { TraceNodeType, ReasoningTraceStep } from './layout-types';
 
 export interface ThreadMessage {
@@ -35,11 +35,11 @@ export interface ThreadMessage {
   data: any;
   timestamp?: string;
   color?: string | null;
-  children: VisNode[];
+  children: Mark[];
 }
 
-export function groupThreadMessages(activeTraceId: string, nodes: VisNode[]): ThreadMessage[] {
-  const filteredNodes = nodes.filter(n => n.traceId === activeTraceId && n.type !== TraceNodeType.THINKING_AREA);
+export function groupThreadMessages(activeTraceId: string, nodes: Mark[]): ThreadMessage[] {
+  const filteredNodes = nodes.filter(n => n.traceId === activeTraceId);
   
   // Sort nodes chronologically
   filteredNodes.sort((a, b) => {
@@ -52,9 +52,9 @@ export function groupThreadMessages(activeTraceId: string, nodes: VisNode[]): Th
   const groups: ThreadMessage[] = [];
 
   // Track the current agent turn
-  let currentTurnChildren: VisNode[] = [];
+  let currentTurnChildren: Mark[] = [];
   let currentTurnSteps = new Set<ReasoningTraceStep>();
-  let turnStartNode: VisNode | null = null;
+  let turnStartNode: Mark | null = null;
 
   const flushAgentTurn = () => {
     if (currentTurnChildren.length === 0 || !turnStartNode) return;
@@ -78,8 +78,8 @@ export function groupThreadMessages(activeTraceId: string, nodes: VisNode[]): Th
       }
     });
 
-    if (!turnColor && (turnStartNode as any).color) {
-      turnColor = (turnStartNode as any).color;
+    if (!turnColor && turnStartNode.color) {
+      turnColor = turnStartNode.color;
     }
 
     const firstStep = currentTurnSteps.values().next().value;
@@ -114,7 +114,6 @@ export function groupThreadMessages(activeTraceId: string, nodes: VisNode[]): Th
   };
 
   for (const node of filteredNodes) {
-    const nodeStepRef = (node as any).stepRef as ReasoningTraceStep | undefined;
 
     // User input or System message breaks the agent turn
     if (node.type === TraceNodeType.USER_INPUT || node.type === TraceNodeType.SYSTEM) {
@@ -124,11 +123,11 @@ export function groupThreadMessages(activeTraceId: string, nodes: VisNode[]): Th
         id: node.id,
         traceId: node.traceId,
         type: node.type,
-        label: (node as any).label || '',
-        text: (node as any).text || '',
+        label: node.label || '',
+        text: node.text || '',
         data: node.data,
         timestamp: node.timestamp,
-        color: (node as any).color || null,
+        color: node.color,
         children: []
       });
       continue;
@@ -138,9 +137,7 @@ export function groupThreadMessages(activeTraceId: string, nodes: VisNode[]): Th
     if (!turnStartNode) {
       turnStartNode = node;
     }
-    if (nodeStepRef) {
-      currentTurnSteps.add(nodeStepRef);
-    }
+    currentTurnSteps.add(node.stepRef);
     currentTurnChildren.push(node);
   }
 
