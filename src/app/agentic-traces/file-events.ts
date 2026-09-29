@@ -19,53 +19,18 @@
  * files. Pure parsing of trace data; `file-lane.ts` turns these into rows.
  */
 
-import { ReasoningStepType, ReasoningTrace, ReasoningTraceNode } from './layout-types';
-
-export type FileAccessKind = 'view' | 'search' | 'edit';
+import { ReasoningTrace } from './layout-types';
+import { FileAccess, PATH_KEYS, SEARCH_PATH_KEYS, asObject, fileAccess, stripQuotes } from './tools';
 
 /** One file touched by one trace node. */
 export interface FileEvent {
   nodeId: string;
   filePath: string;
-  kind: FileAccessKind;
+  kind: FileAccess;
   /** Lines written (edits only). */
   linesCount: number;
   /** A plan / spec / todo document. */
   isPlan: boolean;
-}
-
-const EDIT_STEP_TYPES = new Set<string>([
-  ReasoningStepType.WRITE_TO_FILE,
-  ReasoningStepType.REPLACE_FILE_CONTENT,
-  ReasoningStepType.MULTI_REPLACE_FILE_CONTENT,
-  ReasoningStepType.NOTEBOOK_EDIT,
-  ReasoningStepType.CODE_ACTION,
-]);
-
-const VIEW_STEP_TYPES = new Set<string>([
-  ReasoningStepType.VIEW_FILE,
-  ReasoningStepType.VIEW_CONTENT_CHUNK,
-  ReasoningStepType.VIEW_FILE_OUTLINE,
-]);
-
-const SEARCH_STEP_TYPES = new Set<string>([
-  ReasoningStepType.GREP_SEARCH,
-  ReasoningStepType.FIND_BY_NAME,
-  ReasoningStepType.FIND,
-]);
-
-/**
- * File edits, views, and grep/find searches. The timeline hides these nodes in
- * the main track because they are drawn in the files lane instead.
- */
-export function isFileEventNode(node: ReasoningTraceNode): boolean {
-  const stepType = node.stepType || '';
-  if (EDIT_STEP_TYPES.has(stepType) || VIEW_STEP_TYPES.has(stepType) || SEARCH_STEP_TYPES.has(stepType)) {
-    return true;
-  }
-  const text = (node.text || '').toLowerCase();
-  return ['edit:', 'write:', 'chart:', 'view:', 'grep:', 'find:'].some(p => text.startsWith(p)) ||
-    ['replace file content', 'write to file', 'notebook edit'].some(s => text.includes(s));
 }
 
 /** All file events in a trace, in trace order. */
@@ -73,14 +38,7 @@ export function extractFileEvents(trace: ReasoningTrace): FileEvent[] {
   const events: FileEvent[] = [];
   for (const step of trace.steps) {
     for (const node of step.nodes) {
-      const stepType = node.stepType || '';
-      const text = (node.text || '').toLowerCase();
-      const kind: FileAccessKind | null =
-        EDIT_STEP_TYPES.has(stepType) ? 'edit'
-        : SEARCH_STEP_TYPES.has(stepType) || (VIEW_STEP_TYPES.has(stepType) &&
-            (text.includes('grep') || text.startsWith('find:'))) ? 'search'
-        : VIEW_STEP_TYPES.has(stepType) ? 'view'
-        : null;
+      const kind = fileAccess(node.stepType);
       if (!kind || !node.data) continue;
 
       const input = node.data.toolCall?.input ?? node.data.input;
@@ -107,28 +65,6 @@ export function normalizeFilePath(rawPath: string): string {
 // ---------------------------------------------------------------------------
 // Parsing helpers
 // ---------------------------------------------------------------------------
-
-function stripQuotes(s: string): string {
-  return s.trim().replace(/^['"`\s]+|['"`\s]+$/g, '');
-}
-
-function asObject(input: unknown): Record<string, any> {
-  if (typeof input === 'string') {
-    try {
-      return JSON.parse(input);
-    } catch {
-      return {};
-    }
-  }
-  return typeof input === 'object' && input !== null ? input as Record<string, any> : {};
-}
-
-const PATH_KEYS = [
-  'TargetFile', 'AbsolutePath', 'NotebookPath', 'file_path', 'filePath',
-  'filepath', 'path', 'file', 'filename', 'file_name', 'target_file',
-  'absolute_path', 'notebook_path', 'uri', 'document', 'src', 'dest',
-];
-const SEARCH_PATH_KEYS = ['SearchPath', 'search_path', 'searchPath'];
 
 /** File (or chart artifact) paths referenced by a tool call's input and observation. */
 function extractFilePaths(input: unknown, toolName: string, observation: unknown): string[] {

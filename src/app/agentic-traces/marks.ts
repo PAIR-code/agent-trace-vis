@@ -27,7 +27,7 @@ import { getAgentColor } from './colors';
 import { ChannelId, channelCenter } from './channels';
 import { BASE_OFFSET, ReasoningStepType, ReasoningTraceNode, ReasoningTraceStep, TraceNodeType } from './layout-types';
 import { getStepTokens, stepAxisTokens, truncate, wordCount } from './layout-utils';
-import { isFileEventNode } from './file-events';
+import { fileAccess, toolIcon } from './tools';
 import { XAxis } from './x-scale';
 
 /** Styling hints for a mark; shape and base colors come from CSS keyed on `type`. */
@@ -131,27 +131,6 @@ function isRateLimitNode(node: ReasoningTraceNode): boolean {
          !!node.text?.includes('retryable error from model provider');
 }
 
-function hasStepType(node: ReasoningTraceNode, types: ReasoningStepType[], textPrefixes: string[]): boolean {
-  const text = (node.text || '').toLowerCase();
-  return types.includes(node.stepType as ReasoningStepType) || textPrefixes.some(p => text.startsWith(p));
-}
-
-function isListDir(node: ReasoningTraceNode): boolean {
-  return hasStepType(node, [ReasoningStepType.LIST_DIRECTORY], ['list:']);
-}
-
-function isCommand(node: ReasoningTraceNode): boolean {
-  return isListDir(node) || hasStepType(node,
-    [ReasoningStepType.RUN_COMMAND, ReasoningStepType.COMMAND_STATUS, ReasoningStepType.SEND_COMMAND_INPUT],
-    ['run:']);
-}
-
-function isExternalSearch(node: ReasoningTraceNode): boolean {
-  return hasStepType(node,
-    [ReasoningStepType.SEARCH_WEB, ReasoningStepType.CODE_SEARCH, ReasoningStepType.READ_URL_CONTENT],
-    ['web:', 'search:', 'code search:']);
-}
-
 function markLook(node: ReasoningTraceNode, stepColor: string): MarkLook {
   switch (node.type) {
     case TraceNodeType.USER_INPUT:
@@ -162,7 +141,7 @@ function markLook(node: ReasoningTraceNode, stepColor: string): MarkLook {
       return { borderColor: stepColor };
   }
   return {
-    icon: isCommand(node) ? 'command' : isExternalSearch(node) ? 'search' : undefined,
+    icon: toolIcon(node.stepType),
     failed: (node.type === TraceNodeType.TOOL_DATA && !!node.data?.observation?.error) || undefined,
   };
 }
@@ -244,7 +223,7 @@ export function buildMarks(trace: MarkTraceInput, axis: XAxis, mode: 'time' | 't
         return;
       }
 
-      const spec = node.type === TraceNodeType.TOOL_DATA && isListDir(node) ? LIST_DIR_SPEC
+      const spec = node.type === TraceNodeType.TOOL_DATA && node.stepType === ReasoningStepType.LIST_DIRECTORY ? LIST_DIR_SPEC
         : MARK_SPECS[node.type] ?? MARK_SPECS[TraceNodeType.TOOL_DATA];
 
       // x: the node's own timestamp (time mode), or an even share of the step's tokens.
@@ -274,7 +253,7 @@ export function buildMarks(trace: MarkTraceInput, axis: XAxis, mode: 'time' | 't
         x, y: anchorY(spec.anchor, channelCenter(spec.channel), height), width, height,
         color: spec.agentFill ? stepColor : null,
         look: markLook(node, stepColor),
-        hidden: isFileEventNode(node) || undefined,
+        hidden: fileAccess(node.stepType) !== null || undefined,
       });
 
       cursorX = x + width + (k === 0 ? ICON : 0);

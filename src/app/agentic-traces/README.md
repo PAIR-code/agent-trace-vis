@@ -8,6 +8,7 @@ row. Time (or tokens) runs left to right. Each row has horizontal lanes
 
 ```
 trace JSON ──trace-loader.service──▶ ReasoningTrace (steps → nodes)
+                  tools.ts: tool name → stepType + label
                                             │
                            layoutTraces()   │  layout.ts (pure, no DOM)
                                             ▼
@@ -26,6 +27,10 @@ trace JSON ──trace-loader.service──▶ ReasoningTrace (steps → nodes)
 - **Layout is pure.** `layoutTraces()` returns positioned data, and the
   components only draw it. To check a layout change, compare the layout output
   before and after the change.
+- **Tools** (`tools.ts`): each tool call is classified once, by tool name,
+  into a `stepType` and a display label. Everything downstream reads only the
+  `stepType`: `fileAccess()` decides whether a node goes in the files lane, and
+  `toolIcon()` picks its glyph. Nothing re-parses the label text.
 - **Channels** (`channels.ts`): the lanes' order, labels, heights and colors all
   come from this one list. Lane backgrounds, lane labels and mark y-positions
   are derived from it.
@@ -60,3 +65,10 @@ trace JSON ──trace-loader.service──▶ ReasoningTrace (steps → nodes)
 ## How to add a mark type to an existing channel
 
 Add a `TraceNodeType`, a `MARK_SPECS` entry, and a `.vis-node.<type>` rule.
+
+## How to support new tool names
+
+Agent harnesses name their tools differently (`view_file`, `read_file`, `cat`…).
+Add the new name to the matching entry in `TOOLS` in `tools.ts`. Entries are
+checked in order and the first match wins. A tool that matches nothing is
+`GENERIC`: it is drawn in the tools channel with its name as the label.
