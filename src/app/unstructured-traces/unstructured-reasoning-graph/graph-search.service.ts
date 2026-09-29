@@ -15,14 +15,14 @@
  */
 
 /**
- * @fileoverview Search service providing fuzzy and semantic search over trace nodes.
+ * @fileoverview Single-query fuzzy / semantic search for the reasoning graph page.
  */
 
 import { Injectable, signal } from '@angular/core';
-import { SearchService, SearchResult } from '../shared/search/search.service';
+import { SearchService, SearchResult } from '../../shared/search/search.service';
 
 @Injectable()
-export class AgenticTracesSearchService {
+export class GraphSearchService {
   searchQuery = signal<string>('');
   searchMode = signal<'fuzzy' | 'semantic'>('semantic');
   searchScores = signal<Map<string, SearchResult>>(new Map());

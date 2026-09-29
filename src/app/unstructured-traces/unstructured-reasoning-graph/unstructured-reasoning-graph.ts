@@ -25,7 +25,7 @@ import { marked } from 'marked';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { AgenticTracesSearchService } from '../../agentic-traces/search.service';
+import { GraphSearchService } from './graph-search.service';
 import { SearchService } from '../../shared/search/search.service';
 import { truncate, renderChunkedHtml, renderMarkdownWithLatex } from '../helpers';
 import { SingleGraphVisComponent } from './single-graph-vis/single-graph-vis';
@@ -44,7 +44,7 @@ interface ReasoningChunk {
   selector: 'app-unstructured-reasoning-graph',
   standalone: true,
   imports: [CommonModule, FormsModule, SingleGraphVisComponent, MultiSelectDropdownComponent],
-  providers: [AgenticTracesSearchService, SearchService],
+  providers: [GraphSearchService, SearchService],
   templateUrl: './unstructured-reasoning-graph.html',
   styleUrls: ['./unstructured-reasoning-graph.css']
 })
@@ -116,7 +116,7 @@ export class UnstructuredReasoningGraphComponent implements OnInit, OnDestroy {
     private http: HttpClient,
     private cdr: ChangeDetectorRef,
     private sanitizer: DomSanitizer,
-    public searchService: AgenticTracesSearchService,
+    public searchService: GraphSearchService,
   ) {
     // Configure marked for clean output
     marked.setOptions({
