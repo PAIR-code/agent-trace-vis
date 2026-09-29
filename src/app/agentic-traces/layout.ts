@@ -31,7 +31,6 @@ import { extractFileEvents } from './file-events';
 import { buildFileLane } from './file-lane';
 
 export * from './layout-types';
-export { sanitizeId } from './layout-utils';
 
 /** Space reserved right of the timeline for channel labels. */
 const LABEL_GUTTER = 140;

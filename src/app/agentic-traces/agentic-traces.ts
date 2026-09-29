@@ -33,16 +33,9 @@ import { FormsModule } from "@angular/forms";
 import { HttpClient } from "@angular/common/http";
 import { ActivatedRoute } from "@angular/router";
 import { UrlParamService } from "../shared/url-param.service";
-import { forkJoin, of } from "rxjs";
-import { catchError, map } from "rxjs/operators";
 import { AnalysisLayersService } from "./analysis-layers.service";
 import { TraceLoaderService, DatasetItem, HF_PRESETS } from "./trace-loader.service";
-import {
-  SPEAKER_STYLES,
-  getModelColor,
-  createStyle,
-  COLORS,
-} from "./colors";
+import { COLORS } from "./colors";
 import { MultiSelectDropdownComponent, DropdownItem } from "../shared/multi-select-dropdown.component";
 import { AnalysisToolbarComponent } from "./analysis-toolbar.component";
 import { ConversationViewerComponent } from "../shared/conversation-viewer.component";
@@ -94,7 +87,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   // HF Import Modal State
   showImportModal = signal<boolean>(false);
   traces = signal<any[]>([]);
-  selectedTraceId = signal<string>("");
   selectedNode = signal<any>(null);
   hoveredNodeId = signal<string | null>(null);
   highlightedChunkId = signal<string | null>(null);
@@ -127,8 +119,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     }))
   );
 
-  private speakerColorMap = new Map<string, string>();
-  private warmColorIndex = { value: 0 };
   private lastSelectedDataset = '';
 
   /** One laid-out row per selected trace. */
@@ -185,7 +175,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     const seenNames = new Set<string>();
 
     for (const trace of traces) {
-      const agents = trace?.agents || trace?.models;
+      const agents = trace?.agents;
       if (agents) {
         for (const a of agents) {
           const entryKey = a.model ? `${a.name} (${a.model})` : a.name;
@@ -232,7 +222,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     ];
   });
 
-  // Group nodes into thread messages: tool/system/error nest under agent turns
+  /** Trace shown in the side panel: the selected mark's, else the clicked row, else the first. */
   activeTraceId = computed(() => {
     const selectedNode = this.selectedNode();
     if (selectedNode) {
@@ -463,10 +453,10 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     if (fromIndex !== null && targetDropIndex !== null) {
       this.executeDropReorder(fromIndex, targetDropIndex);
     }
-    this.onTrackDragEnd(event);
+    this.onTrackDragEnd();
   }
 
-  onTrackDragEnd(event: DragEvent) {
+  onTrackDragEnd() {
     this.draggedTrackIndex.set(null);
     this.dropIndex.set(null);
     this.lastMouseDownTarget = null;
@@ -575,7 +565,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
                 trace.title = parsedTrace.title;
               }
 
-              trace.models = parsedTrace.models || [];
+              trace.agents = parsedTrace.agents || [];
 
               return parsedTrace;
             }),
@@ -805,7 +795,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
                   trace.timestamp = date.getTime();
                 }
 
-                trace.models = parsedTrace.models || [];
+                trace.agents = parsedTrace.agents || [];
                 trace.data = parsedTrace;
 
                 const updatedTraces = [...this.traces()];
@@ -867,7 +857,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
         title: parsedTrace.title || traceId,
         data: parsedTrace,
         file: '',
-        models: parsedTrace.models || [],
+        agents: parsedTrace.agents || [],
         date: dateStr,
         timestamp: timestampVal
       };
@@ -877,13 +867,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     this.isLoading.set(false);
 
     this.applyTraceSelection(traces, targetIndices);
-  }
-
-  /** Handles trace selection changes (single selection). */
-  onTraceChange(id: string) {
-    this.selectedTraceIds.set(new Set([id]));
-    this.updateActiveTraces();
-    this.updateUrlParams();
   }
 
   /** Processes the active traces to generate nodes and lines for visualization. */

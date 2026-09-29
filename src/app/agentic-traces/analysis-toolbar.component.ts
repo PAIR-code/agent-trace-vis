@@ -19,7 +19,7 @@
  * layer chips, presets menu, and per-layer detail popover.
  */
 
-import { Component, Input, HostListener, ViewChild, ElementRef, AfterViewInit, AfterViewChecked } from '@angular/core';
+import { Component, Input, ViewChild, ElementRef, AfterViewInit, AfterViewChecked } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SearchBarComponent } from '../shared/search/search-bar.component';

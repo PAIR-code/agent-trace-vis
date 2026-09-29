@@ -17,7 +17,7 @@
 import { Component, EventEmitter, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { HttpClient, HttpHeaders, HttpErrorResponse } from '@angular/common/http';
+import { HttpErrorResponse } from '@angular/common/http';
 import { TraceLoaderService } from './trace-loader.service';
 import { DatasetItem } from './trace-loader.service';
 
@@ -240,10 +240,7 @@ export class HuggingFaceImportComponent {
   importError = "";
   importLoading = false;
 
-  constructor(
-    private http: HttpClient,
-    private traceLoaderService: TraceLoaderService
-  ) {}
+  constructor(private traceLoaderService: TraceLoaderService) {}
 
   private parseHuggingFaceRepoId(url: string): string | null {
     const cleanUrl = url.trim().replace(/\/+$/, '');

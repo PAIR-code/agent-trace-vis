@@ -17,10 +17,9 @@
 /**
  * @fileoverview Service managing multiple analysis layers — each layer is a
  * search query (text or AI) with its own results, color, and toggle state.
- * Replaces the former single-search AgenticTracesSearchService.
  */
 
-import { Injectable, signal, computed, effect } from '@angular/core';
+import { Injectable, signal, computed } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { SearchService, SearchResult } from '../shared/search/search.service';
 import { AnalysisLayer, AnalysisPreset, PRESET_COLORS, USER_AI_COLORS, USER_TEXT_COLORS, ANALYSIS_PRESETS } from './analysis-layers.types';

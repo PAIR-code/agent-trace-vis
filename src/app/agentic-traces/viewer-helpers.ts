@@ -47,19 +47,6 @@ export function getRoleLabel(type: string): string {
   }
 }
 
-export function getNodeBorderColor(node: any): string {
-  if (node.type === TraceNodeType.SYSTEM || node.type === 'system') {
-    return node.borderColor || (node as any).stepRef?.color || (node.data as any)?.color || (node.data as any)?.agentColor || COLORS.AGENT;
-  }
-  if (
-    node.type !== TraceNodeType.TOOL_CALL &&
-    node.type !== TraceNodeType.TOOL_DATA
-  ) {
-    return '';
-  }
-  return COLORS.TOOL_LINE;
-}
-
 export function getSpeakerColorForViewer(msg: any, activeTraceId: string | undefined, traces: any[]): string {
   if (msg.type === 'response' || msg.type === 'thinking' || msg.type === 'step' || msg.type === 'turn') {
     if (msg.color) return msg.color;
@@ -83,10 +70,7 @@ export function getSpeakerBgColorForViewer(msg: any, activeTraceId: string | und
 
 export function getSpeakerBorderForViewer(msg: any, activeTraceId: string | undefined, traces: any[]): string {
   if (msg.type === 'tool_call' || msg.type === 'tool_data') {
-    const borderColor = getNodeBorderColor(msg);
-    if (borderColor) {
-      return `1.5px solid ${borderColor}`;
-    }
+    return `1.5px solid ${COLORS.TOOL_LINE}`;
   }
   if (msg.type === 'response' || msg.type === 'thinking' || msg.type === 'step' || msg.type === 'turn') {
     const color = msg.color || (traces.find((t) => t.id === (msg.traceId || activeTraceId)) as any)?.agentColor;
@@ -95,14 +79,6 @@ export function getSpeakerBorderForViewer(msg: any, activeTraceId: string | unde
     }
   }
   return SPEAKER_STYLES[msg.type]?.border || '1px solid #e5e7eb';
-}
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }
 
 const COLOR_CLASS_MAP: Record<string, string> = {

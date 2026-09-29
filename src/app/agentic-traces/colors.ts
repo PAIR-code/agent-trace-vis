@@ -37,11 +37,6 @@ export function lightenColor(colorStr: string, factor: number): string {
   return rgb.toString();
 }
 
-export function darkenColor(colorStr: string, factor: number = 1): string {
-  const c = d3Color(colorStr);
-  return c ? c.darker(factor).toString() : colorStr;
-}
-
 export function createStyle(color: string, bgLightness: 'very-light' | 'white' = 'very-light', borderStyle: string = 'solid'): SpeakerStyle {
   return {
     color: color,
@@ -57,23 +52,12 @@ export const COLORS = {
   USER_BORDER: '#9ca3af',   // User bubble border
   
   AGENT: '#d97706',         // Fallback Agent / Warm Orange
-  AGENT_DARK: '#78350f',    // Fallback Dark Agent
-  AGENT_BORDER_LIGHT: '#e5e7eb', // Light border
   
   
   // Viewer-specific conversation bubble colors
-  VIEWER_USER: '#374151',
-  VIEWER_USER_BG: '#ffffff',
-  VIEWER_USER_BORDER: '#9ca3af',
 
-  VIEWER_AGENT: '#ca8a04', // Agent default text/badge color in message cards
-  VIEWER_AGENT_BG: '#ffffff',
-  VIEWER_AGENT_BORDER: '#d1d5db',
 
   VIEWER_THINKING: '#5C7B99', // Muted Blue-gray for thinking text
-  VIEWER_THINKING_BG: '#fce4ec', // Pink background for thinking message card
-  VIEWER_THINKING_BORDER: '#e0c4cc',
-  VIEWER_THINKING_TEXT: '#b71c1c', // Dark red for thinking role badge
 
   VIEWER_RESPONSE: '#4A627A', // Darker Blue-gray
   
@@ -81,20 +65,10 @@ export const COLORS = {
   TOOL_LINE: '#c4c9d0',     // Light gray for lines/borders
 
   // Tool cards in message lists
-  TOOL_CALL_BG: '#fffbeb',
-  TOOL_CALL_BORDER: '#d97706',
-  TOOL_DATA_BG: '#e3f2fd',
-  TOOL_DATA_BORDER: '#90caf9',
-  TOOL_DATA_TEXT: '#1565c0',
 
-  SYSTEM_BG: '#f3f4f6',
-  SYSTEM_BORDER: '#e5e7eb',
-  SYSTEM_TEXT: '#6b7280',
 
   ERROR: '#ef4444',         // Red
   ERROR_LIGHT: '#e57373',   // Light Red for node / legend
-  ERROR_BG_LIGHT: '#fef2f2', // Light Red background
-  ERROR_BORDER_LIGHT: '#fca5a5' // Light Red border
 };
 
 export const SPEAKER_STYLES: { [key: string]: SpeakerStyle } = {
@@ -188,6 +162,4 @@ export function getAgentColor(agentName?: string | null, model?: string | null):
   return DISTINCT_PALETTE[idx];
 }
 
-// Backward-compatibility aliases
-export const getModelColor = getAgentColor;
 

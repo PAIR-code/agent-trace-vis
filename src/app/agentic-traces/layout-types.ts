@@ -73,7 +73,6 @@ export interface ReasoningTrace {
   metadata?: Record<string, any>;
   agentColor?: string;
   agents?: { name: string; model?: string; color: string }[];
-  models?: { name: string; color: string }[];
   date?: string;
   timestamp?: number;
 }

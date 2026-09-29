@@ -82,7 +82,6 @@ export function groupThreadMessages(activeTraceId: string, nodes: Mark[]): Threa
       turnColor = turnStartNode.color;
     }
 
-    const firstStep = currentTurnSteps.values().next().value;
     const turnData = {
       agentName,
       model: modelName,

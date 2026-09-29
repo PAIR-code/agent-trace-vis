@@ -15,16 +15,8 @@
  */
 
 /**
- * @fileoverview Lower-level helper utilities.
- * 
- * Includes:
- * - Time formatters (turning milliseconds to label like "+1m 20s")
- * - Text measurement approximations (deciding node heights based on string lengths)
+ * @fileoverview Small shared helpers: ids, time labels, text, and token counts.
  */
-
-export function sanitizeId(id: string): string {
-  return String(id || '').replace(/[^a-zA-Z0-9-]/g, '_');
-}
 
 /** Computes a short deterministic 32-bit hash for a string. */
 export function hashString(str: string): string {

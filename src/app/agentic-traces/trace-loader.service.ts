@@ -19,10 +19,10 @@
  */
 
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
 import { ReasoningTrace, ReasoningTraceStep, ReasoningTraceNode, TraceNodeType, ReasoningStepType } from './layout';
-import { TraceRecord, Step, ToolCall, Observation, Agent } from './trace';
-import { getAgentColor, darkenColor } from './colors';
+import { TraceRecord, Step, ToolCall, Agent } from './trace';
+import { getAgentColor } from './colors';
 import { hashString } from './layout-utils';
 
 export interface DatasetItem {
@@ -176,7 +176,7 @@ export class TraceLoaderService {
     );
   }
 
-  getTraces(files: string[]): { id: string, title: string, data: any, file: string, models: any[], date?: string, timestamp?: number }[] {
+  getTraces(files: string[]): { id: string, title: string, data: any, file: string, agents: any[], date?: string, timestamp?: number }[] {
     const base = 'assets/data/traces/';
     return files.map(f => {
       const filename = f.replace('.json', '');
@@ -185,7 +185,7 @@ export class TraceLoaderService {
         title: filename,
         data: null,
         file: base + f,
-        models: [],
+        agents: [],
       };
     });
   }
@@ -351,7 +351,6 @@ export class TraceLoaderService {
       steps: parsedSteps,
       metadata: traceData.metadata,
       agents: agentList,
-      models: agentList
     };
   }
 }
@@ -589,12 +588,3 @@ function getToolLabel(tc: ToolCall): string {
 
   return fileName ? `${tc.tool_name}: ${fileName}` : tc.tool_name;
 }
-
-function getObservationLabel(tc: ToolCall, obs: Observation): string {
-  if (obs.error) return `Error: ${obs.error}`;
-  const duration = tc.duration_ms ? ` (${tc.duration_ms}ms)` : '';
-  return `Output of ${tc.tool_name}${duration}`;
-}
-
-
-
