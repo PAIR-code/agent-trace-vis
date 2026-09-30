@@ -8,7 +8,7 @@
   position: relative;
 }
 
-::ng-deep app-search-bar {
+app-search-bar {
   width: 280px;
   flex-shrink: 0;
 }

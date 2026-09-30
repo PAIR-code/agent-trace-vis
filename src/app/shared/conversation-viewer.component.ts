@@ -32,7 +32,6 @@ export interface ConversationMessage {
   children?: ConversationMessage[];
   score?: number;
   isSearchMatch?: boolean;
-  glowStyle?: string;
   data?: any;
 }
 
@@ -76,10 +75,8 @@ export interface ConversationMessage {
                  [class.is-active]="activeNodeId === msg.id"
                  [class.is-hovered]="hoveredNodeId === msg.id"
                  [class.search-match]="isMatch(msg)"
-                 [style.boxShadow]="msg.glowStyle"
-                 [style.borderLeftColor]="getSpeakerColor(msg)"
-                 [style.background-color]="getSpeakerBgColor(msg)"
-                 [style.border]="getSpeakerBorder(msg)"
+                 [style.--speaker-bg]="getSpeakerBgColor(msg)"
+                 [style.--speaker-border]="getSpeakerBorder(msg)"
                  (click)="onMessageClick(msg.id)"
                  (mouseenter)="messageHover.emit(msg.id)"
                  (mouseleave)="messageHover.emit(null)">
@@ -124,8 +121,8 @@ export interface ConversationMessage {
                    [id]="'msg-' + child.id"
                    [class.is-active]="activeNodeId === child.id"
                    [class.is-hovered]="hoveredNodeId === child.id"
-                   [style.background-color]="getSpeakerBgColor(child)"
-                   [style.border]="getSpeakerBorder(child)"
+                   [style.--speaker-bg]="getSpeakerBgColor(child)"
+                   [style.--speaker-border]="getSpeakerBorder(child)"
                    (click)="onMessageClick(child.id); $event.stopPropagation()"
                    (mouseenter)="messageHover.emit(child.id)"
                    (mouseleave)="messageHover.emit(null)">
@@ -182,14 +179,15 @@ export interface ConversationMessage {
       display: flex;
       flex-direction: column;
       height: 100%;
-      background: #1e1e1e;
-      border-left: 1px solid rgba(255,255,255,0.1);
+      background: #f8fafc;
+      color: #1e293b;
+      border-left: 1px solid #e2e8f0;
     }
 
     .panel-static-header {
       padding: 12px 16px;
-      background: rgba(0,0,0,0.2);
-      border-bottom: 1px solid rgba(255,255,255,0.05);
+      background: #ffffff;
+      border-bottom: 1px solid #e2e8f0;
       flex-shrink: 0;
       display: flex;
       justify-content: space-between;
@@ -231,7 +229,7 @@ export interface ConversationMessage {
       align-items: flex-start;
       padding-top: 6px;
       transform: translateY(-6px);
-      background: linear-gradient(to bottom, rgba(30, 30, 30, 0.85) 0%, rgba(30, 30, 30, 0.4) 50%, transparent 100%);
+      background: linear-gradient(to bottom, rgba(248, 250, 252, 0.9) 0%, rgba(248, 250, 252, 0.4) 50%, transparent 100%);
     }
 
     .bottom-overlay {
@@ -239,7 +237,7 @@ export interface ConversationMessage {
       align-items: flex-end;
       padding-bottom: 22px;
       transform: translateY(6px);
-      background: linear-gradient(to top, rgba(30, 30, 30, 0.85) 0%, rgba(30, 30, 30, 0.4) 50%, transparent 100%);
+      background: linear-gradient(to top, rgba(248, 250, 252, 0.9) 0%, rgba(248, 250, 252, 0.4) 50%, transparent 100%);
     }
 
     .top-overlay:hover,
@@ -255,12 +253,12 @@ export interface ConversationMessage {
       padding: 3px 9px;
       font-size: 0.7rem;
       font-weight: 500;
-      color: rgba(255, 255, 255, 0.8);
-      background: rgba(35, 35, 35, 0.9);
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #475569;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
       border-radius: 12px;
       cursor: pointer;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
       pointer-events: auto;
       transition: all 0.15s ease;
       white-space: nowrap;
@@ -269,10 +267,10 @@ export interface ConversationMessage {
     }
 
     .trace-jump-pill-btn:hover {
-      background: rgba(55, 55, 55, 0.95);
-      color: #fff;
-      border-color: rgba(255, 255, 255, 0.3);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+      background: #f8fafc;
+      color: #0f172a;
+      border-color: #cbd5e1;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
     }
 
     .trace-jump-pill-btn:active {
@@ -280,16 +278,16 @@ export interface ConversationMessage {
     }
 
     .header-content {
-      flex: 1;
+      flex: 1 1 auto;
       min-width: 0;
       overflow: hidden;
     }
 
     .panel-static-header h3 {
       margin: 0 0 2px 0;
-      font-size: 0.95rem;
+      font-size: 1rem;
       font-weight: 600;
-      color: #fff;
+      color: #0f172a;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -297,8 +295,8 @@ export interface ConversationMessage {
 
     .panel-static-header p {
       margin: 0;
-      font-size: 0.75rem;
-      color: rgba(255,255,255,0.5);
+      font-size: 0.8rem;
+      color: #64748b;
     }
 
     .thread-scroll {
@@ -306,6 +304,7 @@ export interface ConversationMessage {
       overflow-y: auto;
       padding: 16px 16px 64px 16px;
       position: relative;
+      scroll-behavior: smooth;
     }
 
     .message-list {
@@ -314,26 +313,27 @@ export interface ConversationMessage {
       gap: 12px;
     }
 
+    /* --speaker-bg / --speaker-border come from the getSpeaker* inputs. */
     .message-card {
-      background: rgba(255,255,255,0.03);
-      border: 1px solid rgba(255,255,255,0.08);
+      background: var(--speaker-bg, #ffffff);
+      border: var(--speaker-border, 1px solid #e2e8f0);
       border-radius: 8px;
-      padding: 10px 12px;
+      padding: 12px 16px;
+      color: #1e293b;
       cursor: pointer;
       transition: all 0.2s;
       position: relative;
-      border-left-width: 3px;
     }
 
-    .message-card:hover {
-      background: rgba(255,255,255,0.06);
-      border-color: rgba(255,255,255,0.15);
+    .message-card:hover,
+    .message-card.is-hovered {
+      background: #f1f5f9;
     }
 
     .message-card.is-active {
-      background: rgba(255,255,255,0.08);
-      border-color: rgba(255,255,255,0.2);
-      box-shadow: 0 0 0 1px rgba(255,255,255,0.1);
+      background: #ffffff;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
     }
 
     .message-meta {
@@ -352,74 +352,76 @@ export interface ConversationMessage {
 
     .timestamp {
       font-size: 0.7rem;
-      color: rgba(255,255,255,0.4);
+      color: #94a3b8;
     }
 
     .message-body {
       font-size: 0.85rem;
       line-height: 1.5;
-      color: rgba(255,255,255,0.85);
+      color: #334155;
       word-break: break-word;
       overflow-wrap: break-word;
+      white-space: normal;
     }
 
-    .message-body p {
+    /* Rendered markdown arrives via [innerHTML], so it needs ::ng-deep
+       (still scoped to this component by the .message-body prefix). */
+    .message-body ::ng-deep p {
       margin: 0 0 0.5em 0;
     }
 
-    .message-body p:last-child {
+    .message-body ::ng-deep p:last-child {
       margin-bottom: 0;
     }
 
-    .message-body h1,
-    .message-body h2,
-    .message-body h3,
-    .message-body h4,
-    .message-body h5,
-    .message-body h6 {
-      color: #fff;
+    .message-body ::ng-deep :is(h1, h2, h3, h4, h5, h6) {
+      color: #0f172a;
       font-weight: 600;
       margin: 0.8em 0 0.3em 0;
       line-height: 1.3;
     }
 
-    .message-body h1 { font-size: 1.15rem; }
-    .message-body h2 { font-size: 1.05rem; }
-    .message-body h3 { font-size: 0.95rem; }
-    .message-body h4 { font-size: 0.9rem; }
+    .message-body ::ng-deep h1 { font-size: 1.15rem; }
+    .message-body ::ng-deep h2 { font-size: 1.05rem; }
+    .message-body ::ng-deep h3 { font-size: 0.95rem; }
+    .message-body ::ng-deep h4 { font-size: 0.9rem; }
 
-    .message-body ul,
-    .message-body ol {
+    .message-body ::ng-deep :is(ul, ol) {
       margin: 0.4em 0;
       padding-left: 1.4em;
     }
 
-    .message-body li {
+    .message-body ::ng-deep li {
       margin: 0.15em 0;
     }
 
-    .message-body strong {
-      font-weight: 600;
-      color: #fff;
+    .message-body ::ng-deep li > :is(ul, ol) {
+      margin: 0.1em 0;
     }
 
-    .message-body em {
+    .message-body ::ng-deep strong {
+      font-weight: 600;
+      color: #0f172a;
+    }
+
+    .message-body ::ng-deep em {
       font-style: italic;
     }
 
-    .message-body code {
+    .message-body ::ng-deep code {
       font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
       font-size: 0.82em;
-      background: rgba(255, 255, 255, 0.1);
-      color: #e2e8f0;
+      background: #f1f5f9;
+      color: #0f172a;
       padding: 0.15em 0.35em;
       border-radius: 4px;
+      border: 1px solid #e2e8f0;
       word-break: break-all;
     }
 
-    .message-body pre {
-      background: rgba(0, 0, 0, 0.4);
-      color: #e2e8f0;
+    .message-body ::ng-deep pre {
+      background: #0f172a;
+      color: #f8fafc;
       border-radius: 6px;
       padding: 10px 12px;
       overflow-x: auto;
@@ -428,7 +430,7 @@ export interface ConversationMessage {
       line-height: 1.45;
     }
 
-    .message-body pre code {
+    .message-body ::ng-deep pre code {
       background: none;
       padding: 0;
       border: none;
@@ -438,44 +440,70 @@ export interface ConversationMessage {
       word-break: normal;
     }
 
-    .message-body blockquote {
+    .message-body ::ng-deep blockquote {
       border-left: 3px solid #3b82f6;
       margin: 0.5em 0;
       padding: 0.3em 0.8em;
-      background: rgba(59, 130, 246, 0.1);
-      color: #93c5fd;
+      background: #eff6ff;
+      color: #1e40af;
       border-radius: 0 4px 4px 0;
     }
 
-    .message-body table {
+    .message-body ::ng-deep table {
       border-collapse: collapse;
       margin: 0.6em 0;
       width: 100%;
       font-size: 0.8rem;
     }
 
-    .message-body th,
-    .message-body td {
-      border: 1px solid rgba(255, 255, 255, 0.15);
+    .message-body ::ng-deep :is(th, td) {
+      border: 1px solid #e2e8f0;
       padding: 5px 8px;
       text-align: left;
     }
 
-    .message-body th {
-      background: rgba(255, 255, 255, 0.08);
+    .message-body ::ng-deep th {
+      background: #f8fafc;
       font-weight: 600;
-      color: #fff;
+      color: #0f172a;
     }
 
-    .message-body a {
-      color: #60a5fa;
+    .message-body ::ng-deep a {
+      color: #2563eb;
       text-decoration: underline;
     }
 
-    .message-body hr {
+    .message-body ::ng-deep hr {
       border: none;
-      border-top: 1px solid rgba(255, 255, 255, 0.15);
+      border-top: 1px solid #e2e8f0;
       margin: 0.8em 0;
+    }
+
+    .message-body ::ng-deep .think-block {
+      background: #fefce8;
+      border: 1px solid #fde68a;
+      border-left: 3px solid #f59e0b;
+      border-radius: 0 6px 6px 0;
+      padding: 10px 14px;
+      margin: 0.6em 0;
+      font-style: italic;
+      color: #92400e;
+    }
+
+    .message-body ::ng-deep .think-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #b45309;
+      margin-bottom: 4px;
+    }
+
+    .message-body ::ng-deep .katex-display {
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 4px 0;
+      margin: 0.5em 0;
     }
 
     .message-actions {
@@ -486,8 +514,8 @@ export interface ConversationMessage {
 
     /* Children styles */
     .children-list {
-      margin-left: 16px;
-      border-left: 1px solid rgba(255,255,255,0.1);
+      margin-left: 12px;
+      border-left: 1px solid #e2e8f0;
       padding-left: 12px;
       display: flex;
       flex-direction: column;
@@ -497,17 +525,23 @@ export interface ConversationMessage {
     }
 
     .child-msg {
-      background: rgba(255,255,255,0.02);
-      border: 1px solid rgba(255,255,255,0.05);
+      background: var(--speaker-bg, #ffffff);
+      border: var(--speaker-border, 1px solid #e2e8f0);
       border-radius: 6px;
-      padding: 6px 8px;
+      padding: 8px 10px;
+      color: #1e293b;
       cursor: pointer;
       font-size: 0.8rem;
     }
 
     .child-msg.is-active {
-      background: rgba(255,255,255,0.05);
-      border-color: rgba(255,255,255,0.1);
+      background: #f8fafc;
+      border-color: #3b82f6;
+    }
+
+    .child-msg:hover,
+    .child-msg.is-hovered {
+      background: #f1f5f9;
     }
 
     .child-header {
@@ -531,7 +565,7 @@ export interface ConversationMessage {
     .raw-json-btn {
       background: transparent;
       border: none;
-      color: rgba(255,255,255,0.5);
+      color: #64748b;
       font-size: 0.7rem;
       cursor: pointer;
       padding: 2px 6px;
@@ -539,25 +573,26 @@ export interface ConversationMessage {
     }
 
     .raw-json-btn:hover {
-      color: rgba(255,255,255,0.8);
-      background: rgba(255,255,255,0.05);
+      color: #0f172a;
+      background: #e2e8f0;
     }
 
     .raw-json-pre {
       margin: 6px 0 0 0;
       font-size: 0.75rem;
-      background: rgba(0,0,0,0.2);
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
       padding: 8px;
       border-radius: 4px;
       overflow-x: auto;
-      color: rgba(255,255,255,0.8);
+      color: #334155;
     }
 
-    .json-key { color: #9ca3af; }
-    .json-string-val { color: inherit; }
-    .json-number { color: #bd93f9; }
-    .json-boolean { color: #50fa7b; }
-    .json-null { color: #8be9fd; }
+    /* JSON is also rendered via [innerHTML]. */
+    :host ::ng-deep .json-key { color: #64748b; }
+    :host ::ng-deep .json-number { color: #1565c0; }
+    :host ::ng-deep .json-boolean { color: #e65100; }
+    :host ::ng-deep .json-null { color: #78909c; }
 
     .fullscreen-json-overlay {
       position: fixed;
@@ -573,7 +608,8 @@ export interface ConversationMessage {
     }
 
     .fullscreen-json-content {
-      background: #1e1e1e;
+      background: #ffffff;
+      color: #1e293b;
       width: 90vw;
       height: 90vh;
       border-radius: 12px;
@@ -594,29 +630,30 @@ export interface ConversationMessage {
 
     .fullscreen-json-header h3 {
       margin: 0;
-      color: #fff;
+      color: #0f172a;
     }
 
     .close-btn {
       background: transparent;
       border: none;
-      color: rgba(255,255,255,0.7);
+      color: #64748b;
       font-size: 1.5rem;
       cursor: pointer;
     }
 
     .close-btn:hover {
-      color: #fff;
+      color: #0f172a;
     }
 
     .fullscreen-json-pre {
       flex: 1;
       overflow-y: auto;
-      background: rgba(0,0,0,0.3);
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
       padding: 16px;
       border-radius: 8px;
       font-size: 0.9rem;
-      color: rgba(255,255,255,0.9);
+      color: #334155;
     }
   `]
 })
@@ -625,7 +662,6 @@ export class ConversationViewerComponent implements OnChanges {
   private lastClickedNodeId: string | null = null;
   @Input() activeNodeId: string | null = null;
   @Input() hoveredNodeId: string | null = null;
-  @Input() searchQuery: string = '';
   @Input() title: string = '';
   @Input() subtitle: string = '';
 
@@ -678,11 +714,6 @@ export class ConversationViewerComponent implements OnChanges {
     if (msg.isSearchMatch) return true;
     if (msg.score !== undefined && msg.score > 0) return true;
     return false;
-  }
-
-  isDim(msg: ConversationMessage): boolean {
-    if (!this.searchQuery) return false;
-    return !this.isMatch(msg);
   }
 
   scrollToNode(nodeId: string) {
