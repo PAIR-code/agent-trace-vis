@@ -23,6 +23,7 @@ import { Injectable, signal, computed } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { SearchService, SearchResult } from '../shared/search/search.service';
 import { AnalysisLayer, AnalysisPreset, PRESET_COLORS, USER_AI_COLORS, USER_TEXT_COLORS, ANALYSIS_PRESETS } from './analysis-layers.types';
+import { Mark } from './marks';
 
 @Injectable()
 export class AnalysisLayersService {
@@ -83,13 +84,13 @@ export class AnalysisLayersService {
   }
 
   /** Submit the current toolbar query as a new layer. */
-  submitSearch(nodes: any[]): void {
+  submitSearch(marks: Mark[]): void {
     const query = this.currentQuery().trim();
     if (!query) return;
     if (this.currentMode() === 'semantic' && !this.ensureApiKey()) {
       return;
     }
-    this.addLayer(query, this.currentMode(), nodes);
+    this.addLayer(query, this.currentMode(), marks);
     this.currentQuery.set('');
   }
 
@@ -97,7 +98,7 @@ export class AnalysisLayersService {
   addLayer(
     query: string,
     mode: 'fuzzy' | 'semantic',
-    nodes: any[],
+    marks: Mark[],
     name?: string,
     isPreset = false,
   ): void {
@@ -116,12 +117,12 @@ export class AnalysisLayersService {
       createdAt: Date.now(),
     };
     this.layers.update(layers => [layer, ...layers]);
-    this.runSearch(id, nodes);
+    this.runSearch(id, marks);
   }
 
   /** Add a preset as a new layer. */
-  addPreset(preset: AnalysisPreset, nodes: any[]): void {
-    this.addLayer(preset.query, preset.mode, nodes, preset.name, true);
+  addPreset(preset: AnalysisPreset, marks: Mark[]): void {
+    this.addLayer(preset.query, preset.mode, marks, preset.name, true);
   }
 
   /** Remove a layer and cancel its pending search. */
@@ -132,7 +133,7 @@ export class AnalysisLayersService {
   }
 
   /** Toggle a layer's visibility on/off. */
-  toggleLayer(id: string, nodes: any[]): void {
+  toggleLayer(id: string, marks: Mark[]): void {
     let shouldRunSearch = false;
     this.layers.update(layers =>
       layers.map(l => {
@@ -148,16 +149,16 @@ export class AnalysisLayersService {
     );
 
     if (shouldRunSearch) {
-      this.runSearch(id, nodes);
+      this.runSearch(id, marks);
     }
   }
 
-  /** Re-run searches for all currently enabled layers (e.g. when trace nodes change). */
-  reRunAllEnabledLayers(nodes: any[]): void {
-    if (nodes.length === 0) return;
+  /** Re-run searches for all currently enabled layers (e.g. after a new layout). */
+  reRunAllEnabledLayers(marks: Mark[]): void {
+    if (marks.length === 0) return;
     for (const layer of this.layers()) {
       if (layer.enabled) {
-        this.runSearch(layer.id, nodes);
+        this.runSearch(layer.id, marks);
       }
     }
   }
@@ -177,8 +178,8 @@ export class AnalysisLayersService {
   }
 
   /** Re-run the search for a specific layer. */
-  rerunLayer(id: string, nodes: any[]): void {
-    this.runSearch(id, nodes);
+  rerunLayer(id: string, marks: Mark[]): void {
+    this.runSearch(id, marks);
   }
 
   /** Set the search mode, prompting for API key if selecting semantic mode. */
@@ -215,7 +216,7 @@ export class AnalysisLayersService {
 
   // ─── Private ──────────────────────────────────────────────────────
 
-  private runSearch(layerId: string, nodes: any[]): void {
+  private runSearch(layerId: string, marks: Mark[]): void {
     const layer = this.layers().find(l => l.id === layerId);
     if (!layer) return;
 
@@ -229,11 +230,11 @@ export class AnalysisLayersService {
     this.subscriptions.get(layerId)?.unsubscribe();
     this.updateLayer(layerId, { loading: true });
 
-    const searchNodes = nodes.map((n: any) => ({
-      id: n.id,
-      role: n.type || n.role || '',
-      text: n.text || '',
-      traceId: n.traceId || '',
+    const searchNodes = marks.map(m => ({
+      id: m.id,
+      role: m.type,
+      text: m.text || '',
+      traceId: m.traceId,
     }));
 
     const sub = this.searchService

@@ -25,6 +25,7 @@ import { FormsModule } from '@angular/forms';
 import { SearchBarComponent } from '../shared/search/search-bar.component';
 import { AnalysisLayersService } from './analysis-layers.service';
 import { AnalysisLayer } from './analysis-layers.types';
+import { Mark } from './marks';
 
 @Component({
   selector: 'app-analysis-toolbar',
@@ -407,7 +408,8 @@ import { AnalysisLayer } from './analysis-layers.types';
   `]
 })
 export class AnalysisToolbarComponent implements AfterViewInit, AfterViewChecked {
-  @Input() nodes: any[] = [];
+  /** Every mark on the timeline: what search layers search. */
+  @Input() marks: Mark[] = [];
   @ViewChild('chipsContainer') chipsContainer!: ElementRef<HTMLDivElement>;
 
   showLeftScroll = false;
@@ -472,7 +474,7 @@ export class AnalysisToolbarComponent implements AfterViewInit, AfterViewChecked
   }
 
   onSubmitSearch(): void {
-    this.layersService.submitSearch(this.nodes);
+    this.layersService.submitSearch(this.marks);
   }
 
   onChipClick(event: MouseEvent, layer: AnalysisLayer): void {
@@ -486,7 +488,7 @@ export class AnalysisToolbarComponent implements AfterViewInit, AfterViewChecked
     } else {
       this.clickTimeout = setTimeout(() => {
         this.clickTimeout = null;
-        this.layersService.toggleLayer(layer.id, this.nodes);
+        this.layersService.toggleLayer(layer.id, this.marks);
       }, 250);
     }
   }
@@ -525,7 +527,7 @@ export class AnalysisToolbarComponent implements AfterViewInit, AfterViewChecked
     this.layersService.updateLayer(this.editingLayer.id, { name, color, query });
 
     if (queryChanged) {
-      this.layersService.rerunLayer(this.editingLayer.id, this.nodes);
+      this.layersService.rerunLayer(this.editingLayer.id, this.marks);
     }
 
     this.editingLayer = null;

@@ -39,6 +39,7 @@ import { MultiSelectDropdownComponent, DropdownItem } from "../shared/multi-sele
 import { AnalysisToolbarComponent } from "./analysis-toolbar.component";
 import { ConversationViewerComponent } from "../shared/conversation-viewer.component";
 import { layoutTraces, TraceEntry, TraceLayout, TraceNodeType } from "./layout";
+import { Mark } from "./marks";
 import { groupThreadMessages } from "./thread-helper";
 import { HuggingFaceImportComponent } from "./hugging-face-import.component";
 import {
@@ -50,6 +51,17 @@ import {
 } from "./viewer-helpers";
 import { measureDrop } from "./drag-drop-helper";
 import { TraceTrackComponent } from "./trace-track";
+
+/** A side-panel message or child, annotated with whether a search layer matches it. */
+interface SearchAnnotated {
+  id: string;
+  isSearchMatch?: boolean;
+  glowStyle?: string;
+  children?: SearchAnnotated[];
+}
+
+/** Dev helpers exposed on `window` (a convention shared with the other pages). */
+type DevWindow = Window & { clearCache?: () => void; clearcache?: () => void };
 
 interface LegendEntry {
   label: string;
@@ -86,8 +98,8 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   // HF Import Modal State
   showImportModal = signal<boolean>(false);
   traces = signal<TraceEntry[]>([]);
-  selectedNode = signal<any>(null);
-  hoveredNodeId = signal<string | null>(null);
+  selectedMark = signal<Mark | null>(null);
+  hoveredMarkId = signal<string | null>(null);
   highlightedChunkId = signal<string | null>(null);
   manualActiveTraceId = signal<string | null>(null);
 
@@ -225,9 +237,9 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
 
   /** Trace shown in the side panel: the selected mark's, else the clicked row, else the first. */
   activeTraceId = computed(() => {
-    const selectedNode = this.selectedNode();
-    if (selectedNode) {
-      return selectedNode.traceId;
+    const selectedMark = this.selectedMark();
+    if (selectedMark) {
+      return selectedMark.traceId;
     }
     const manual = this.manualActiveTraceId();
     if (manual) {
@@ -254,7 +266,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     const layerColors = this.layersService.getLayerColorMap();
 
     // Annotate search matches (the conversation viewer reads these on each message).
-    const annotateMatches = (msgs: any[]) => {
+    const annotateMatches = (msgs: SearchAnnotated[]) => {
       for (const m of msgs) {
         const color = layerColors.get(m.id)?.[0];
         m.isSearchMatch = !!color;
@@ -299,8 +311,8 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   };
 
   ngOnInit() {
-    (window as any).clearCache = this.clearCacheFn;
-    (window as any).clearcache = this.clearCacheFn;
+    const w = window as DevWindow;
+    w.clearCache = w.clearcache = this.clearCacheFn;
 
     this.loadDatasets();
   }
@@ -355,9 +367,10 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     document.body.style.cursor = '';
 
     this.resizeObserver.disconnect();
-    if ((window as any).clearCache === this.clearCacheFn) {
-      delete (window as any).clearCache;
-      delete (window as any).clearcache;
+    const w = window as DevWindow;
+    if (w.clearCache === this.clearCacheFn) {
+      delete w.clearCache;
+      delete w.clearcache;
     }
   }
 
@@ -484,11 +497,11 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   /** Returns the highlighted text for a message. */
   getHighlightedTextForViewer = (msg: any) => getHighlightedTextForViewer(msg, this.layersService, this.highlightedChunkId());
 
-  /** Selects a node in the visualization by its ID. */
-  selectNodeById(id: string) {
-    const node = this.marks().find((n) => n.id === id);
-    if (node) {
-      this.selectNode(node);
+  /** Selects a mark by id (e.g. from a side-panel click). */
+  selectMarkById(id: string) {
+    const mark = this.marks().find((m) => m.id === id);
+    if (mark) {
+      this.selectMark(mark);
     }
   }
 
@@ -496,7 +509,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   onJumpToStart() {
     const msgs = this.threadMessages();
     if (msgs.length > 0) {
-      this.selectNodeById(msgs[0].id);
+      this.selectMarkById(msgs[0].id);
     }
   }
 
@@ -508,7 +521,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
       const lastId = (lastMsg.children && lastMsg.children.length > 0)
         ? lastMsg.children[lastMsg.children.length - 1].id
         : lastMsg.id;
-      this.selectNodeById(lastId);
+      this.selectMarkById(lastId);
     }
   }
 
@@ -628,7 +641,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     this.contentWidth.set(layout.contentWidth);
     this.contentHeight.set(layout.contentHeight);
     this.timeTicks.set(layout.timeTicks);
-    this.selectedNode.set(null);
+    this.selectedMark.set(null);
   }
 
   /** Trace ids whose files lane is expanded. */
@@ -650,7 +663,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     this.isLegendCollapsed.update((val) => !val);
   }
 
-  /** Selects a track (trace) without selecting a specific node. */
+  /** Selects a track (trace) without selecting a specific mark. */
   selectTrack(traceId: string, event?: Event) {
     if (event) {
       const target = event.target as HTMLElement;
@@ -658,24 +671,19 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
         return;
       }
     }
-    this.selectedNode.set(null);
+    this.selectedMark.set(null);
     this.manualActiveTraceId.set(traceId);
   }
 
-  /** Selects a node. */
-  selectNode(node: any, event?: Event) {
-    if (event) {
-      event.stopPropagation();
-    }
-    if (!node) return;
+  /** Selects a mark; the side panel scrolls to its message. */
+  selectMark(mark: Mark) {
+    this.selectedMark.set(mark);
 
-    this.selectedNode.set(node);
-
-    if (node.type === TraceNodeType.THINKING) {
-      // Highlight the specific chunk
-      this.highlightedChunkId.set(node.id);
+    if (mark.type === TraceNodeType.THINKING) {
+      // Briefly highlight that thinking chunk in the panel.
+      this.highlightedChunkId.set(mark.id);
       setTimeout(() => {
-        if (this.highlightedChunkId() === node.id) {
+        if (this.highlightedChunkId() === mark.id) {
           this.highlightedChunkId.set(null);
         }
       }, 2000);

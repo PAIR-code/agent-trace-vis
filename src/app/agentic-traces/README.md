@@ -4,6 +4,21 @@ Developer notes for `/#/agentic-traces`. Each selected trace is drawn as one
 row. Time (or tokens) runs left to right. Each row has horizontal lanes
 ("channels"), with a files lane underneath.
 
+## Glossary
+
+| Word | Type | Meaning |
+|---|---|---|
+| trace record | `TraceRecord` (`trace.ts`) | Raw OpenTraces JSON for one agent session. |
+| trace | `ReasoningTrace` | A parsed trace record: a list of steps. |
+| trace entry | `TraceEntry` | One item in the trace picker: title, date, agents, and the parsed trace. |
+| step | `ReasoningTraceStep` | One message in the record: a user turn, an agent turn, or a system message. |
+| node | `ReasoningTraceNode` | One piece of a step: thinking, a tool call (with its result), a response… |
+| mark | `Mark` | A node as drawn: its channel, position, size and look. Marks keep their node's id. |
+| row / track | `TraceLayout` | Everything drawn for one selected trace: marks, backbone and files lane. |
+| channel / lane | `CHANNELS` | A horizontal band in a row (user, agent, tools…). |
+| thread message | `ThreadMessage` | A side-panel entry: a user or system message, or an agent turn with its marks (thinking, tools, response) nested. |
+| search layer | `AnalysisLayer` | One search query with a color. Its matches glow on the timeline and in the panel. |
+
 ## How it works
 
 ```

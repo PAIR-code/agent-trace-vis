@@ -38,7 +38,7 @@ export interface ThreadMessage {
   children: Mark[];
 }
 
-export function groupThreadMessages(activeTraceId: string, nodes: Mark[]): ThreadMessage[] {
+export function groupThreadMessages(activeTraceId: string | undefined, nodes: Mark[]): ThreadMessage[] {
   const filteredNodes = nodes.filter(n => n.traceId === activeTraceId);
   
   // Sort nodes chronologically

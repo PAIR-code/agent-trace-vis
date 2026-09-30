@@ -61,7 +61,7 @@
 </div>
 
 <!-- Analysis Toolbar (separate row below header) -->
-<app-analysis-toolbar [nodes]="marks()"></app-analysis-toolbar>
+<app-analysis-toolbar [marks]="marks()"></app-analysis-toolbar>
 
 <div class="vis-page-container" *ngIf="!isLoading() && activeTrace(); else loading" (click)="onBackgroundClick($event)">
   <div class="main-layout">
@@ -150,13 +150,13 @@
               [trace]="t"
               [width]="contentWidth()"
               [showLabels]="i === 0"
-              [hoveredId]="hoveredNodeId()"
-              [selectedId]="selectedNode()?.id ?? null"
+              [hoveredId]="hoveredMarkId()"
+              [selectedId]="selectedMark()?.id ?? null"
               [searching]="layersService.anyLayerEnabled()"
               [searchColors]="searchColors()"
               [filesExpanded]="expandedFileTraceIds().has(t.id)"
-              (markSelect)="selectNode($event)"
-              (markHover)="hoveredNodeId.set($event)"
+              (markSelect)="selectMark($event)"
+              (markHover)="hoveredMarkId.set($event)"
               (toggleFiles)="toggleTraceFiles(t.id)">
             </app-trace-track>
           </div>
@@ -177,8 +177,8 @@
       <app-conversation-viewer
         [messages]="threadMessages()"
         [showJumpButtons]="true"
-        [activeNodeId]="selectedNode()?.id"
-        [hoveredNodeId]="hoveredNodeId()"
+        [activeNodeId]="selectedMark()?.id ?? null"
+        [hoveredNodeId]="hoveredMarkId()"
         [searchQuery]="layersService.anyLayerEnabled() ? ' ' : ''"
         [title]="activeTraceTitle() ? 'Trace: ' + activeTraceTitle() : 'Trace Conversation'"
         [subtitle]="activeTraceStepsCount() + ' steps'"
@@ -188,8 +188,8 @@
         [getSpeakerBorder]="getSpeakerBorderForViewer"
         [getHighlightedText]="getHighlightedTextForViewer"
         [scrollBehavior]="'smooth'"
-        (messageClick)="selectNodeById($event)"
-        (messageHover)="hoveredNodeId.set($event)"
+        (messageClick)="selectMarkById($event)"
+        (messageHover)="hoveredMarkId.set($event)"
         (jumpToStart)="onJumpToStart()"
         (jumpToEnd)="onJumpToEnd()"
         (overlayClick)="null">
