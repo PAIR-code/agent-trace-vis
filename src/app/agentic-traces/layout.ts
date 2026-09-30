@@ -20,7 +20,7 @@
  * Pure: the input traces are not modified.
  */
 
-import { ReasoningTrace, ReasoningTraceStep, BASE_OFFSET, LayoutOutput, LayoutParams, TraceLayout } from './layout-types';
+import { ReasoningTrace, ReasoningTraceStep, BASE_OFFSET, LayoutOutput, LayoutParams, TraceEntry, TraceLayout } from './layout-types';
 import { getAgentColor } from './colors';
 import { getStepTokens, stepAxisTokens, wordCount } from './layout-utils';
 import { Mark, MarkTraceInput, buildMarks } from './marks';
@@ -45,7 +45,7 @@ interface TraceMeta extends MarkTraceInput {
   duration: number;
 }
 
-function getTraceMetadata(trace: any, yAxisMode: 'time' | 'tokens', tokenTypes?: Set<string>): TraceMeta {
+function getTraceMetadata(trace: TraceEntry, yAxisMode: 'time' | 'tokens', tokenTypes?: Set<string>): TraceMeta {
   const data = (trace.data as ReasoningTrace) || {};
   const steps = data.steps || [];
 
@@ -90,7 +90,7 @@ export function layoutTraces(params: LayoutParams): LayoutOutput {
 
   const metas = [...selectedTraceIds]
     .map(id => traces.find(t => t.id === id))
-    .filter(trace => trace && trace.data)
+    .filter((trace): trace is TraceEntry => !!trace?.data)
     .map(trace => getTraceMetadata(trace, yAxisMode, selectedTokenTypes));
 
   // All traces share one scale (so durations are comparable) unless stretched.

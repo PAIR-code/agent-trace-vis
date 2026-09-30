@@ -30,16 +30,15 @@ import {
 } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
-import { HttpClient } from "@angular/common/http";
 import { ActivatedRoute } from "@angular/router";
 import { UrlParamService } from "../shared/url-param.service";
 import { AnalysisLayersService } from "./analysis-layers.service";
-import { TraceLoaderService, DatasetItem, HF_PRESETS } from "./trace-loader.service";
+import { DatasetItem, DatasetService } from "./dataset.service";
 import { COLORS } from "./colors";
 import { MultiSelectDropdownComponent, DropdownItem } from "../shared/multi-select-dropdown.component";
 import { AnalysisToolbarComponent } from "./analysis-toolbar.component";
 import { ConversationViewerComponent } from "../shared/conversation-viewer.component";
-import { layoutTraces, TraceLayout, TraceNodeType } from "./layout";
+import { layoutTraces, TraceEntry, TraceLayout, TraceNodeType } from "./layout";
 import { groupThreadMessages } from "./thread-helper";
 import { HuggingFaceImportComponent } from "./hugging-face-import.component";
 import {
@@ -86,7 +85,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
 
   // HF Import Modal State
   showImportModal = signal<boolean>(false);
-  traces = signal<any[]>([]);
+  traces = signal<TraceEntry[]>([]);
   selectedNode = signal<any>(null);
   hoveredNodeId = signal<string | null>(null);
   highlightedChunkId = signal<string | null>(null);
@@ -120,6 +119,8 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   );
 
   private lastSelectedDataset = '';
+  /** Bumped on each dataset load, so a slow load can't overwrite a newer one. */
+  private datasetRequest = 0;
 
   /** One laid-out row per selected trace. */
   traceLayouts = signal<TraceLayout[]>([]);
@@ -267,9 +268,8 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
 
 
   constructor(
-    private http: HttpClient,
     public layersService: AnalysisLayersService,
-    private traceLoaderService: TraceLoaderService,
+    private datasetService: DatasetService,
     private route: ActivatedRoute,
     private urlParamService: UrlParamService,
   ) { }
@@ -502,7 +502,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     }
 
     this.selectedTraceIds.set(new Set(updatedIds));
-    this.updateActiveTraces();
+    this.processTraces();
     this.updateUrlParams();
   }
 
@@ -545,45 +545,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** Loads trace data for selected traces if not already loaded. */
-  private updateActiveTraces() {
-    const ids = this.selectedTraceIds();
-    const promises: Promise<any>[] = [];
-
-    for (const id of ids) {
-      const trace = this.traces().find((t) => t.id === id);
-      if (trace && !trace.data && trace.file) {
-        promises.push(
-          this.http
-            .get(trace.file)
-            .toPromise()
-            .then((data: any) => {
-              const parsedTrace = this.traceLoaderService.parseTrace(data, trace.id);
-              trace.data = parsedTrace;
-
-              if (parsedTrace.title) {
-                trace.title = parsedTrace.title;
-              }
-
-              trace.agents = parsedTrace.agents || [];
-
-              return parsedTrace;
-            }),
-        );
-      }
-    }
-
-    if (promises.length > 0) {
-      Promise.all(promises).then(() => {
-        // Trigger reactivity for trace titles
-        this.traces.set([...this.traces()]);
-        this.processTraces();
-      });
-    } else {
-      this.processTraces();
-    }
-  }
-
   /** Sets the Y-axis mode (time or tokens). */
   setYAxisMode(mode: "time" | "tokens") {
     this.yAxisMode.set(mode);
@@ -595,24 +556,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     this.processTraces();
   }
 
-
-  private loadImportedDatasets(): DatasetItem[] {
-    try {
-      const data = localStorage.getItem('imported_datasets');
-      return data ? (JSON.parse(data) as any[]) : [];
-    } catch (e) {
-      console.error('Failed to load imported datasets from localStorage', e);
-      return [];
-    }
-  }
-
-  private saveImportedDatasets(datasets: DatasetItem[]) {
-    try {
-      localStorage.setItem('imported_datasets', JSON.stringify(datasets));
-    } catch (e) {
-      console.error('Failed to save imported datasets to localStorage', e);
-    }
-  }
 
   private updateUrlParams() {
     const currentDataset = this.selectedDatasetFile();
@@ -634,7 +577,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
 
 
 
-  private applyTraceSelection(tracesList: any[], targetIndices?: number[] | null) {
+  private applyTraceSelection(tracesList: TraceEntry[], targetIndices?: number[] | null) {
     if (tracesList.length === 0) {
       this.selectedTraceIds.set(new Set());
       this.updateUrlParams();
@@ -643,66 +586,29 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
 
     const selectedIds = this.urlParamService.validateAndSelectTraceIds(tracesList, targetIndices);
     this.selectedTraceIds.set(new Set(selectedIds));
-    this.updateActiveTraces();
+    this.processTraces();
     this.updateUrlParams();
   }
 
-  /** Loads the initial list of datasets. */
-  loadDatasets(selectDatasetId?: string) {
+  /** Loads the list of datasets, then the dataset named in the URL (or `selectDatasetId`, or the first). */
+  async loadDatasets(selectDatasetId?: string) {
     this.isLoading.set(true);
-    this.http.get<any>('assets/data/traces/manifest.json').subscribe({
-      next: (manifest) => {
-        let loadedDatasets: DatasetItem[] = [];
-        if (Array.isArray(manifest) && manifest.length > 0 && typeof manifest[0] === 'object' && 'files' in manifest[0]) {
-          loadedDatasets = manifest.map(ds => ({ name: ds.name, file: ds.id }));
-        } else {
-          loadedDatasets = [
-            { name: "Developer Agent Traces", file: "developer_agent_traces" },
-          ];
-        }
+    const datasets = await this.datasetService.listDatasets();
+    this.datasets.set(datasets);
+    this.isLoading.set(false);
 
-        // Add presets
-        loadedDatasets = [...loadedDatasets, ...HF_PRESETS];
-
-        // Add user-imported datasets
-        const imported = this.loadImportedDatasets();
-        loadedDatasets = [...loadedDatasets, ...imported];
-
-        this.datasets.set(loadedDatasets);
-        this.isLoading.set(false);
-
-        const { targetId, pendingIndices } = this.urlParamService.resolveInitialDatasetAndIndices(
-          loadedDatasets,
-          selectDatasetId,
-          this.route
-        );
-        if (targetId) {
-          this.onDatasetChange(targetId, pendingIndices);
-        }
-      },
-      error: (err) => {
-        console.error('Failed to load trace manifest.json', err);
-        let loadedDatasets = [...HF_PRESETS];
-        const imported = this.loadImportedDatasets();
-        loadedDatasets = [...loadedDatasets, ...imported];
-
-        this.datasets.set(loadedDatasets);
-        this.isLoading.set(false);
-
-        const { targetId, pendingIndices } = this.urlParamService.resolveInitialDatasetAndIndices(
-          loadedDatasets,
-          selectDatasetId,
-          this.route
-        );
-        if (targetId) {
-          this.onDatasetChange(targetId, pendingIndices);
-        }
-      }
-    });
+    const { targetId, pendingIndices } = this.urlParamService.resolveInitialDatasetAndIndices(
+      datasets,
+      selectDatasetId,
+      this.route
+    );
+    if (targetId) {
+      this.onDatasetChange(targetId, pendingIndices);
+    }
   }
 
   /** Handles dataset selection changes. */
-  onDatasetChange(file: string, targetIndices?: number[] | null) {
+  async onDatasetChange(file: string, targetIndices?: number[] | null) {
     if (file === '__import_hf_dataset__') {
       this.openImportModal();
       setTimeout(() => {
@@ -716,157 +622,19 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     const ds = this.datasets().find((d) => d.file === file);
     if (!ds) return;
 
-    if (ds.isRemote || ds.isImported) {
-      // Remote Hugging Face Dataset Ingestion
-      this.isLoading.set(true);
-      this.traces.set([]);
-
-      const maxTraces = ds.maxTraces || (ds.isRemote ? 5 : 50);
-
-      const startLoading = (urls: string[]) => {
-        this.traceLoaderService.loadRemoteDataset(urls, maxTraces)
-          .then((records) => {
-            this.processLoadedRecords(records, maxTraces, targetIndices);
-          })
-          .catch((err) => {
-            console.error('Failed to load remote dataset traces', err);
-            this.isLoading.set(false);
-          });
-      };
-
-      if (ds.urls && ds.urls.length > 0) {
-        startLoading(ds.urls);
-      } else if (ds.repoId) {
-        this.traceLoaderService.resolveRepositoryUrls(ds.repoId)
-          .then((urls) => {
-            ds.urls = urls; // cache the resolved URLs
-            startLoading(urls);
-          })
-          .catch((err) => {
-            console.error('Failed to resolve repository files', err);
-            this.isLoading.set(false);
-          });
-      } else {
-        this.isLoading.set(false);
-      }
-    } else {
-      // Local Dataset Loading
-      this.isLoading.set(true);
-      this.traces.set([]);
-
-      this.http.get<any>('assets/data/traces/manifest.json').subscribe({
-        next: (manifest) => {
-          let files: string[] = [];
-          if (Array.isArray(manifest) && manifest.length > 0 && typeof manifest[0] === 'object' && 'files' in manifest[0]) {
-            const matchingDs = manifest.find((d: any) => d.id === file);
-            if (matchingDs) {
-              files = matchingDs.files;
-            }
-          } else {
-            files = manifest;
-          }
-
-          const traces = this.traceLoaderService.getTraces(files);
-          this.traces.set(traces);
-
-          let remainingToPreload = traces.length;
-          if (remainingToPreload === 0) {
-            this.isLoading.set(false);
-            return;
-          }
-
-          // Preload titles in background programmatically from JSON
-          traces.forEach((trace) => {
-            this.http.get(trace.file).subscribe({
-              next: (data: any) => {
-                const parsedTrace = this.traceLoaderService.parseTrace(data, trace.id);
-
-                if (parsedTrace.title) {
-                  trace.title = parsedTrace.title;
-                }
-
-                const firstStep = parsedTrace.steps[0];
-                if (firstStep?.timestamp) {
-                  const date = new Date(firstStep.timestamp);
-                  trace.date = date.toLocaleDateString([], {
-                    month: "short",
-                    day: "numeric",
-                  });
-                  trace.timestamp = date.getTime();
-                }
-
-                trace.agents = parsedTrace.agents || [];
-                trace.data = parsedTrace;
-
-                const updatedTraces = [...this.traces()];
-                this.traces.set(updatedTraces);
-
-                remainingToPreload--;
-                if (remainingToPreload === 0) {
-                  this.isLoading.set(false);
-                  if (updatedTraces.length > 0) {
-                    this.applyTraceSelection(updatedTraces, targetIndices);
-                  }
-                }
-              },
-              error: (err) => {
-                console.error(`Failed to preload trace ${trace.file}`, err);
-                remainingToPreload--;
-                if (remainingToPreload === 0) {
-                  this.isLoading.set(false);
-                  const currentTraces = this.traces();
-                  if (currentTraces.length > 0) {
-                    this.applyTraceSelection(currentTraces, targetIndices);
-                  }
-                }
-              }
-            });
-          });
-        },
-        error: (err) => {
-          console.error('Failed to load trace manifest.json', err);
-          this.isLoading.set(false);
-        }
-      });
+    const request = ++this.datasetRequest;
+    this.isLoading.set(true);
+    this.traces.set([]);
+    try {
+      const traces = await this.datasetService.loadTraces(ds);
+      if (request !== this.datasetRequest) return;
+      this.traces.set(traces);
+      this.applyTraceSelection(traces, targetIndices);
+    } catch (err) {
+      console.error(`Failed to load dataset ${ds.name}`, err);
+    } finally {
+      if (request === this.datasetRequest) this.isLoading.set(false);
     }
-  }
-
-  private processLoadedRecords(records: any[], maxTraces: number, targetIndices?: number[] | null) {
-    if (maxTraces && maxTraces > 0) {
-      records = records.slice(0, maxTraces);
-    }
-
-    const traces = records.map((record: any) => {
-      const traceId = record.trace_id || record.session_id || 'default';
-      const parsedTrace = this.traceLoaderService.parseTrace(record, traceId);
-
-      let dateStr = '';
-      let timestampVal = 0;
-      const firstStep = parsedTrace.steps[0];
-      if (firstStep?.timestamp) {
-        const date = new Date(firstStep.timestamp);
-        dateStr = date.toLocaleDateString([], {
-          month: "short",
-          day: "numeric",
-        });
-        timestampVal = date.getTime();
-      }
-
-      return {
-        id: parsedTrace.id,
-        title: parsedTrace.title || traceId,
-        data: parsedTrace,
-        file: '',
-        agents: parsedTrace.agents || [],
-        date: dateStr,
-        timestamp: timestampVal
-      };
-    });
-
-    this.traces.set(traces);
-    this.isLoading.set(false);
-
-    this.applyTraceSelection(traces, targetIndices);
   }
 
   /** Processes the active traces to generate nodes and lines for visualization. */
@@ -956,8 +724,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   }
 
   onImportDataset(newDataset: DatasetItem) {
-    const currentImported = this.loadImportedDatasets();
-    this.saveImportedDatasets([newDataset, ...currentImported]);
+    this.datasetService.saveImported(newDataset);
 
     // Reload all datasets and switch to the new one asynchronously
     this.loadDatasets(newDataset.file);

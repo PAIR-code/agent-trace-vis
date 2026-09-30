@@ -66,6 +66,19 @@ export interface ReasoningTrace {
 
 import { TokenUsage } from './trace';
 
+/** One trace in the loaded dataset (an item in the trace picker). */
+export interface TraceEntry {
+  id: string;
+  title: string;
+  /** Source URL for local traces; '' for Hugging Face ones. */
+  file: string;
+  /** Null if the trace failed to load. */
+  data: ReasoningTrace | null;
+  agents: { name: string; model?: string; color: string }[];
+  /** Start date shown in the picker, e.g. "Sep 28". */
+  date?: string;
+}
+
 export interface ReasoningTraceStep {
   id: string;
   timestamp?: string;
@@ -118,7 +131,7 @@ export interface LayoutOutput {
 }
 
 export interface LayoutParams {
-  traces: any[];
+  traces: TraceEntry[];
   selectedTraceIds: Set<string>;
   yAxisMode: 'time' | 'tokens';
   hideGaps: boolean;

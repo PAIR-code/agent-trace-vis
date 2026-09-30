@@ -7,6 +7,7 @@ row. Time (or tokens) runs left to right. Each row has horizontal lanes
 ## How it works
 
 ```
+dataset.service: dataset list (manifest.json, Hugging Face, imports) → TraceEntry[]
 trace JSON ──trace-loader.service──▶ ReasoningTrace (steps → nodes)
                   tools.ts: tool name → stepType + label
                                             │

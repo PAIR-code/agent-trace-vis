@@ -18,8 +18,7 @@ import { Component, EventEmitter, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
-import { TraceLoaderService } from './trace-loader.service';
-import { DatasetItem } from './trace-loader.service';
+import { DatasetItem, DatasetService } from './dataset.service';
 
 @Component({
   selector: 'app-hugging-face-import',
@@ -240,7 +239,7 @@ export class HuggingFaceImportComponent {
   importError = "";
   importLoading = false;
 
-  constructor(private traceLoaderService: TraceLoaderService) {}
+  constructor(private datasetService: DatasetService) {}
 
   private parseHuggingFaceRepoId(url: string): string | null {
     const cleanUrl = url.trim().replace(/\/+$/, '');
@@ -268,9 +267,9 @@ export class HuggingFaceImportComponent {
 
     this.importLoading = true;
 
-    this.traceLoaderService.resolveRepositoryUrls(repoId)
+    this.datasetService.resolveRepositoryUrls(repoId)
       .then((resolveUrls) => {
-        this.traceLoaderService.loadRemoteDataset([resolveUrls[0]], 1)
+        this.datasetService.loadRemoteDataset([resolveUrls[0]], 1)
           .then((parsedRecords) => {
             if (parsedRecords.length === 0) {
               this.importError = "The first file in the dataset is empty or invalid JSONL.";

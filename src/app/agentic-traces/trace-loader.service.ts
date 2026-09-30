@@ -15,203 +15,21 @@
  */
 
 /**
- * @fileoverview Loads and parses OpenTraces JSON into internal trace structures.
+ * @fileoverview Parses OpenTraces JSON into internal trace structures.
  */
 
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
 import { ReasoningTrace, ReasoningTraceStep, ReasoningTraceNode, TraceNodeType, ReasoningStepType } from './layout';
 import { TraceRecord, Step, Agent } from './trace';
 import { classifyTool } from './tools';
 import { getAgentColor } from './colors';
 import { hashString } from './layout-utils';
 
-export interface DatasetItem {
-  name: string;
-  file: string; // Unique identifier or folder name
-  isRemote?: boolean;
-  isImported?: boolean;
-  repoId?: string;
-  urls?: string[];
-  maxTraces?: number;
-}
-
-export const HF_PRESETS: DatasetItem[] = [
-  {
-    name: 'OpenTraces/opentraces-runtime 🤗',
-    file: 'opentraces-runtime-hf',
-    isRemote: true,
-    repoId: 'OpenTraces/opentraces-runtime',
-    maxTraces: 10
-  },
-  {
-    name: 'OpenTraces/opentraces-devtime 🤗',
-    file: 'opentraces-devtime-hf',
-    isRemote: true,
-    repoId: 'OpenTraces/opentraces-devtime',
-    maxTraces: 10
-  },
-  {
-    name: 'OpenTraces/lambda-hermes-agent-reasoning-opentraces 🤗',
-    file: 'opentraces-lambda-hermes-hf',
-    isRemote: true,
-    repoId: 'OpenTraces/lambda-hermes-agent-reasoning-opentraces',
-    maxTraces: 10
-  }
-];
-
-
+/** Parses OpenTraces records into `ReasoningTrace`s. Fetching is `DatasetService`'s job. */
 @Injectable({
   providedIn: 'root'
 })
 export class TraceLoaderService {
-  constructor(private http: HttpClient) { }
-
-  async loadRemoteDataset(urls: string[], maxTraces: number): Promise<TraceRecord[]> {
-    // Try Hugging Face Dataset Viewer API first
-    if (urls.length > 0) {
-      const firstUrl = urls[0];
-      const match = firstUrl.match(/datasets\/([^\/]+\/[^\/]+)\/resolve\//);
-      if (match) {
-        const repoId = match[1];
-        const rowsApiUrl = `https://datasets-server.huggingface.co/rows?dataset=${repoId}&config=default&split=train&offset=0&length=${maxTraces}`;
-        try {
-          const response = await this.http.get<any>(rowsApiUrl).toPromise();
-          if (response && response.rows && Array.isArray(response.rows)) {
-            const records = response.rows.map((r: any) => r.row as TraceRecord);
-            return records;
-          }
-        } catch (e) {
-          console.warn(`Hugging Face rows API failed for ${repoId}, falling back to streaming file download:`, e);
-        }
-      }
-    }
-
-    // Fallback: Streaming Fetch
-    let records: TraceRecord[] = [];
-    for (const url of urls) {
-      if (records.length >= maxTraces) {
-        break;
-      }
-      try {
-        if (url.endsWith('.jsonl')) {
-          const response = await fetch(url);
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-          if (!response.body) {
-            throw new Error('Response body is null');
-          }
-          const reader = response.body.getReader();
-          const decoder = new TextDecoder('utf-8');
-          let buffer = '';
-
-          try {
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) {
-                break;
-              }
-              buffer += decoder.decode(value, { stream: true });
-              const lines = buffer.split('\n');
-              buffer = lines.pop() || '';
-
-              for (const line of lines) {
-                const trimmed = line.trim();
-                if (!trimmed) continue;
-                if (trimmed.includes('[redacted: model produced reasoning but content was withheld by provider]')) {
-                  continue;
-                }
-                try {
-                  const record = JSON.parse(trimmed) as TraceRecord;
-                  if (record && (record.steps || record.trace_id)) {
-                    records.push(record);
-                    if (records.length >= maxTraces) {
-                      await reader.cancel();
-                      break;
-                    }
-                  }
-                } catch (e) {
-                  // Ignore partial line parse errors
-                }
-              }
-              if (records.length >= maxTraces) {
-                break;
-              }
-            }
-          } finally {
-            reader.releaseLock();
-          }
-        } else {
-          const text = await this.http.get(url, { responseType: 'text' }).toPromise();
-          if (text) {
-            const parsed = this.parseJsonl(text);
-            records = records.concat(parsed);
-          }
-        }
-      } catch (e) {
-        console.error(`Error loading JSONL from ${url}:`, e);
-      }
-    }
-    return records.slice(0, maxTraces);
-  }
-
-  async resolveRepositoryUrls(repoId: string): Promise<string[]> {
-    const apiUrl = `https://huggingface.co/api/datasets/${repoId}`;
-    const metadata = await this.http.get<any>(apiUrl).toPromise();
-    if (!metadata || !metadata.siblings || !Array.isArray(metadata.siblings)) {
-      throw new Error("Failed to fetch dataset files list from Hugging Face API.");
-    }
-
-    const files = metadata.siblings
-      .map((s: any) => s.rfilename)
-      .filter((f: string) => f.endsWith('.jsonl') || f.endsWith('.json'))
-      .sort((a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
-
-    if (files.length === 0) {
-      throw new Error("No JSON or JSONL files found in this Hugging Face dataset repository.");
-    }
-
-    return files.map((f: string) =>
-      `https://huggingface.co/datasets/${repoId}/resolve/main/${f}`
-    );
-  }
-
-  getTraces(files: string[]): { id: string, title: string, data: any, file: string, agents: any[], date?: string, timestamp?: number }[] {
-    const base = 'assets/data/traces/';
-    return files.map(f => {
-      const filename = f.replace('.json', '');
-      return {
-        id: hashString(filename),
-        title: filename,
-        data: null,
-        file: base + f,
-        agents: [],
-      };
-    });
-  }
-
-  parseJsonl(content: string): TraceRecord[] {
-    const lines = content.split('\n');
-    const records: TraceRecord[] = [];
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
-      if (line.includes('[redacted: model produced reasoning but content was withheld by provider]')) {
-        continue;
-      }
-      try {
-        const record = JSON.parse(line) as TraceRecord;
-        if (record && (record.steps || record.trace_id)) {
-          records.push(record);
-        }
-      } catch (e) {
-        console.error(`Failed to parse JSONL line ${i + 1}:`, e);
-      }
-    }
-    return records;
-  }
-
   parseStep(step: Step, traceId: string, stepIndex: number, defaultAgent?: Agent, inheritedModel?: string): ReasoningTraceStep {
     const stepId = `${traceId}_step_${stepIndex}`;
     const nodes: ReasoningTraceNode[] = [];
