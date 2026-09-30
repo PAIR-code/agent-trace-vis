@@ -1,0 +1,77 @@
+<div class="analysis-toolbar">
+  <!-- Search input (reuses shared SearchBarComponent) -->
+  <app-search-bar
+    [searchMode]="layersService.currentMode()"
+    [searchQuery]="layersService.currentQuery()"
+    [searchLoading]="false"
+    [searchFocused]="layersService.searchFocused()"
+    [aiDisabled]="!layersService.apiKey()"
+    [referenceChips]="[]"
+    (searchModeChange)="layersService.setSearchMode($event)"
+    (searchQueryChange)="layersService.currentQuery.set($event)"
+    (executeSearch)="onSubmitSearch()"
+    (clearSearch)="layersService.currentQuery.set('')"
+    (focusChange)="layersService.searchFocused.set($event)">
+  </app-search-bar>
+
+  <!-- Scrollable Layer Chips list -->
+  <div class="chips-scroll-container">
+    <button class="scroll-btn left" *ngIf="showLeftScroll" (click)="scrollChips(-200)" title="Scroll left">&#10094;</button>
+
+    <div class="layer-chips" #chipsContainer (scroll)="onScroll()">
+      <!-- Active and Preset search layers -->
+      <div *ngFor="let layer of layersService.layers(); trackBy: trackByLayerId"
+           class="layer-chip"
+           [style.background]="layer.enabled ? layer.color : 'transparent'"
+           [style.borderColor]="layer.color"
+           [class.disabled]="!layer.enabled"
+           [class.loading]="layer.loading"
+           (click)="onChipClick($event, layer)">
+        <span class="chip-ai-marker" *ngIf="layer.mode === 'semantic'">&#10022;</span>
+        <span class="chip-label">{{ layer.name }}</span>
+        <div class="chip-spinner" *ngIf="layer.loading"></div>
+        <button class="chip-remove" (click)="onRemove($event, layer)" title="Remove layer">&#x2715;</button>
+      </div>
+    </div>
+
+    <button class="scroll-btn right" *ngIf="showRightScroll" (click)="scrollChips(200)" title="Scroll right">&#10095;</button>
+  </div>
+</div>
+
+<!-- Popover backdrop -->
+<div class="popover-backdrop" *ngIf="editingLayer" (click)="closePopover()"></div>
+
+<!-- Layer detail popover -->
+<div class="layer-popover" *ngIf="editingLayer"
+     [style.left.px]="popoverX" [style.top.px]="popoverY">
+  <div class="popover-section">
+    <label class="popover-label">Name</label>
+    <input type="text" class="popover-input"
+           [(ngModel)]="editingName">
+  </div>
+  <div class="popover-section">
+    <label class="popover-label">Query</label>
+    <textarea class="popover-textarea"
+              [(ngModel)]="editingQuery"></textarea>
+  </div>
+  <div class="popover-section popover-row">
+    <div>
+      <label class="popover-label">Type</label>
+      <span class="popover-type">{{ editingLayer.mode === 'semantic' ? '✦ AI semantic' : 'Text match' }}</span>
+    </div>
+    <div>
+      <label class="popover-label">Color</label>
+      <input type="color" class="popover-color"
+             [(ngModel)]="editingColor">
+    </div>
+  </div>
+  <div class="popover-matches">
+    Matches: {{ editingLayer.results.size }} nodes
+  </div>
+  <div class="popover-actions">
+    <button class="popover-btn rerun" [disabled]="!hasChanges" (click)="onSave()">
+      {{ queryChanged ? 'Save & rerun' : 'Save' }}
+    </button>
+    <button class="popover-btn cancel-edit" (click)="closePopover()">Cancel</button>
+  </div>
+</div>
