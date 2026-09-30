@@ -19,6 +19,38 @@ row. Time (or tokens) runs left to right. Each row has horizontal lanes
 | thread message | `ThreadMessage` | A side-panel entry: a user or system message, or an agent turn with its marks (thinking, tools, response) nested. |
 | search layer | `AnalysisLayer` | One search query with a color. Its matches glow on the timeline and in the panel. |
 
+### Steps, nodes and marks
+
+```
+TraceRecord.steps[i]   raw JSON
+      │  trace-loader.service: parseStep()      one step → one or more nodes
+      ▼
+ReasoningTraceStep     one message: user turn, agent turn, or system message
+  └─ nodes: ReasoningTraceNode[]
+      │  marks.ts: buildMarks()                 one node → exactly one mark (same id)
+      ▼
+Mark                   the node as drawn: channel, x, y, width, height, look
+  └─ stepRef ──▶ its ReasoningTraceStep
+```
+
+- **Step → nodes.** A user step becomes one `USER_INPUT` node, and a system
+  step one `SYSTEM` node. An agent step becomes, in order: a `THINKING` node
+  (if it has reasoning text), one node per tool call (`TOOL_DATA` if the result
+  came back, else `TOOL_CALL`), and a `RESPONSE` node (if it has reply text).
+- **What lives where.** The step holds what its nodes share: timestamp, model,
+  agent, token usage and color. A node holds its own type, text, `stepType`
+  (the tool kind, from `tools.ts`) and raw `data` (the tool call and result).
+- **Node → mark.** Every node gets exactly one mark with the same `id`, so the
+  side panel, search and files lane all refer to it by id. The mark copies the
+  node's fields and adds geometry. `stepRef` points back to the step: the step's
+  time or token range places the mark, its token usage sizes it, and the side
+  panel uses it to group an agent turn.
+- **Hidden marks.** File views, edits and searches have marks with
+  `hidden: true`: they're drawn in the files lane, which reuses the mark's x
+  and id. Rate-limit retry messages get an invisible zero-size mark.
+- Nodes never change after parsing. Marks are rebuilt on every layout (resize,
+  time/tokens toggle, …).
+
 ## How it works
 
 ```
