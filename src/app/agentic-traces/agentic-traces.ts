@@ -134,31 +134,31 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   sidebarWidth = signal<number>(420);
   containerWidth = signal<number>(typeof window !== 'undefined' ? Math.max(500, window.innerWidth - 450 - 50) : 1000);
 
-  private resizeObserver?: ResizeObserver;
-  private _visScrollAreaElement?: HTMLElement;
+  /** Re-lays out the rows when the timeline area changes width. */
+  private resizeObserver = new ResizeObserver(([entry]) => this.onScrollAreaResize(entry.contentRect.width));
+  private scrollArea?: HTMLElement;
   private isResizingSidebar = false;
   private resizeStartX = 0;
   private resizeStartWidth = 0;
   private mouseMoveListener?: (e: MouseEvent) => void;
   private mouseUpListener?: (e: MouseEvent) => void;
 
+  /** The scroll area comes and goes with the loading screen; observe whichever is current. */
   @ViewChild('visScrollArea', { static: false })
   set visScrollAreaRef(ref: ElementRef<HTMLElement> | undefined) {
     const el = ref?.nativeElement;
-    if (el && el !== this._visScrollAreaElement) {
-      if (this._visScrollAreaElement && this.resizeObserver) {
-        this.resizeObserver.unobserve(this._visScrollAreaElement);
-      }
-      this._visScrollAreaElement = el;
-      if (this.resizeObserver) {
-        this.resizeObserver.observe(el);
-      }
-      const measured = Math.floor(el.clientWidth - 32);
-      if (measured > 0 && Math.abs(measured - this.containerWidth()) > 2) {
-        this.containerWidth.set(Math.max(500, measured));
-        if (this.traces().length > 0) {
-          this.processTraces();
-        }
+    if (el === this.scrollArea) return;
+    if (this.scrollArea) this.resizeObserver.unobserve(this.scrollArea);
+    this.scrollArea = el;
+    if (el) this.resizeObserver.observe(el);  // also reports the initial size
+  }
+
+  private onScrollAreaResize(contentWidth: number) {
+    const width = Math.floor(contentWidth - 32);
+    if (width > 0 && Math.abs(width - this.containerWidth()) > 2) {
+      this.containerWidth.set(Math.max(500, width));
+      if (this.traces().length > 0) {
+        this.processTraces();
       }
     }
   }
@@ -298,39 +298,9 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     console.log(`[Agent Trace] Cleared ${count} cached search results.`);
   };
 
-  @HostListener('window:resize')
-  onWindowResize() {
-    if (this._visScrollAreaElement) {
-      const width = Math.floor(this._visScrollAreaElement.clientWidth - 32);
-      if (width > 0 && Math.abs(width - this.containerWidth()) > 2) {
-        this.containerWidth.set(Math.max(500, width));
-        if (this.traces().length > 0) {
-          this.processTraces();
-        }
-      }
-    }
-  }
-
   ngOnInit() {
     (window as any).clearCache = this.clearCacheFn;
     (window as any).clearcache = this.clearCacheFn;
-
-    if (typeof ResizeObserver !== 'undefined') {
-      this.resizeObserver = new ResizeObserver((entries) => {
-        for (const entry of entries) {
-          const width = Math.floor(entry.contentRect.width - 32);
-          if (width > 0 && Math.abs(width - this.containerWidth()) > 2) {
-            this.containerWidth.set(Math.max(500, width));
-            if (this.traces().length > 0) {
-              this.processTraces();
-            }
-          }
-        }
-      });
-      if (this._visScrollAreaElement) {
-        this.resizeObserver.observe(this._visScrollAreaElement);
-      }
-    }
 
     this.loadDatasets();
   }
@@ -384,10 +354,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     document.body.style.userSelect = '';
     document.body.style.cursor = '';
 
-    if (this.resizeObserver) {
-      this.resizeObserver.disconnect();
-      this.resizeObserver = undefined;
-    }
+    this.resizeObserver.disconnect();
     if ((window as any).clearCache === this.clearCacheFn) {
       delete (window as any).clearCache;
       delete (window as any).clearcache;
