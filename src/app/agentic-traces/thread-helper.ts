@@ -39,15 +39,12 @@ export interface ThreadMessage {
 }
 
 export function groupThreadMessages(activeTraceId: string | undefined, nodes: Mark[]): ThreadMessage[] {
-  const filteredNodes = nodes.filter(n => n.traceId === activeTraceId);
-  
-  // Sort nodes chronologically
-  filteredNodes.sort((a, b) => {
-    const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-    const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-    if (ta !== tb) return ta - tb;
-    return nodes.indexOf(a) - nodes.indexOf(b);
-  });
+  // Chronological; marks without a timestamp sort first, ties keep trace order.
+  const filteredNodes = nodes
+    .map((mark, index) => ({ mark, index, time: mark.timestamp ? new Date(mark.timestamp).getTime() : 0 }))
+    .filter(e => e.mark.traceId === activeTraceId)
+    .sort((a, b) => a.time - b.time || a.index - b.index)
+    .map(e => e.mark);
 
   const groups: ThreadMessage[] = [];
 

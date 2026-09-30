@@ -98,6 +98,8 @@ trace JSON ──trace-loader.service──▶ ReasoningTrace (steps → nodes)
   - Matched marks keep their color and get a `box-shadow` glow in the layer's
     color.
   - Everything else is grayed out.
+  - In the side panel, only the matched text is highlighted, in the layer's
+    color (`viewer-helpers.ts`).
   - Don't use per-mark CSS `filter`s (`drop-shadow`, `grayscale`). With
     hundreds of marks they make clicking noticeably laggy.
 

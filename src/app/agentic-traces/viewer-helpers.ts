@@ -20,7 +20,8 @@
 
 import { marked } from 'marked';
 import { AnalysisLayersService } from './analysis-layers.service';
-import { SPEAKER_STYLES, createStyle, COLORS } from './colors';
+import { SPEAKER_STYLES, SpeakerStyle, createStyle, COLORS } from './colors';
+import { PRESET_COLORS, USER_AI_COLORS, USER_TEXT_COLORS } from './analysis-layers.types';
 import { TraceNodeType } from './layout-types';
 
 export function getRoleLabel(type: string): string {
@@ -47,59 +48,53 @@ export function getRoleLabel(type: string): string {
   }
 }
 
-export function getSpeakerColorForViewer(msg: any, activeTraceId: string | undefined, traces: any[]): string {
-  if (msg.type === 'response' || msg.type === 'thinking' || msg.type === 'step' || msg.type === 'turn') {
-    if (msg.color) return msg.color;
-    const traceId = msg.traceId || activeTraceId;
-    const trace = traces.find((t) => t.id === traceId);
-    const color = (trace as any)?.agentColor;
-    if (color) return color;
-  }
-  return SPEAKER_STYLES[msg.type]?.color || '#000';
+/** The parts of a side-panel message (a `ThreadMessage` or a `Mark`) the helpers read. */
+export interface PanelMessage {
+  id: string;
+  type: string;
+  text?: string;
+  traceId?: string;
+  color?: string | null;
 }
 
-export function getSpeakerBgColorForViewer(msg: any, activeTraceId: string | undefined, traces: any[]): string {
-  if (msg.type === 'response' || msg.type === 'thinking' || msg.type === 'step' || msg.type === 'turn') {
-    const color = msg.color || (traces.find((t) => t.id === (msg.traceId || activeTraceId)) as any)?.agentColor;
-    if (color) {
-      return createStyle(color).bg;
-    }
-  }
-  return SPEAKER_STYLES[msg.type]?.bg || '#ffffff';
+/** Message types drawn in their agent's color. */
+const AGENT_COLORED = new Set<string>(['response', 'thinking', 'step', 'turn']);
+
+/** Text, background and border colors for a side-panel message. */
+export function speakerStyle(msg: PanelMessage, agentColor: string | undefined): SpeakerStyle {
+  const agent = AGENT_COLORED.has(msg.type) ? msg.color || agentColor : undefined;
+  if (agent) return createStyle(agent);
+  const base = SPEAKER_STYLES[msg.type];
+  const isTool = msg.type === 'tool_call' || msg.type === 'tool_data';
+  return {
+    color: base?.color || '#000',
+    bg: base?.bg || '#ffffff',
+    border: isTool ? `1.5px solid ${COLORS.TOOL_LINE}` : base?.border || '1px solid #e5e7eb',
+  };
 }
 
-export function getSpeakerBorderForViewer(msg: any, activeTraceId: string | undefined, traces: any[]): string {
-  if (msg.type === 'tool_call' || msg.type === 'tool_data') {
-    return `1.5px solid ${COLORS.TOOL_LINE}`;
-  }
-  if (msg.type === 'response' || msg.type === 'thinking' || msg.type === 'step' || msg.type === 'turn') {
-    const color = msg.color || (traces.find((t) => t.id === (msg.traceId || activeTraceId)) as any)?.agentColor;
-    if (color) {
-      return createStyle(color).border;
-    }
-  }
-  return SPEAKER_STYLES[msg.type]?.border || '1px solid #e5e7eb';
+/**
+ * Every color a search layer can have. Highlights are `<mark class="hl-N">`
+ * (N = index here) because Angular strips inline styles from [innerHTML];
+ * the matching CSS rules are generated from this same list.
+ */
+const LAYER_COLORS = [...PRESET_COLORS, ...USER_AI_COLORS, ...USER_TEXT_COLORS];
+
+let highlightStylesAdded = false;
+function ensureHighlightStyles() {
+  if (highlightStylesAdded) return;
+  highlightStylesAdded = true;
+  const style = document.createElement('style');
+  style.textContent = LAYER_COLORS
+    .map((c, i) => `.search-span-highlight.hl-${i} { background-color: color-mix(in srgb, ${c} 35%, transparent); }`)
+    .join('\n');
+  document.head.appendChild(style);
 }
 
-const COLOR_CLASS_MAP: Record<string, string> = {
-  '#8b5cf6': 'hl-violet',
-  '#38bdf8': 'hl-sky',
-  '#4f46e5': 'hl-indigo',
-  '#a855f7': 'hl-purple',
-  '#3b82f6': 'hl-blue',
-  '#06b6d4': 'hl-cyan',
-  '#6366f1': 'hl-indigo-med',
-  '#0ea5e9': 'hl-sky-bright',
-  '#0d9488': 'hl-teal-dark',
-  '#eab308': 'hl-yellow',
-  '#22c55e': 'hl-green',
-  '#a3e635': 'hl-lime',
-  '#14b8a6': 'hl-teal',
-  '#f59e0b': 'hl-amber',
-  '#10b981': 'hl-emerald',
-  '#84cc16': 'hl-lime-green',
-  'rgb(255, 150, 50)': 'hl-orange',
-};
+function highlightClass(color: string): string {
+  const i = LAYER_COLORS.indexOf(color);
+  return i >= 0 ? `hl-${i}` : '';  // unknown colors get the default (orange) from styles.css
+}
 
 /**
  * Renders raw text as markdown (with LaTeX math support) and search span highlighting.
@@ -142,10 +137,10 @@ export function renderMarkdownWithHighlights(
   let html = marked.parse(text, { breaks: true, async: false }) as string;
 
   // 4. Restore search span highlights
+  if (spanHighlightConfigs.length > 0) ensureHighlightStyles();
   for (let i = 0; i < spanHighlightConfigs.length; i++) {
     const color = spanHighlightConfigs[i].color;
-    const colorClass = COLOR_CLASS_MAP[color] || 'hl-orange';
-    const markTag = `<mark class="search-span-highlight ${colorClass}">`;
+    const markTag = `<mark class="search-span-highlight ${highlightClass(color)}">`;
 
     html = html.split(`%%HL_START_${i}%%`).join(markTag);
     html = html.split(`%%HL_END_${i}%%`).join('</mark>');
@@ -158,7 +153,7 @@ const highlightCache = new Map<string, string>();
 const MAX_CACHE_SIZE = 1000;
 
 export function getHighlightedTextForViewer(
-  msg: any,
+  msg: PanelMessage,
   layersService: AnalysisLayersService,
   highlightedChunkId: string | null
 ): string {

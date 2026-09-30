@@ -179,7 +179,6 @@
         [showJumpButtons]="true"
         [activeNodeId]="selectedMark()?.id ?? null"
         [hoveredNodeId]="hoveredMarkId()"
-        [searchQuery]="layersService.anyLayerEnabled() ? ' ' : ''"
         [title]="activeTraceTitle() ? 'Trace: ' + activeTraceTitle() : 'Trace Conversation'"
         [subtitle]="activeTraceStepsCount() + ' steps'"
         [getSpeakerLabel]="getSpeakerLabelForViewer"

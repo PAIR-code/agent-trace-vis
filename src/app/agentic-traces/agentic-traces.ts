@@ -42,23 +42,9 @@ import { layoutTraces, TraceEntry, TraceLayout, TraceNodeType } from "./layout";
 import { Mark } from "./marks";
 import { groupThreadMessages } from "./thread-helper";
 import { HuggingFaceImportComponent } from "./hugging-face-import.component";
-import {
-  getRoleLabel,
-  getSpeakerColorForViewer,
-  getSpeakerBgColorForViewer,
-  getSpeakerBorderForViewer,
-  getHighlightedTextForViewer,
-} from "./viewer-helpers";
+import { PanelMessage, getRoleLabel, speakerStyle, getHighlightedTextForViewer } from "./viewer-helpers";
 import { measureDrop } from "./drag-drop-helper";
 import { TraceTrackComponent } from "./trace-track";
-
-/** A side-panel message or child, annotated with whether a search layer matches it. */
-interface SearchAnnotated {
-  id: string;
-  isSearchMatch?: boolean;
-  glowStyle?: string;
-  children?: SearchAnnotated[];
-}
 
 /** Dev helpers exposed on `window` (a convention shared with the other pages). */
 type DevWindow = Window & { clearCache?: () => void; clearcache?: () => void };
@@ -260,23 +246,8 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     return trace?.title || '';
   });
 
-  // Group nodes into thread messages: tool/system/error nest under agent turns
-  threadMessages = computed(() => {
-    const messages = groupThreadMessages(this.activeTraceId(), this.marks());
-    const layerColors = this.layersService.getLayerColorMap();
-
-    // Annotate search matches (the conversation viewer reads these on each message).
-    const annotateMatches = (msgs: SearchAnnotated[]) => {
-      for (const m of msgs) {
-        const color = layerColors.get(m.id)?.[0];
-        m.isSearchMatch = !!color;
-        m.glowStyle = color ? `0 0 0 2px ${color}, 0 0 8px ${color}50` : undefined;
-        if (m.children) annotateMatches(m.children);
-      }
-    };
-    annotateMatches(messages);
-    return messages;
-  });
+  /** Side-panel messages for the active trace. Search matches are highlighted in the text only. */
+  threadMessages = computed(() => groupThreadMessages(this.activeTraceId(), this.marks()));
 
 
   constructor(
@@ -486,16 +457,17 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     this.updateUrlParams();
   }
 
-  /** Returns the speaker label for the viewer. */
-  getSpeakerLabelForViewer = (msg: any) => getRoleLabel(msg.type);
-  /** Returns the text color for a message type. */
-  getSpeakerColorForViewer = (msg: any) => getSpeakerColorForViewer(msg, this.activeTraceId(), this.traceLayouts());
-  /** Returns the background color for a message type. */
-  getSpeakerBgColorForViewer = (msg: any) => getSpeakerBgColorForViewer(msg, this.activeTraceId(), this.traceLayouts());
-  /** Returns the border style for a message type. */
-  getSpeakerBorderForViewer = (msg: any) => getSpeakerBorderForViewer(msg, this.activeTraceId(), this.traceLayouts());
-  /** Returns the highlighted text for a message. */
-  getHighlightedTextForViewer = (msg: any) => getHighlightedTextForViewer(msg, this.layersService, this.highlightedChunkId());
+  // Callbacks for the side panel (the shared viewer asks for each color separately).
+  getSpeakerLabelForViewer = (msg: PanelMessage) => getRoleLabel(msg.type);
+  getSpeakerColorForViewer = (msg: PanelMessage) => this.speakerStyle(msg).color;
+  getSpeakerBgColorForViewer = (msg: PanelMessage) => this.speakerStyle(msg).bg;
+  getSpeakerBorderForViewer = (msg: PanelMessage) => this.speakerStyle(msg).border;
+  getHighlightedTextForViewer = (msg: PanelMessage) => getHighlightedTextForViewer(msg, this.layersService, this.highlightedChunkId());
+
+  private speakerStyle(msg: PanelMessage) {
+    const traceId = msg.traceId || this.activeTraceId();
+    return speakerStyle(msg, this.traceLayouts().find(t => t.id === traceId)?.agentColor);
+  }
 
   /** Selects a mark by id (e.g. from a side-panel click). */
   selectMarkById(id: string) {
