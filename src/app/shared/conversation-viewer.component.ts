@@ -30,8 +30,6 @@ export interface ConversationMessage {
   text: string;
   timestamp?: string | number;
   children?: ConversationMessage[];
-  score?: number;
-  isSearchMatch?: boolean;
   data?: any;
 }
 
@@ -74,7 +72,6 @@ export interface ConversationMessage {
                  class="message-card"
                  [class.is-active]="activeNodeId === msg.id"
                  [class.is-hovered]="hoveredNodeId === msg.id"
-                 [class.search-match]="isMatch(msg)"
                  [style.--speaker-bg]="getSpeakerBgColor(msg)"
                  [style.--speaker-border]="getSpeakerBorder(msg)"
                  (click)="onMessageClick(msg.id)"
@@ -708,12 +705,6 @@ export class ConversationViewerComponent implements OnChanges {
 
   onScroll(event: Event) {
     this.panelScroll.emit(event);
-  }
-
-  isMatch(msg: ConversationMessage): boolean {
-    if (msg.isSearchMatch) return true;
-    if (msg.score !== undefined && msg.score > 0) return true;
-    return false;
   }
 
   scrollToNode(nodeId: string) {
