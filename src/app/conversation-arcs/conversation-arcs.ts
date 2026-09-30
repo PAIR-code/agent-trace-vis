@@ -458,7 +458,7 @@ export class ConversationArcsComponent implements OnInit, OnDestroy {
       setTimeout(() => {
         const el = document.getElementById(`chat-sentence-${col.conversationHash}-${globalIndex}`);
         if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.scrollIntoView({ block: 'center' });
         }
       }, 50);
     }

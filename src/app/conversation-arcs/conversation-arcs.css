@@ -368,10 +368,6 @@
   border-left: 1px solid #e2e8f0 !important;
 }
 
-::ng-deep .thread-scroll {
-  scroll-behavior: smooth !important;
-}
-
 ::ng-deep .panel-static-header {
   background: #ffffff !important;
   border-bottom: 1px solid #e2e8f0 !important;

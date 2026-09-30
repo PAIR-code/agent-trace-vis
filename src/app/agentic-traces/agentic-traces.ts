@@ -45,6 +45,7 @@ import { HuggingFaceImportComponent } from "./hugging-face-import.component";
 import { PanelMessage, getRoleLabel, speakerStyle, getHighlightedTextForViewer } from "./viewer-helpers";
 import { measureDrop } from "./drag-drop-helper";
 import { TraceTrackComponent } from "./trace-track";
+import { ScrubBarComponent, ScrubEvent } from "./scrub-bar";
 
 /** Dev helpers exposed on `window` (a convention shared with the other pages). */
 type DevWindow = Window & { clearCache?: () => void; clearcache?: () => void };
@@ -71,6 +72,7 @@ interface LegendEntry {
     ConversationViewerComponent,
     HuggingFaceImportComponent,
     TraceTrackComponent,
+    ScrubBarComponent,
   ],
   providers: [AnalysisLayersService],
   templateUrl: './agentic-traces.html',
@@ -365,7 +367,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
 
   isInteractiveElement(target: EventTarget | null): boolean {
     if (!target || !(target instanceof Element)) return false;
-    return !!target.closest('.vis-node, .file-marker, .file-label, .files-header, button, input, select, a');
+    return !!target.closest('.vis-node, .file-marker, .file-label, .files-header, .scrub-bar, button, input, select, a');
   }
 
   onMouseDown(event: MouseEvent) {
@@ -661,6 +663,16 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
         }
       }, 2000);
     }
+  }
+
+  /** Side panel scrolls this message to the top without selecting it. */
+  panelScrollTarget = signal<{ id: string } | null>(null);
+
+  /** Scrub bar moved: select the mark under it, or in a gap select nothing and show the next mark. */
+  onScrub(traceId: string, { mark, next }: ScrubEvent) {
+    this.manualActiveTraceId.set(traceId);  // keep this row active when nothing is selected
+    this.selectedMark.set(mark);
+    if (!mark && next) this.panelScrollTarget.set({ id: next.id });
   }
 
   openImportModal() {

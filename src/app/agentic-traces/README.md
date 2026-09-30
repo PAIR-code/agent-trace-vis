@@ -102,6 +102,10 @@ trace JSON ──trace-loader.service──▶ ReasoningTrace (steps → nodes)
     color (`viewer-helpers.ts`).
   - Don't use per-mark CSS `filter`s (`drop-shadow`, `grayscale`). With
     hundreds of marks they make clicking noticeably laggy.
+- **Scrub bar** (`scrub-bar.ts`): a playhead over the active row (lanes and
+  files). Over a mark (`markAt()`), it selects it and the side panel jumps to
+  it. In a gap, nothing is selected and the side panel scrolls the next mark
+  to the top (`scrollTarget`). The side panel never smooth-scrolls; it jumps.
 
 ## How to add a channel
 

@@ -159,6 +159,11 @@
               (markHover)="hoveredMarkId.set($event)"
               (toggleFiles)="toggleTraceFiles(t.id)">
             </app-trace-track>
+            <app-scrub-bar *ngIf="activeTraceId() === t.id"
+              [marks]="t.marks"
+              [selectedId]="selectedMark()?.id ?? null"
+              (scrub)="onScrub(t.id, $event)">
+            </app-scrub-bar>
           </div>
         </div>
       </div>
@@ -178,6 +183,7 @@
         [messages]="threadMessages()"
         [showJumpButtons]="true"
         [activeNodeId]="selectedMark()?.id ?? null"
+        [scrollTarget]="panelScrollTarget()"
         [hoveredNodeId]="hoveredMarkId()"
         [title]="activeTraceTitle() ? 'Trace: ' + activeTraceTitle() : 'Trace Conversation'"
         [subtitle]="activeTraceStepsCount() + ' steps'"
@@ -186,7 +192,6 @@
         [getSpeakerBgColor]="getSpeakerBgColorForViewer"
         [getSpeakerBorder]="getSpeakerBorderForViewer"
         [getHighlightedText]="getHighlightedTextForViewer"
-        [scrollBehavior]="'smooth'"
         (messageClick)="selectMarkById($event)"
         (messageHover)="hoveredMarkId.set($event)"
         (jumpToStart)="onJumpToStart()"

@@ -301,7 +301,6 @@ export interface ConversationMessage {
       overflow-y: auto;
       padding: 16px 16px 64px 16px;
       position: relative;
-      scroll-behavior: smooth;
     }
 
     .message-list {
@@ -675,7 +674,6 @@ export class ConversationViewerComponent implements OnChanges {
   @Input() headerActionsTemplate: any;
   @Input() messageActionsTemplate: any;
   @Input() betweenMessagesTemplate: any;
-  @Input() scrollBehavior: 'auto' | 'smooth' | 'instant' = 'instant';
 
   @Input() showJumpButtons: boolean = true;
   @Output() jumpToStart = new EventEmitter<void>();
@@ -687,6 +685,9 @@ export class ConversationViewerComponent implements OnChanges {
 
   @ViewChild('threadScrollContainer') scrollContainer!: ElementRef<HTMLDivElement>;
 
+  /** Scrolls this message to the top without selecting it. A new object each time, so the same id scrolls again. */
+  @Input() scrollTarget: { id: string } | null = null;
+
   ngOnChanges(changes: SimpleChanges) {
     if ((changes['activeNodeId'] || changes['messages']) && this.activeNodeId) {
       const wasClicked = this.activeNodeId === this.lastClickedNodeId;
@@ -695,6 +696,9 @@ export class ConversationViewerComponent implements OnChanges {
       if (!wasClicked) {
         this.scrollToNode(this.activeNodeId);
       }
+    }
+    if (changes['scrollTarget'] && this.scrollTarget) {
+      this.scrollToNode(this.scrollTarget.id);
     }
   }
 
@@ -708,38 +712,29 @@ export class ConversationViewerComponent implements OnChanges {
   }
 
   scrollToNode(nodeId: string) {
+    // Wait for this change detection pass to render the messages.
     setTimeout(() => {
       const el = document.getElementById('msg-' + nodeId) || document.getElementById('chunk-' + nodeId);
       if (el && this.scrollContainer) {
         const container = this.scrollContainer.nativeElement;
         const containerRect = container.getBoundingClientRect();
         const elementRect = el.getBoundingClientRect();
-        const relativeTop = elementRect.top - containerRect.top + container.scrollTop;
-
-        container.scrollTo({
-          top: relativeTop,
-          behavior: this.scrollBehavior as ScrollBehavior
-        });
+        container.scrollTop += elementRect.top - containerRect.top;
       }
-    }, 100);
+    });
   }
 
   scrollToTop() {
     if (this.scrollContainer) {
-      this.scrollContainer.nativeElement.scrollTo({
-        top: 0,
-        behavior: 'smooth'
-      });
+      this.scrollContainer.nativeElement.scrollTop = 0;
     }
     this.jumpToStart.emit();
   }
 
   scrollToBottom() {
     if (this.scrollContainer) {
-      this.scrollContainer.nativeElement.scrollTo({
-        top: this.scrollContainer.nativeElement.scrollHeight,
-        behavior: 'smooth'
-      });
+      const container = this.scrollContainer.nativeElement;
+      container.scrollTop = container.scrollHeight;
     }
     this.jumpToEnd.emit();
   }
