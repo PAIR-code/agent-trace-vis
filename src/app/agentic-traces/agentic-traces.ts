@@ -152,6 +152,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   }
 
   private onScrollAreaResize(contentWidth: number) {
+    // 32px slack: the last mark extends past its timestamp, so the full width would scroll horizontally.
     const width = Math.floor(contentWidth - 32);
     if (width > 0 && Math.abs(width - this.containerWidth()) > 2) {
       this.containerWidth.set(Math.max(500, width));

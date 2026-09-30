@@ -9,7 +9,7 @@ As AI systems increasingly rely on multi-step reasoning and tool use, understand
 ## Visualizations
 
 ### Agentic Traces
-A timeline-based visualization for structured agent traces (e.g., from coding agents, tool-using LLMs). Shows the interplay between user messages, model thinking, tool calls, and observations in a multi-column layout. Supports search, model highlighting, and gap compression for long traces.
+A timeline-based visualization for structured agent traces (e.g., from coding agents, tool-using LLMs). Each trace is one row with horizontal lanes: the user/agent conversation, the agent's internal processes (thinking), tool calls, and a files lane showing which files were read, searched, and edited. Supports search, model highlighting, and gap compression for long traces.
 
 - **Demo**: [Demo](https://agent-trace-vis.netlify.app/#/agentic-traces)
 - **Route**: `/#/agentic-traces`
