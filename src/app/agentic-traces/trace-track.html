@@ -15,8 +15,7 @@
     @for (ch of channels; track ch.id) {
       <div class="row-lane" [style.height.px]="ch.height" [style.background]="ch.background"></div>
     }
-    <svg class="track-lines-layer" [attr.width]="width()" [attr.height]="trackHeight"
-         draggable="false" (dragstart)="blockDrag($event)">
+    <svg class="track-lines-layer" [attr.width]="width()" [attr.height]="trackHeight">
       @for (line of trace().backbone; track line.id) {
         <path [attr.d]="line.path"
               [attr.stroke]="line.stroke"
@@ -29,7 +28,7 @@
   </div>
 
   <!-- Marks: one div per drawn trace node (see marks.ts) -->
-  <div class="track-nodes-layer" draggable="false" (dragstart)="blockDrag($event)">
+  <div class="track-nodes-layer">
     @for (node of trace().marks; track node.id) {
       @if (!node.hidden) {
         <div class="vis-node {{ node.type }} {{ node.look.icon ?? '' }}"
@@ -46,8 +45,6 @@
              [style.--mark-border]="node.look.borderColor"
              [style.box-shadow]="glow().get(node.id)"
              [title]="node.label"
-             draggable="false"
-             (dragstart)="blockDrag($event)"
              (click)="onSelect(node, $event)"
              (mouseenter)="markHover.emit(node.id)"
              (mouseleave)="markHover.emit(null)">
@@ -93,7 +90,6 @@
            [attr.opacity]="isRowDimmed(row) ? 0.3 : null"
            [attr.transform]="'translate(0,' + (filesExpanded() ? r * fileRowHeight : filesLane.height / 2 - 14) + ')'">
           <text class="file-label" [attr.x]="row.startX" y="10"
-                draggable="false" (dragstart)="blockDrag($event)"
                 (click)="onSelect(row.edits[0]?.node ?? row.views[0]?.node, $event)"
                 [attr.title]="row.filePath">{{ row.basename }}</text>
 
@@ -121,7 +117,6 @@
                     [class.is-hovered]="hoveredId() === view.node.id"
                     [class.selected]="selectedId() === view.node.id"
                     [class.dimmed]="searching() && !searchColor(view.node.id)"
-                    draggable="false" (dragstart)="blockDrag($event)"
                     (click)="onSelect(view.node, $event)"
                     (mouseenter)="markHover.emit(view.node.id)"
                     (mouseleave)="markHover.emit(null)"
@@ -136,7 +131,6 @@
                   [class.is-hovered]="hoveredId() === edit.node.id"
                   [class.selected]="selectedId() === edit.node.id"
                   [class.dimmed]="searching() && !searchColor(edit.node.id)"
-                  draggable="false" (dragstart)="blockDrag($event)"
                   (click)="onSelect(edit.node, $event)"
                   (mouseenter)="markHover.emit(edit.node.id)"
                   (mouseleave)="markHover.emit(null)"

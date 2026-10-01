@@ -109,10 +109,4 @@ export class TraceTrackComponent {
     event.preventDefault();
     this.toggleFiles.emit();
   }
-
-  /** Keeps the row itself draggable but not its contents. */
-  blockDrag(event: Event) {
-    event.preventDefault();
-    event.stopPropagation();
-  }
 }

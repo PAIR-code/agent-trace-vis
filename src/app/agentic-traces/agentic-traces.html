@@ -138,14 +138,9 @@
                class="trace-background-row"
                [class.is-dragging]="draggedTrackIndex() === i"
                [class.is-active]="activeTraceId() === t.id"
-               draggable="true"
-               (mousedown)="onMouseDown($event)"
                (click)="selectTrack(t.id, $event)"
-               (dragstart)="onTrackDragStart($event, i)"
                (dragover)="onContainerDragOver($event)"
-               (drop)="onTrackDrop($event)"
-               (dragend)="onTrackDragEnd()"
-               title="Drag track to reorder">
+               (drop)="onTrackDrop($event)">
             <app-trace-track
               [trace]="t"
               [width]="contentWidth()"
@@ -164,6 +159,18 @@
               [selectedId]="selectedMark()?.id ?? null"
               (scrub)="onScrub(t.id, $event)">
             </app-scrub-bar>
+            <!-- Reorder handle -->
+            <div class="row-drag-handle"
+                 draggable="true"
+                 (dragstart)="onTrackDragStart($event, i)"
+                 (dragend)="onTrackDragEnd()"
+                 title="Drag to reorder">
+              <svg width="6" height="14" viewBox="0 0 6 14" fill="currentColor">
+                <circle cx="1.5" cy="2" r="1" /><circle cx="4.5" cy="2" r="1" />
+                <circle cx="1.5" cy="7" r="1" /><circle cx="4.5" cy="7" r="1" />
+                <circle cx="1.5" cy="12" r="1" /><circle cx="4.5" cy="12" r="1" />
+              </svg>
+            </div>
           </div>
         </div>
       </div>

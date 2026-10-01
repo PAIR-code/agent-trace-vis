@@ -359,32 +359,28 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     }
   }
 
-  // Drag and drop track reordering
+  // Drag and drop track reordering (started from a row's drag handle)
   draggedTrackIndex = signal<number | null>(null);
   dropIndex = signal<number | null>(null);
   dropIndicatorTop = signal(0);
-  private lastMouseDownTarget: EventTarget | null = null;
 
   isInteractiveElement(target: EventTarget | null): boolean {
     if (!target || !(target instanceof Element)) return false;
     return !!target.closest('.vis-node, .file-marker, .file-label, .files-header, .scrub-bar, button, input, select, a');
   }
 
-  onMouseDown(event: MouseEvent) {
-    this.lastMouseDownTarget = event.target;
-  }
-
   onTrackDragStart(event: DragEvent, index: number) {
-    // Don't start track drag when clicking on interactive nodes or markers
-    if (this.isInteractiveElement(event.target) || this.isInteractiveElement(this.lastMouseDownTarget)) {
-      event.preventDefault();
-      return;
-    }
     this.draggedTrackIndex.set(index);
     this.dropIndex.set(null);
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = 'move';
       event.dataTransfer.setData('text/plain', String(index));
+      // Drag the picture of the whole row, not just the handle.
+      const row = (event.target as Element).closest('.trace-background-row');
+      if (row) {
+        const rect = row.getBoundingClientRect();
+        event.dataTransfer.setDragImage(row, event.clientX - rect.left, event.clientY - rect.top);
+      }
     }
   }
 
@@ -413,7 +409,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   onTrackDragEnd() {
     this.draggedTrackIndex.set(null);
     this.dropIndex.set(null);
-    this.lastMouseDownTarget = null;
   }
 
   executeDropReorder(fromIndex: number, targetDropIndex: number) {

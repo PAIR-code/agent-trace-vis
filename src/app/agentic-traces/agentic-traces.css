@@ -419,14 +419,12 @@ app-analysis-toolbar {
   margin-bottom: 28px;
   flex-shrink: 0;
   pointer-events: auto;
-  cursor: grab;
   border-radius: 8px;
   box-sizing: border-box;
   transition: opacity 0.15s, outline 0.15s, box-shadow 0.15s;
 }
 
 .trace-background-row.is-dragging {
-  cursor: grabbing;
   opacity: 0.25;
   background: #eff6ff;
   outline: 2px solid #3b82f6;
@@ -436,6 +434,32 @@ app-analysis-toolbar {
 
 .trace-background-row:last-child {
   margin-bottom: 0;
+}
+
+/* Reorder grip: a full-height strip just past the row's right end */
+.row-drag-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  border-radius: 3px;
+  color: #94a3b8;
+  opacity: 0.5;
+  cursor: grab;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.row-drag-handle:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.row-drag-handle:active {
+  cursor: grabbing;
 }
 
 .trace-background-row.is-active::after {
