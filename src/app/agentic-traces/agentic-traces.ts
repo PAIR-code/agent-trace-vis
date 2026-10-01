@@ -126,6 +126,8 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   traceLayouts = signal<TraceLayout[]>([]);
   /** Every mark across all rows. */
   marks = computed(() => this.traceLayouts().flatMap(t => t.marks));
+  /** Re-layouts create new row objects; key by id so rows (and their marks) keep their DOM and animate. */
+  trackByTraceId = (_: number, t: TraceLayout) => t.id;
 
   /** Colors of the enabled search layers that match each mark id. */
   searchColors = computed(() => this.layersService.getLayerColorMap());

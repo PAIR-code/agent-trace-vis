@@ -134,7 +134,7 @@
                *ngIf="draggedTrackIndex() !== null && dropIndex() !== null"
                [style.top.px]="dropIndicatorTop()">
           </div>
-          <div *ngFor="let t of traceLayouts(); let i = index"
+          <div *ngFor="let t of traceLayouts(); let i = index; trackBy: trackByTraceId"
                class="trace-background-row"
                [class.is-dragging]="draggedTrackIndex() === i"
                [class.is-active]="activeTraceId() === t.id"
