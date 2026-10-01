@@ -45,6 +45,9 @@ Mark                   the node as drawn: channel, x, y, width, height, look
   node's fields and adds geometry. `stepRef` points back to the step: the step's
   time or token range places the mark, its token usage sizes it, and the side
   panel uses it to group an agent turn.
+- **Within a step** the data has the order of events but not their times (all
+  nodes carry the step's timestamp). Reasoning spans the step; tool calls and
+  the response follow in order, one icon apart, at its right edge.
 - **Hidden marks.** File views, edits and searches have marks with
   `hidden: true`: they're drawn in the files lane, which reuses the mark's x
   and id. Rate-limit retry messages get an invisible zero-size mark.
@@ -103,9 +106,11 @@ trace JSON ──trace-loader.service──▶ ReasoningTrace (steps → nodes)
   - Don't use per-mark CSS `filter`s (`drop-shadow`, `grayscale`). With
     hundreds of marks they make clicking noticeably laggy.
 - **Scrub bar** (`scrub-bar.ts`): a playhead over the active row (lanes and
-  files). Over a mark (`markAt()`), it selects it and the side panel jumps to
-  it. In a gap, nothing is selected and the side panel scrolls the next mark
-  to the top (`scrollTarget`). The side panel never smooth-scrolls; it jumps.
+  files). Press anywhere on a row to make it active and scrub from there.
+  Over a mark (`markAt()`), it selects it and the side panel jumps to it. In a
+  gap, nothing is selected and the side panel scrolls the next mark to the top
+  (`scrollTarget`). The side panel never smooth-scrolls; it jumps. Rows are
+  reordered by the grip at their right end.
 
 ## How to add a channel
 

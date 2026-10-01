@@ -138,7 +138,9 @@
                class="trace-background-row"
                [class.is-dragging]="draggedTrackIndex() === i"
                [class.is-active]="activeTraceId() === t.id"
-               (click)="selectTrack(t.id, $event)"
+               (pointerdown)="onRowPress($event, bar)"
+               (pointermove)="onRowHover($event, bar)"
+               (pointerleave)="bar.hover(null)"
                (dragover)="onContainerDragOver($event)"
                (drop)="onTrackDrop($event)">
             <app-trace-track
@@ -154,7 +156,8 @@
               (markHover)="hoveredMarkId.set($event)"
               (toggleFiles)="toggleTraceFiles(t.id)">
             </app-trace-track>
-            <app-scrub-bar *ngIf="activeTraceId() === t.id"
+            <app-scrub-bar #bar
+              [visible]="activeTraceId() === t.id"
               [marks]="t.marks"
               [selectedId]="selectedMark()?.id ?? null"
               (scrub)="onScrub(t.id, $event)">

@@ -75,8 +75,8 @@ type Anchor =
 interface MarkSpec {
   channel: ChannelId;
   anchor: Anchor;
-  /** px; 'step' = spans the whole step; 'share' = an even share of the step (at least ICON). */
-  width: number | 'step' | 'share';
+  /** px; 'step' = spans the whole step. */
+  width: number | 'step';
   /** px; 'speech' = scaled by step tokens; 'effort' = scaled by thinking tokens. */
   height: number | 'speech' | 'effort';
   /** Filled with the step's agent color. */
@@ -91,7 +91,7 @@ const MARK_SPECS: Record<string, MarkSpec> = {
   [TraceNodeType.USER_INPUT]: { channel: 'user',  anchor: 'above',  width: SPEECH_WIDTH, height: 'speech' },
   [TraceNodeType.RESPONSE]:   { channel: 'user',  anchor: 'below',  width: SPEECH_WIDTH, height: 'speech', agentFill: true },
   [TraceNodeType.THINKING]:   { channel: 'agent', anchor: 'hang',   width: 'step',       height: 'effort', agentFill: true },
-  [TraceNodeType.TOOL_CALL]:  { channel: 'agent', anchor: 'center', width: 'share',      height: ICON },
+  [TraceNodeType.TOOL_CALL]:  { channel: 'agent', anchor: 'center', width: ICON,         height: ICON },
   [TraceNodeType.SYSTEM]:     { channel: 'agent', anchor: 'center', width: ICON,         height: ICON },
   [TraceNodeType.ERROR]:      { channel: 'agent', anchor: 'center', width: ICON,         height: ICON },
   [TraceNodeType.TOOL_DATA]:  { channel: 'tools', anchor: 'center', width: ICON,         height: ICON },
@@ -210,7 +210,16 @@ export function buildMarks(trace: MarkTraceInput, axis: XAxis, mode: 'time' | 't
     const stepColor = step.color || getAgentColor(step.agentName || trace.agentName, step.model || trace.model);
     const stepX0 = axis.toX(start);
     const stepX1 = axis.toX(end);
-    const share = Math.max(ICON, (stepX1 - stepX0) / step.nodes.length || 0);
+
+    // Within a step we know the order of events, not their times. Reasoning
+    // spans the step; the actions (tool calls, response) follow in order, one
+    // icon apart, ending at the step's right edge: thought, then acted. With
+    // no reasoning, they start at the step's start.
+    const drawn = step.nodes.filter(n => !isRateLimitNode(n));
+    const actions = drawn.filter(n => n.type !== TraceNodeType.THINKING);
+    const actionsX0 = actions.length === drawn.length ? stepX0
+      : isNaN(stepX1) ? stepX0 + ICON
+      : Math.max(stepX0, stepX1 - actions.length * ICON);
 
     step.nodes.forEach((node, k) => {
       const base = {
@@ -226,20 +235,12 @@ export function buildMarks(trace: MarkTraceInput, axis: XAxis, mode: 'time' | 't
       const spec = node.type === TraceNodeType.TOOL_DATA && node.stepType === ReasoningStepType.LIST_DIRECTORY ? LIST_DIR_SPEC
         : MARK_SPECS[node.type] ?? MARK_SPECS[TraceNodeType.TOOL_DATA];
 
-      // x: the node's own timestamp (time mode), or an even share of the step's tokens.
-      let x = mode === 'time'
-        ? axis.toX(node.timestamp ? new Date(node.timestamp).getTime() : start)
-        : axis.toX(start + (k / step.nodes.length) * (end - start));
+      let x = node.type === TraceNodeType.THINKING ? stepX0 : actionsX0 + actions.indexOf(node) * ICON;
       if (isNaN(x)) x = cursorX;
 
-      let width: number;
-      if (spec.width === 'step') {
-        const right = isNaN(stepX1) ? x + share : stepX1;
-        if (!isNaN(stepX0)) x = stepX0;
-        width = Math.max(1, right - x);
-      } else {
-        width = spec.width === 'share' ? share : spec.width;
-      }
+      const width = spec.width === 'step'
+        ? Math.max(1, (isNaN(stepX1) ? x + ICON : stepX1) - x)
+        : spec.width;
 
       const tokens = sizeTokens(step, node, tokenTypes);
       const height = spec.height === 'speech' ? speechHeight(tokens, trace.maxStepTokens, mode)

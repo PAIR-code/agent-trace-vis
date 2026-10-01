@@ -271,7 +271,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
       target.classList.contains('vis-container') ||
       target.classList.contains('vis-scroll-area') ||
       target.classList.contains('vis-content') ||
-      target.classList.contains('row-lane') ||
       target.classList.contains('vis-page-container');
 
     if (isBackground) {
@@ -366,7 +365,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
 
   isInteractiveElement(target: EventTarget | null): boolean {
     if (!target || !(target instanceof Element)) return false;
-    return !!target.closest('.vis-node, .file-marker, .file-label, .files-header, .scrub-bar, button, input, select, a');
+    return !!target.closest('.vis-node, .file-marker, .file-label, .files-header, .scrub-bar, .row-drag-handle, button, input, select, a');
   }
 
   onTrackDragStart(event: DragEvent, index: number) {
@@ -633,16 +632,15 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     this.isLegendCollapsed.update((val) => !val);
   }
 
-  /** Selects a track (trace) without selecting a specific mark. */
-  selectTrack(traceId: string, event?: Event) {
-    if (event) {
-      const target = event.target as HTMLElement;
-      if (this.isInteractiveElement(target)) {
-        return;
-      }
-    }
-    this.selectedMark.set(null);
-    this.manualActiveTraceId.set(traceId);
+  /** Press on a row: scrub from there (the scrub makes the row active). Marks, buttons and the drag handle keep their own behavior. */
+  onRowPress(event: PointerEvent, bar: ScrubBarComponent) {
+    if (this.isInteractiveElement(event.target)) return;
+    bar.start(event);
+  }
+
+  /** Hover on a row: preview where a press would put the playhead (not over marks, buttons or the drag handle). */
+  onRowHover(event: PointerEvent, bar: ScrubBarComponent) {
+    bar.hover(this.isInteractiveElement(event.target) ? null : event);
   }
 
   /** Selects a mark; the side panel scrolls to its message. */
