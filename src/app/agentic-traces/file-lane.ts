@@ -111,7 +111,7 @@ export function buildFileLane(events: FileEvent[], marks: Mark[], contentWidth: 
         x: e.x,
         width: 7,
         barHeight: linesToBarHeight(e.linesCount),
-        label: `${basename}: ${e.linesCount} lines written`,
+        label: e.linesCount > 0 ? `${basename}: ${e.linesCount} lines written` : `${basename}: written`,
         node: e.node,
       })),
       nodeIds: new Set(evs.map(e => e.nodeId)),

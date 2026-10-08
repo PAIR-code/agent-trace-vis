@@ -47,7 +47,9 @@ Mark                   the node as drawn: channel, x, y, width, height, look
   panel uses it to group an agent turn.
 - **Within a step** the data has the order of events but not their times (all
   nodes carry the step's timestamp). Reasoning spans the step; tool calls and
-  the response follow in order, one icon apart, at its right edge.
+  the response follow in order, one icon apart, at its right edge. If that
+  would run past the next step's start (e.g. zoomed out), the icons are
+  squeezed together so marks stay in time order.
 - **Hidden marks.** File views, edits and searches have marks with
   `hidden: true`: they're drawn in the files lane, which reuses the mark's x
   and id. Rate-limit retry messages get an invisible zero-size mark.
@@ -82,6 +84,10 @@ trace JSON ──trace-loader.service──▶ ReasoningTrace (steps → nodes)
   into a `stepType` and a display label. Everything downstream reads only the
   `stepType`: `fileAccess()` decides whether a node goes in the files lane, and
   `toolIcon()` picks its glyph. Nothing re-parses the label text.
+  Files written as a side effect (a URL fetch's saved page, or shell output
+  via redirects, `tee`, Python `open(.., 'w')`, `curl -o/-O`) also appear in the
+  files lane as writes, while the tool's mark stays in the tools lane; see
+  `extractIndirectWrites()` in `file-events.ts`.
 - **Channels** (`channels.ts`): the lanes' order, labels, heights and colors all
   come from this one list. Lane backgrounds, lane labels and mark y-positions
   are derived from it.

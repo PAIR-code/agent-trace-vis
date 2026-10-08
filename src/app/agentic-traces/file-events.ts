@@ -19,7 +19,7 @@
  * files. Pure parsing of trace data; `file-lane.ts` turns these into rows.
  */
 
-import { ReasoningTrace } from './layout-types';
+import { ReasoningStepType as S, ReasoningTrace } from './layout-types';
 import { FileAccess, PATH_KEYS, SEARCH_PATH_KEYS, asObject, fileAccess, stripQuotes } from './tools';
 
 /** One file touched by one trace node. */
@@ -38,10 +38,19 @@ export function extractFileEvents(trace: ReasoningTrace): FileEvent[] {
   const events: FileEvent[] = [];
   for (const step of trace.steps) {
     for (const node of step.nodes) {
+      if (!node.data) continue;
       const kind = fileAccess(node.stepType);
-      if (!kind || !node.data) continue;
-
       const input = node.data.toolCall?.input ?? node.data.input;
+
+      if (!kind) {
+        // Tools that aren't file tools but still write files as a side effect.
+        // The mark stays in the tools lane; the write shows in the files lane.
+        for (const filePath of extractIndirectWrites(node.stepType, input, node.data.observation)) {
+          events.push({ nodeId: node.id, filePath, kind: 'edit', linesCount: 0, isPlan: isPlanPath(filePath, input) });
+        }
+        continue;
+      }
+
       const toolName: string = node.data.toolCall?.tool_name ?? node.text ?? '';
       for (const filePath of extractFilePaths(input, toolName, node.data.observation)) {
         events.push({
@@ -65,6 +74,91 @@ export function normalizeFilePath(rawPath: string): string {
 // ---------------------------------------------------------------------------
 // Parsing helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Files a non-file tool wrote as a side effect: the page a URL fetch saved to
+ * disk, or files a shell command created (redirects, tee, Python `open(.., 'w')`,
+ * `Path(..).write_text`, curl / wget output). Heuristic; shell parsing is best effort.
+ */
+function extractIndirectWrites(stepType: S | undefined, input: unknown, observation: unknown): string[] {
+  if (stepType === S.READ_URL_CONTENT) {
+    const m = observationText(observation).match(/saved to:\s*`?(?:file:\/\/)?([^\s`]+)/i);
+    return m ? [m[1]] : [];
+  }
+  if (stepType !== S.RUN_COMMAND) return [];
+
+  const obj = asObject(input);
+  const cmd = decodeString(obj['CommandLine'] ?? obj['command'] ?? obj['cmd']);
+  if (!cmd) return [];
+  const baseCwd = decodeString(obj['Cwd'] ?? obj['cwd']);
+
+  // `cd DIR` changes where later relative paths resolve.
+  const cds = [...cmd.matchAll(/(?:^|[;&|]\s*)cd\s+(['"]?)([^\s'";&|]+)\1/g)]
+    .map(m => ({ index: m.index ?? 0, dir: m[2] }));
+  const cwdAt = (index: number) =>
+    cds.filter(c => c.index < index).reduce((cwd, c) => joinPath(cwd, c.dir), baseCwd);
+
+  const found: string[] = [];
+  const add = (raw: string, index: number) => {
+    const p = raw.trim();
+    if (!looksLikeFilePath(p)) return;
+    found.push(joinPath(cwdAt(index), p));
+  };
+  const q = `\\\\?['"]`;  // a quote, possibly backslash-escaped inside a shell string
+  const patterns: RegExp[] = [
+    /(?:^|[^<>&\d=-])>>?\s*(['"]?)([^\s'"|;&<>()]+)\1/g,                              // > file, >> file
+    /\btee\s+(?:-a\s+)?(['"]?)([^\s'"|;&<>]+)\1/g,                                     // tee file
+    new RegExp(`\\bopen\\(\\s*${q}([^'"\\\\]+)${q}\\s*,\\s*${q}[wax]b?\\+?${q}`, 'g'),    // open('f', 'w')
+    new RegExp(`\\bPath\\(\\s*${q}([^'"\\\\]+)${q}\\s*\\)\\.write_(?:text|bytes)`, 'g'), // Path('f').write_text
+    /\bcurl\b[^;&|]*?\s(?:-o|--output)\s+(['"]?)([^\s'"]+)\1/g,                         // curl -o file
+    /\bwget\b[^;&|]*?\s(?:-O|--output-document)\s+(['"]?)([^\s'"]+)\1/g,                 // wget -O file
+  ];
+  for (const re of patterns) {
+    for (const m of cmd.matchAll(re)) add(m[2] ?? m[1], m.index ?? 0);
+  }
+  // curl -O URL saves to the URL's basename.
+  for (const m of cmd.matchAll(/\bcurl\b[^;&|]*/g)) {
+    for (const o of m[0].matchAll(/\s(?:-O|--remote-name)\s+(['"]?)(https?:\/\/[^\s'"]+)\1/g)) {
+      const name = o[2].split(/[?#]/)[0].split('/').pop();
+      if (name) add(name, m.index ?? 0);
+    }
+  }
+  return [...new Set(found)];
+}
+
+function observationText(observation: unknown): string {
+  return String(typeof observation === 'string' ? observation : asObject(observation)['content'] || '');
+}
+
+/** A tool input string, JSON-decoded if it was stored as a JSON string literal. */
+function decodeString(v: unknown): string {
+  if (typeof v !== 'string') return '';
+  const s = v.trim();
+  if (s.startsWith('"') && s.endsWith('"')) {
+    try {
+      const parsed = JSON.parse(s);
+      if (typeof parsed === 'string') return parsed;
+    } catch { /* fall through */ }
+  }
+  return stripQuotes(s);
+}
+
+/** Filters out redirect targets that aren't files (/dev/null, numbers, `x > y` comparisons). */
+function looksLikeFilePath(p: string): boolean {
+  if (!p || p.startsWith('/dev/') || p.startsWith('&') || p.includes('$') || p.includes('{')) return false;
+  if (/^[\d.]+$/.test(p)) return false;
+  return p.includes('/') || /\.[a-zA-Z0-9]{1,8}$/.test(p);
+}
+
+function joinPath(cwd: string, p: string): string {
+  if (!cwd || p.startsWith('/') || p.startsWith('~')) return p;
+  const parts = cwd.replace(/\/+$/, '').split('/');
+  for (const seg of p.split('/')) {
+    if (seg === '..') parts.pop();
+    else if (seg && seg !== '.') parts.push(seg);
+  }
+  return parts.join('/');
+}
 
 /** File (or chart artifact) paths referenced by a tool call's input and observation. */
 function extractFilePaths(input: unknown, toolName: string, observation: unknown): string[] {

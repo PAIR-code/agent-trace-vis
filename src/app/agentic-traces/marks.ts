@@ -91,7 +91,8 @@ const MARK_SPECS: Record<string, MarkSpec> = {
   [TraceNodeType.USER_INPUT]: { channel: 'user',  anchor: 'above',  width: SPEECH_WIDTH, height: 'speech' },
   [TraceNodeType.RESPONSE]:   { channel: 'user',  anchor: 'below',  width: SPEECH_WIDTH, height: 'speech', agentFill: true },
   [TraceNodeType.THINKING]:   { channel: 'agent', anchor: 'hang',   width: 'step',       height: 'effort', agentFill: true },
-  [TraceNodeType.TOOL_CALL]:  { channel: 'agent', anchor: 'center', width: ICON,         height: ICON },
+  // A tool call with no logged result is still a tool call: same lane as one with a result.
+  [TraceNodeType.TOOL_CALL]:  { channel: 'tools', anchor: 'center', width: ICON,         height: ICON },
   [TraceNodeType.SYSTEM]:     { channel: 'agent', anchor: 'center', width: ICON,         height: ICON },
   [TraceNodeType.ERROR]:      { channel: 'agent', anchor: 'center', width: ICON,         height: ICON },
   [TraceNodeType.TOOL_DATA]:  { channel: 'tools', anchor: 'center', width: ICON,         height: ICON },
@@ -175,9 +176,12 @@ function stepRange(steps: ReasoningTraceStep[], i: number, mode: 'time' | 'token
   const ms = (ts?: string) => ts ? new Date(ts).getTime() : NaN;
   let end = ms(step.completedAt);
   // No completion time: an agent step lasts until the next agent step starts.
+  // User and system messages end the span: they're outside events the agent
+  // was waiting on (a system notification can arrive days later), not work.
   const next = steps[i + 1];
-  if (isNaN(end) && next && next.stepType !== ReasoningStepType.USER_INPUT &&
-      step.stepType !== ReasoningStepType.USER_INPUT) {
+  const isExternal = (s: ReasoningTraceStep) =>
+    s.stepType === ReasoningStepType.USER_INPUT || s.stepType === ReasoningStepType.SYSTEM_MESSAGE;
+  if (isNaN(end) && next && !isExternal(next) && !isExternal(step)) {
     end = ms(next.timestamp);
   }
   return [ms(step.timestamp), end];
@@ -220,6 +224,13 @@ export function buildMarks(trace: MarkTraceInput, axis: XAxis, mode: 'time' | 't
     const actionsX0 = actions.length === drawn.length ? stepX0
       : isNaN(stepX1) ? stepX0 + ICON
       : Math.max(stepX0, stepX1 - actions.length * ICON);
+    // Never run past the next step's start: when zoomed out, squeeze the
+    // actions together (they overlap) so marks stay in time order.
+    const next = trace.steps[i + 1];
+    const limitX = mode === 'time' && next?.timestamp ? axis.toX(new Date(next.timestamp).getTime()) : stepX1;
+    const actionGap = actions.length > 1 && !isNaN(limitX)
+      ? Math.max(0, Math.min(ICON, (limitX - actionsX0 - ICON) / (actions.length - 1)))
+      : ICON;
 
     step.nodes.forEach((node, k) => {
       const base = {
@@ -232,10 +243,11 @@ export function buildMarks(trace: MarkTraceInput, axis: XAxis, mode: 'time' | 't
         return;
       }
 
-      const spec = node.type === TraceNodeType.TOOL_DATA && node.stepType === ReasoningStepType.LIST_DIRECTORY ? LIST_DIR_SPEC
+      const isTool = node.type === TraceNodeType.TOOL_DATA || node.type === TraceNodeType.TOOL_CALL;
+      const spec = isTool && node.stepType === ReasoningStepType.LIST_DIRECTORY ? LIST_DIR_SPEC
         : MARK_SPECS[node.type] ?? MARK_SPECS[TraceNodeType.TOOL_DATA];
 
-      let x = node.type === TraceNodeType.THINKING ? stepX0 : actionsX0 + actions.indexOf(node) * ICON;
+      let x = node.type === TraceNodeType.THINKING ? stepX0 : actionsX0 + actions.indexOf(node) * actionGap;
       if (isNaN(x)) x = cursorX;
 
       const width = spec.width === 'step'
