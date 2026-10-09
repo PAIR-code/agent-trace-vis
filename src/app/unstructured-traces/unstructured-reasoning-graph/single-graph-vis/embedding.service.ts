@@ -72,7 +72,7 @@ export class EmbeddingService {
     const cached = localStorage.getItem(key);
     if (cached) {
       try {
-        const arr = JSON.parse(cached);
+        const arr = JSON.parse(cached) as number[];
         return new Float32Array(arr);
       } catch (e) {
         console.error('Failed to parse cached embedding', e);

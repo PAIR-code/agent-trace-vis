@@ -44,7 +44,8 @@ const either = (...fs: ((name: string) => boolean)[]) => (name: string) => fs.so
 const field = (input: Record<string, any>, keys: string[], fallback: string) =>
   keys.map(k => input[k]).find(v => v) || fallback;
 
-const firstTitle = (list: unknown) => Array.isArray(list) ? list[0]?.title : undefined;
+const firstTitle = (list: unknown) =>
+  Array.isArray(list) ? (list as Array<{ title?: string } | undefined>)[0]?.title : undefined;
 
 /** Tool families, checked in order; the first match wins. */
 const TOOLS: ToolSpec[] = [
@@ -215,7 +216,7 @@ export function stripQuotes(s: string): string {
 export function asObject(input: unknown): Record<string, any> {
   if (typeof input === 'string') {
     try {
-      return JSON.parse(input);
+      return JSON.parse(input) as Record<string, any>;
     } catch {
       return {};
     }

@@ -123,7 +123,10 @@ export class ReferenceService {
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
       try {
-        const { timestamp, references } = JSON.parse(cached);
+        const { timestamp, references } = JSON.parse(cached) as {
+          timestamp: number;
+          references: SentenceReference[];
+        };
         // Only load from cache if references array is not empty
         if (references && Array.isArray(references) && references.length > 0 && Date.now() - timestamp < 7 * 24 * 60 * 60 * 1000) {
           console.log('[ReferenceService] Loaded references from cache.');
@@ -179,7 +182,9 @@ export class ReferenceService {
       throw new Error(`Gemini API error (${response.status}): ${errText}`);
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as {
+      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+    } | null;
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) {
       throw new Error('Gemini returned an empty response.');

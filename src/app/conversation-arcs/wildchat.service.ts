@@ -36,7 +36,10 @@ export class WildChatService {
     const cached = localStorage.getItem(this.HF_CACHE_KEY);
     if (cached) {
       try {
-        const { timestamp, data } = JSON.parse(cached);
+        const { timestamp, data } = JSON.parse(cached) as {
+          timestamp: number;
+          data: WildChatConversation[];
+        };
         if (Date.now() - timestamp < this.HF_CACHE_TTL) {
           console.log('[WildChatService] Loaded conversations from cache.');
           return data;
@@ -79,7 +82,10 @@ export class WildChatService {
           if (!trimmed) continue;
 
           try {
-            const rawItem = JSON.parse(trimmed);
+            const rawItem = JSON.parse(trimmed) as {
+              conversation?: Array<{ human?: string; assistant?: string }>;
+              conversation_id: string;
+            };
             const rawConvo = rawItem.conversation || [];
             
             const mappedMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [];

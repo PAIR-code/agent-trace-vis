@@ -83,7 +83,7 @@ export class SingleGraphVisComponent implements OnChanges, OnDestroy {
 
   ngOnChanges(changes: SimpleChanges) {
     if ((changes['data'] || changes['dataItems'] || changes['traceColors'] || changes['chunkBy'] || changes['use3D']) && (this.data || this.dataItems.length > 0)) {
-      this.rebuild();
+      void this.rebuild();
     }
   }
 
@@ -284,12 +284,12 @@ export class SingleGraphVisComponent implements OnChanges, OnDestroy {
   }
 
   onSimilarityMethodChange() {
-    this.rebuild();
+    void this.rebuild();
   }
 
   /** EXPERIMENTAL: toggle 2D ↔ 3D and rebuild the graph */
   onToggle3D() {
-    this.rebuild();
+    void this.rebuild();
   }
 
   private destroyGraph() {

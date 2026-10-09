@@ -107,7 +107,7 @@ export class HuggingFaceImportComponent {
         if (err instanceof HttpErrorResponse && err.status === 404) {
           this.importError = `Repository "${repoId}" was not found on Hugging Face. Please check the name and ensure it is public.`;
         } else {
-          this.importError = err.message || "Hugging Face dataset not found or private. Make sure the dataset name is correct and public.";
+          this.importError = (err as Error).message || "Hugging Face dataset not found or private. Make sure the dataset name is correct and public.";
         }
         this.importLoading = false;
       });

@@ -106,7 +106,7 @@ export class UrlParamService {
    * Updates query parameters in the current route URL.
    */
   updateQueryParams(queryParams: Record<string, string | null>, route?: ActivatedRoute): void {
-    this.router.navigate([], {
+    void this.router.navigate([], {
       relativeTo: route,
       queryParams,
       queryParamsHandling: 'merge',

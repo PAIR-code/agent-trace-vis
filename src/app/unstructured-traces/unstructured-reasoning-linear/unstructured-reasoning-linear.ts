@@ -137,17 +137,17 @@ export class UnstructuredReasoningLinearComponent implements OnInit {
 
   onQuestionChange(question: string) {
     this.selectedQuestion = question;
-    this.rebuildVisualization();
+    void this.rebuildVisualization();
   }
 
   onNumRolloutsChange(val: number) {
     this.numRollouts = val;
-    this.rebuildVisualization();
+    void this.rebuildVisualization();
   }
 
   onTokenizeModeChange(mode: TokenizeMode) {
     this.tokenizeMode = mode;
-    this.rebuildVisualization();
+    void this.rebuildVisualization();
   }
 
   onColoringSchemeChange(scheme: ColoringScheme) {
@@ -228,7 +228,7 @@ export class UnstructuredReasoningLinearComponent implements OnInit {
     forkJoin(requests).subscribe(() => {
       this.datasetData = newData;
       this.updateQuestions();
-      this.rebuildVisualization();
+      void this.rebuildVisualization();
       this.cdr.detectChanges();
     });
   }

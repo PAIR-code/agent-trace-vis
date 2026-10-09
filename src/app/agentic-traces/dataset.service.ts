@@ -223,7 +223,7 @@ export class DatasetService {
 
   private loadImported(): DatasetItem[] {
     try {
-      return JSON.parse(localStorage.getItem(IMPORTED_KEY) || '[]');
+      return JSON.parse(localStorage.getItem(IMPORTED_KEY) || '[]') as DatasetItem[];
     } catch (e) {
       console.error('Failed to load imported datasets from localStorage', e);
       return [];

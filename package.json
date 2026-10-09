@@ -14,7 +14,11 @@
     "deploy:all": "npm run build && npx netlify deploy --dir=dist/reasoning-trace-vis/browser --prod --no-build",
     "deploy:draft": "npm run build && npx netlify deploy --dir=dist/reasoning-trace-vis/browser --no-build",
     "prewatch": "npm run manifest",
-    "watch": "ng build --watch --configuration development"
+    "watch": "ng build --watch --configuration development",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit",
+    "lint": "eslint src",
+    "check": "npm run typecheck && npm run lint",
+    "prepare": "git rev-parse --git-dir >/dev/null 2>&1 && git config core.hooksPath .githooks || true"
   },
   "private": true,
   "packageManager": "npm@10.9.0",
@@ -38,7 +42,10 @@
     "@angular/build": "^21.2.1",
     "@angular/cli": "^21.2.1",
     "@angular/compiler-cli": "^21.2.0",
+    "@total-typescript/ts-reset": "^0.6.1",
+    "eslint": "^9.29.0",
     "prettier": "^3.8.1",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "typescript-eslint": "^8.70.0"
   }
 }

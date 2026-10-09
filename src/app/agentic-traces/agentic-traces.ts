@@ -290,7 +290,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     const w = window as DevWindow;
     w.clearCache = w.clearcache = this.clearCacheFn;
 
-    this.loadDatasets();
+    void this.loadDatasets();
   }
 
   onSidebarResizeStart(event: MouseEvent) {
@@ -555,7 +555,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
       this.route
     );
     if (targetId) {
-      this.onDatasetChange(targetId, pendingIndices);
+      void this.onDatasetChange(targetId, pendingIndices);
     }
   }
 
@@ -683,7 +683,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     this.datasetService.saveImported(newDataset);
 
     // Reload all datasets and switch to the new one asynchronously
-    this.loadDatasets(newDataset.file);
+    void this.loadDatasets(newDataset.file);
 
     this.closeImportModal();
   }

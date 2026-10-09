@@ -113,7 +113,7 @@ export class ConversationArcsComponent implements OnInit, OnDestroy {
   ngOnInit() {
     (window as any).clearCache = this.clearCacheFn;
     (window as any).clearcache = this.clearCacheFn;
-    this.loadConversations();
+    void this.loadConversations();
   }
 
   ngOnDestroy() {

@@ -1,0 +1,9 @@
+#!/bin/sh
+# Runs typecheck + lint (mirroring google3 conformance checks) and blocks the
+# push if they fail. Bypass in an emergency with: git push --no-verify
+echo "pre-push: running npm run check..."
+if ! npm run check --silent; then
+  echo ""
+  echo "pre-push: checks failed; push blocked. Fix the errors above (or use --no-verify to skip)."
+  exit 1
+fi

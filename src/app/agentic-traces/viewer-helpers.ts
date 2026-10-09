@@ -86,10 +86,13 @@ function ensureHighlightStyles() {
   if (highlightStylesAdded) return;
   highlightStylesAdded = true;
   const style = document.createElement('style');
-  style.textContent = LAYER_COLORS
-    .map((c, i) => `.search-span-highlight.hl-${i} { background-color: color-mix(in srgb, ${c} 35%, transparent); }`)
-    .join('\n');
+  // Append first so `style.sheet` exists, then add rules via the CSSOM
+  // (assigning to `style.textContent` is banned by tsetse).
   document.head.appendChild(style);
+  LAYER_COLORS.forEach((c, i) => {
+    style.sheet?.insertRule(
+      `.search-span-highlight.hl-${i} { background-color: color-mix(in srgb, ${c} 35%, transparent); }`);
+  });
 }
 
 function highlightClass(color: string): string {

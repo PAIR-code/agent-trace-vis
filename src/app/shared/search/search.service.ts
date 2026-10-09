@@ -368,7 +368,7 @@ ${searchInstruction}
     try {
       const response = await fetch(url);
       if (response.ok) {
-        const data = await response.json();
+        const data = (await response.json()) as { models?: any[] };
         const models = (data.models || []).map((m: any) => ({
           name: m.name,
           displayName: m.displayName,
@@ -411,7 +411,7 @@ ${searchInstruction}
       throw new Error(`Gemini API error (${response.status}): ${errText}`);
     }
 
-    const data: GeminiResponse = await response.json();
+    const data = (await response.json()) as GeminiResponse;
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) {
       throw new Error('Gemini returned an empty response.');
