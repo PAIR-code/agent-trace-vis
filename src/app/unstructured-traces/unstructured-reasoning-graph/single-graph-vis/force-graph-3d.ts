@@ -277,7 +277,7 @@ export function buildForceGraph3D(
   container.addEventListener('mousemove', onMouseMove);
 
   function showTooltip(node: Node3D) {
-    // eslint-disable-next-line no-restricted-syntax -- force graph is stripped from the google3 import.
+    // eslint-disable-next-line no-restricted-syntax -- tooltip renders markdown/LaTeX HTML.
     tooltip.innerHTML = renderMarkdownWithLatex(node.text);
     tooltip.style.opacity = '1';
   }

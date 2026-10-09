@@ -87,7 +87,7 @@ function ensureHighlightStyles() {
   highlightStylesAdded = true;
   const style = document.createElement('style');
   // Append first so `style.sheet` exists, then add rules via the CSSOM
-  // (assigning to `style.textContent` is banned by tsetse).
+  // (rather than assigning a computed string to `style.textContent`).
   document.head.appendChild(style);
   LAYER_COLORS.forEach((c, i) => {
     style.sheet?.insertRule(
