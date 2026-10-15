@@ -100,6 +100,8 @@ export interface ToolCall {
   tool_name: string;
   input?: Record<string, any>;
   duration_ms?: number;
+  /** Trace ids of subagents this call launched (extension; see convert_jetski_db.py). */
+  subagent_trajectory_refs?: string[];
 }
 
 export interface Observation {

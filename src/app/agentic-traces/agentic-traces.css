@@ -436,6 +436,24 @@ app-analysis-toolbar {
   margin-bottom: 0;
 }
 
+/*
+ * Subagent branches: one SVG over the row stack (see subagentConnectors in
+ * agentic-traces.ts). Above the files lanes (z-index 10), which are opaque,
+ * so the line runs unbroken from the parent's agent line to the subagent's.
+ */
+.subagent-links {
+  position: absolute;
+  left: 0;
+  z-index: 12;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.subagent-links line {
+  stroke-width: 1;
+  opacity: 0.8;
+}
+
 /* Reorder grip: a full-height strip just past the row's right end */
 .row-drag-handle {
   position: absolute;

@@ -117,6 +117,14 @@ const TOOLS: ToolSpec[] = [
     stepType: S.CODE_SEARCH,
     matches: has('code_search'),
   },
+  {
+    stepType: S.INVOKE_SUBAGENT,
+    matches: has('subagent', 'spawn_agent', 'invoke_agent', 'delegate'),
+    label: input => {
+      const role = stripQuotes(String(field(input, ['Role', 'role'], '')));
+      return role ? `Subagent: ${role}` : 'Subagent';
+    },
+  },
   // Dashboard-building agents: charts count as files (read with get_*, else written).
   {
     stepType: S.VIEW_FILE,

@@ -31,6 +31,7 @@ import { TraceEntry } from './layout-types';
 import { TraceRecord } from './trace';
 import { TraceLoaderService } from './trace-loader.service';
 import { hashString } from './layout-utils';
+import { linkSubagents } from './subagents';
 
 export interface DatasetItem {
   name: string;
@@ -96,6 +97,12 @@ export class DatasetService {
    * load keeps its place in the list (URLs select traces by index) with no data.
    */
   async loadTraces(ds: DatasetItem): Promise<TraceEntry[]> {
+    const entries = await this.fetchTraces(ds);
+    linkSubagents(entries);
+    return entries;
+  }
+
+  private async fetchTraces(ds: DatasetItem): Promise<TraceEntry[]> {
     if (ds.isRemote || ds.isImported) {
       if (!ds.urls?.length && ds.repoId) ds.urls = await this.resolveRepositoryUrls(ds.repoId);
       const records = await this.loadRemoteDataset(ds.urls ?? [], ds.maxTraces || (ds.isRemote ? 5 : 50));

@@ -164,12 +164,16 @@ export class TraceLoaderService {
 
     const agentList = Array.from(agentMap.values());
 
+    const meta = traceData.metadata || {};
     return {
       id: traceId,
       title: title,
       steps: parsedSteps,
       metadata: traceData.metadata,
       agents: agentList,
+      sourceId: traceData.trace_id || traceData.session_id || undefined,
+      parentSourceId: typeof meta['parent_trace_id'] === 'string' ? meta['parent_trace_id'] : undefined,
+      parentToolCallId: typeof meta['parent_tool_call_id'] === 'string' ? meta['parent_tool_call_id'] : undefined,
     };
   }
 }

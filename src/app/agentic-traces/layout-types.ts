@@ -51,6 +51,7 @@ export enum ReasoningStepType {
   READ_URL_CONTENT = 'READ_URL_CONTENT',
   SEARCH_WEB = 'SEARCH_WEB',
   CODE_SEARCH = 'CODE_SEARCH',
+  INVOKE_SUBAGENT = 'INVOKE_SUBAGENT',
   GENERIC = 'GENERIC',
 }
 
@@ -63,6 +64,11 @@ export interface ReasoningTrace {
   agents?: { name: string; model?: string; color: string }[];
   date?: string;
   timestamp?: number;
+  /** The record's own trace id (what other traces refer to it by). */
+  sourceId?: string;
+  /** For a subagent trace: the launching trace's id and tool call. */
+  parentSourceId?: string;
+  parentToolCallId?: string;
 }
 
 import { TokenUsage } from './trace';
@@ -78,6 +84,10 @@ export interface TraceEntry {
   agents: { name: string; model?: string; color: string }[];
   /** Start date shown in the picker, e.g. "Sep 28". */
   date?: string;
+  /** Entry id of the trace that launched this one as a subagent, if it is in the dataset (see subagents.ts). */
+  parentId?: string;
+  /** Tool call in the parent that launched this subagent. */
+  parentToolCallId?: string;
 }
 
 export interface ReasoningTraceStep {
@@ -122,6 +132,10 @@ export interface TraceLayout {
   marks: Mark[];
   backbone: BackboneLine[];
   files: FileLane;
+  /** 0 for a top-level trace; 1 for its subagents, 2 for theirs, etc. */
+  depth: number;
+  /** For a subagent row: the row it hangs under, and the x where it branches off. */
+  parent?: { id: string; x: number };
 }
 
 export interface LayoutOutput {

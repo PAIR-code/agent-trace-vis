@@ -1,5 +1,10 @@
-<div class="row-trace-title">
-  <span class="row-trace-title-text" [title]="trace().title">{{ trace().title }}</span>
+<div class="row-trace-title" [class.is-subagent]="trace().depth > 0" [style.left.px]="trace().parent ? trace().parent!.x + 8 : 0">
+  <span class="row-trace-title-text" [title]="trace().title">
+    @if (trace().depth > 0) {
+      <span class="subagent-tag">[subagent]</span>
+    }
+    {{ trace().title }}
+  </span>
 </div>
 
 <!-- Channel lanes, backbone and marks -->

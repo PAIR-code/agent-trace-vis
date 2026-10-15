@@ -10,7 +10,7 @@
   <div class="conv-selector-group" *ngIf="traces().length > 0">
     <label class="selector-label">Trace</label>
     <app-multi-select-dropdown
-      [items]="traces()"
+      [items]="traceItems()"
       [selectedIds]="selectedTraceIds()"
       [itemTypeName]="'trace'"
       (selectionChange)="onTraceSelectionChange($event)"
@@ -130,6 +130,14 @@
 
         <!-- Row Lanes -->
         <div class="row-lanes" [style.width.px]="contentWidth()" [style.padding-top.px]="60 + 18">
+          <!-- Subagent branches: from the parent's agent line down to the subagent's -->
+          <svg class="subagent-links" *ngIf="subagentConnectors().length > 0"
+               [style.top.px]="60 + 18" [attr.width]="contentWidth()" [attr.height]="contentHeight()">
+            <g *ngFor="let c of subagentConnectors()">
+              <line [attr.x1]="c.x" [attr.y1]="c.y1" [attr.x2]="c.x" [attr.y2]="c.y2" [attr.stroke]="c.color" />
+              <circle [attr.cx]="c.x" [attr.cy]="c.y1" r="3.5" [attr.fill]="c.color" />
+            </g>
+          </svg>
           <div class="drop-indicator-row"
                *ngIf="draggedTrackIndex() !== null && dropIndex() !== null"
                [style.top.px]="dropIndicatorTop()">
@@ -138,6 +146,7 @@
                class="trace-background-row"
                [class.is-dragging]="draggedTrackIndex() === i"
                [class.is-active]="activeTraceId() === t.id"
+               [class.is-subagent]="t.depth > 0"
                (pointerdown)="onRowPress($event, bar)"
                (pointermove)="onRowHover($event, bar)"
                (pointerleave)="bar.hover(null)"
@@ -162,8 +171,9 @@
               [selectedId]="selectedMark()?.id ?? null"
               (scrub)="onScrub(t.id, $event)">
             </app-scrub-bar>
-            <!-- Reorder handle -->
-            <div class="row-drag-handle"
+            <!-- Reorder handle (top-level rows only: a trace moves together with its subagents) -->
+            <div *ngIf="t.depth === 0"
+                 class="row-drag-handle"
                  draggable="true"
                  (dragstart)="onTrackDragStart($event, i)"
                  (dragend)="onTrackDragEnd()"

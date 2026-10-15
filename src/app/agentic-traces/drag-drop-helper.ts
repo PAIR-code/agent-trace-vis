@@ -33,8 +33,12 @@ export interface DropTarget {
 /** Half the vertical gap between rows (`.trace-background-row` margin-bottom). */
 const HALF_ROW_GAP = 14;
 
-/** Measures the drop target for the pointer position of a dragover event. */
-export function measureDrop(event: DragEvent): DropTarget | null {
+/**
+ * Measures the drop target for the pointer position of a dragover event.
+ * `allowed` restricts which slots (0..rowCount) can be dropped into; the
+ * nearest allowed slot to the pointer wins.
+ */
+export function measureDrop(event: DragEvent, allowed: (index: number) => boolean = () => true): DropTarget | null {
   const lanes = (event.currentTarget as HTMLElement)
     .closest('.vis-scroll-area')?.querySelector('.row-lanes');
   if (!lanes) return null;
@@ -43,9 +47,13 @@ export function measureDrop(event: DragEvent): DropTarget | null {
   if (rows.length === 0) return null;
 
   const origin = lanes.getBoundingClientRect().top;
-  const index = rows.filter(r => r.top + r.height / 2 < event.clientY).length;
-  const indicatorTop = index < rows.length
-    ? rows[index].top - origin - HALF_ROW_GAP
-    : rows[rows.length - 1].bottom - origin + HALF_ROW_GAP;
-  return { index, indicatorTop };
+  // Slot i sits just above row i (or below the last row for i = rowCount).
+  const slotY = (i: number) => i < rows.length ? rows[i].top - HALF_ROW_GAP : rows[rows.length - 1].bottom + HALF_ROW_GAP;
+  let index = -1;
+  for (let i = 0; i <= rows.length; i++) {
+    if (!allowed(i)) continue;
+    if (index < 0 || Math.abs(slotY(i) - event.clientY) < Math.abs(slotY(index) - event.clientY)) index = i;
+  }
+  if (index < 0) return null;
+  return { index, indicatorTop: slotY(index) - origin };
 }

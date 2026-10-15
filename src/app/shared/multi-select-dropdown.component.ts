@@ -30,6 +30,8 @@ export interface DropdownItem {
   date?: string;
   agents?: { name: string, model?: string, color: string }[];
   models?: { name: string, color: string }[];
+  /** Nesting level (0 = top); nested items are indented under the previous shallower item. */
+  depth?: number;
 }
 
 @Component({
@@ -44,7 +46,9 @@ export interface DropdownItem {
       </button>
       <div class="conv-dropdown-menu" *ngIf="showDropdown" (click)="$event.stopPropagation()">
         <div class="conv-dropdown-item" *ngFor="let item of items"
-             [class.is-selected]="isSelected(item.id)">
+             [class.is-selected]="isSelected(item.id)"
+             [class.is-nested]="(item.depth ?? 0) > 0"
+             [style.padding-left.px]="10 + 14 * (item.depth ?? 0)">
           <input *ngIf="allowRename && editingId === item.id"
                  type="text"
                  class="conv-inline-input"
@@ -58,7 +62,9 @@ export interface DropdownItem {
                 class="conv-item-title"
                 (mousedown)="onMouseDown(item.id, $event)"
                 (mouseup)="onMouseUp(item.id, $event)">
-            <div class="conv-item-main-title">{{ item.title }}</div>
+            <div class="conv-item-main-title">
+              <span *ngIf="(item.depth ?? 0) > 0" class="conv-item-nested-arrow" aria-hidden="true">↳</span>{{ item.title }}
+            </div>
             <div class="conv-item-subtitle" *ngIf="item.date || item.agents || item.models">
               <span *ngIf="item.date" class="conv-item-date">{{ item.date }}</span>
               <div *ngIf="item.agents || item.models" class="conv-item-models">
@@ -173,6 +179,9 @@ export interface DropdownItem {
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+
+    .conv-dropdown-item.is-nested .conv-item-main-title { color: #4b5563; }
+    .conv-item-nested-arrow { color: #9ca3af; margin-right: 4px; }
 
     .conv-item-subtitle {
       font-size: 0.7rem;

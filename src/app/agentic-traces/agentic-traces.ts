@@ -47,9 +47,23 @@ import { PanelMessage, getRoleLabel, speakerStyle, getHighlightedTextForViewer }
 import { measureDrop } from "./drag-drop-helper";
 import { TraceTrackComponent } from "./trace-track";
 import { ScrubBarComponent, ScrubEvent } from "./scrub-bar";
+import { depthOf, familyOf, familyOrder } from "./subagents";
+import { channelCenter, FILES_LANE, TRACK_HEIGHT } from "./channels";
 
 /** Dev helpers exposed on `window` (a convention shared with the other pages). */
 type DevWindow = Window & { clearCache?: () => void; clearcache?: () => void };
+
+/** Vertical space between rows (`.trace-background-row` margin-bottom in agentic-traces.css). */
+const ROW_GAP = 28;
+
+/** A subagent's branch line, in row-stack coordinates: a dot at (x, y1) on the parent's agent line, down to (x, y2) on the subagent's. */
+interface SubagentConnector {
+  id: string;
+  x: number;
+  y1: number;
+  y2: number;
+  color: string;
+}
 
 interface LegendEntry {
   label: string;
@@ -172,6 +186,38 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     return [...ids]
       .map((id) => this.traces().find((t) => t.id === id))
       .filter(Boolean);
+  });
+
+  /** Picker items: every trace, with subagents nested (indented) under the trace that launched them. */
+  traceItems = computed<DropdownItem[]>(() => {
+    const traces = this.traces();
+    return familyOrder(traces, traces.map(t => t.id)).map(id => {
+      const t = traces.find(e => e.id === id)!;
+      return { id: t.id, title: t.title, date: t.date, agents: t.agents, depth: depthOf(traces, id) };
+    });
+  });
+
+  /**
+   * Lines joining each subagent's agent line to its parent's, at the x where it
+   * was launched. Drawn in one overlay over all rows, so y is relative to the
+   * row stack: each row is its track plus its files lane, with ROW_GAP between.
+   */
+  subagentConnectors = computed<SubagentConnector[]>(() => {
+    const rows = this.traceLayouts();
+    const expanded = this.expandedFileTraceIds();
+    const agentY = channelCenter('agent');
+    const top = new Map<string, number>();
+    let y = 0;
+    for (const r of rows) {
+      top.set(r.id, y);
+      const files = r.files.rows.length === 0 ? 0
+        : expanded.has(r.id) ? Math.max(FILES_LANE.height, r.files.totalHeight) : FILES_LANE.height;
+      y += TRACK_HEIGHT + files + ROW_GAP;
+    }
+    return rows.flatMap(r => {
+      if (!r.parent || !top.has(r.parent.id)) return [];
+      return [{ id: r.id, x: r.parent.x, y1: top.get(r.parent.id)! + agentY, y2: top.get(r.id)! + agentY, color: r.agentColor }];
+    });
   });
 
   legendEntries = computed<LegendEntry[]>(() => {
@@ -392,9 +438,15 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     if (event.dataTransfer) {
       event.dataTransfer.dropEffect = 'move';
     }
-    const target = measureDrop(event);
+    const target = measureDrop(event, i => this.isFamilyBoundary(i));
     this.dropIndex.set(target?.index ?? null);
     if (target) this.dropIndicatorTop.set(target.indicatorTop);
+  }
+
+  /** Rows can only be dropped between families: before a root row, or after the last row. */
+  private isFamilyBoundary(rowIndex: number): boolean {
+    const rows = this.traceLayouts();
+    return rowIndex >= rows.length || rows[rowIndex].depth === 0;
   }
 
   onTrackDrop(event: DragEvent) {
@@ -413,46 +465,45 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     this.dropIndex.set(null);
   }
 
+  /** Moves the family (root row + its subagent rows) at `fromIndex` so it starts at row `targetDropIndex`. */
   executeDropReorder(fromIndex: number, targetDropIndex: number) {
-    const currentIds = Array.from(this.selectedTraceIds());
-    if (fromIndex < 0 || fromIndex >= currentIds.length) return;
+    const rows = this.traceLayouts();
+    if (fromIndex < 0 || fromIndex >= rows.length || rows[fromIndex].depth !== 0) return;
 
-    let destinationIndex = targetDropIndex;
-    if (fromIndex < targetDropIndex) {
-      destinationIndex = targetDropIndex - 1;
-    }
+    // The family is the root plus the following rows of greater depth.
+    let blockEnd = fromIndex + 1;
+    while (blockEnd < rows.length && rows[blockEnd].depth > 0) blockEnd++;
+    if (targetDropIndex > fromIndex && targetDropIndex <= blockEnd) return;  // dropped onto itself
 
-    if (destinationIndex < 0 || destinationIndex >= currentIds.length) {
-      return;
-    }
+    const ids = rows.map(r => r.id);
+    const block = ids.splice(fromIndex, blockEnd - fromIndex);
+    const insertAt = targetDropIndex > fromIndex ? targetDropIndex - block.length : targetDropIndex;
+    ids.splice(insertAt, 0, ...block);
 
-    if (destinationIndex === fromIndex) {
-      return;
-    }
-
-    const [movedId] = currentIds.splice(fromIndex, 1);
-    currentIds.splice(destinationIndex, 0, movedId);
-
-    this.selectedTraceIds.set(new Set(currentIds));
+    this.selectedTraceIds.set(new Set(familyOrder(this.traces(), ids)));
     this.processTraces();
     this.updateUrlParams();
   }
 
-  /** Handles changes in the selected traces. */
+  /** Handles changes in the selected traces. Selecting a trace selects its subagents too; deselecting it drops them. */
   onTraceSelectionChange(newSelection: Set<string>) {
-    const currentOrderedIds = Array.from(this.selectedTraceIds());
-
-    // Keep currently selected IDs that are still in newSelection (preserving custom order)
-    const updatedIds = currentOrderedIds.filter(id => newSelection.has(id));
-
-    // Add any newly selected IDs in the order they appear in newSelection
+    const traces = this.traces();
+    const previous = this.selectedTraceIds();
+    const next = new Set(newSelection);
     for (const id of newSelection) {
-      if (!updatedIds.includes(id)) {
-        updatedIds.push(id);
-      }
+      if (!previous.has(id)) for (const d of familyOf(traces, id)) next.add(d);
+    }
+    for (const id of previous) {
+      if (!newSelection.has(id)) for (const d of familyOf(traces, id)) next.delete(d);
     }
 
-    this.selectedTraceIds.set(new Set(updatedIds));
+    // Keep currently selected IDs that are still selected (preserving custom order), then append the new ones.
+    const updatedIds = [...previous].filter(id => next.has(id));
+    for (const id of next) {
+      if (!updatedIds.includes(id)) updatedIds.push(id);
+    }
+
+    this.selectedTraceIds.set(new Set(familyOrder(traces, updatedIds)));
     this.processTraces();
     this.updateUrlParams();
   }
@@ -537,7 +588,8 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     }
 
     const selectedIds = this.urlParamService.validateAndSelectTraceIds(tracesList, targetIndices);
-    this.selectedTraceIds.set(new Set(selectedIds));
+    const withSubagents = selectedIds.flatMap(id => familyOf(tracesList, id));
+    this.selectedTraceIds.set(new Set(familyOrder(tracesList, withSubagents)));
     this.processTraces();
     this.updateUrlParams();
   }

@@ -11,6 +11,9 @@
   z-index: 20;
   overflow: hidden;
   pointer-events: auto;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
 }
 
 .row-trace-title-text {
@@ -21,6 +24,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Subagent rows: lighter title, placed at the branch point */
+.row-trace-title.is-subagent .row-trace-title-text { font-weight: 600; color: #475569; }
+.subagent-tag { font-weight: 500; color: #94a3b8; margin-right: 2px; }
 
 /* Lane labels, right-aligned (first row only) */
 .lane-label,

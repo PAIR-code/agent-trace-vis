@@ -117,6 +117,26 @@ trace JSON ──trace-loader.service──▶ ReasoningTrace (steps → nodes)
   gap, nothing is selected and the side panel scrolls the next mark to the top
   (`scrollTarget`). The side panel never smooth-scrolls; it jumps. Rows are
   reordered by the grip at their right end.
+- **Subagents** (`subagents.ts`): a trace launched by another trace's tool call
+  (an `invoke_subagent`) records its parent in `metadata.parent_trace_id` /
+  `parent_tool_call_id`; the parent's tool call lists its children in
+  `subagent_trajectory_refs` (both written by `convert_jetski_db.py`).
+  `linkSubagents()` resolves those to entry ids when a dataset loads.
+  - A parent and its subagents form a *family* and are laid out on **one shared
+    axis** (`buildFamilies()` in `layout.ts`). In time mode a subagent's row
+    therefore starts under the moment it was launched; in tokens mode it is
+    offset to the parent's token count at the launching step.
+  - Idle gaps are found over the whole family, so a parent waiting on a
+    subagent is not "idle" and hide-gaps doesn't squash the subagent's work.
+    Fill-space stretches the family, not each row.
+  - Selecting a trace selects its subagents; the selection is kept in *family
+    order* (`familyOrder()`), so subagent rows always follow their parent.
+    Dragging a root row moves its whole family, and rows can only be dropped
+    between families.
+  - Subagent rows are titled `[subagent] …` (`TraceLayout.depth`) and joined to
+    the parent by a thin line from a dot on the parent's agent line (at the
+    launching tool call, whose mark is hidden) down to the subagent's agent
+    line (`subagentConnectors` in `agentic-traces.ts`, one SVG over all rows).
 
 ## How to add a channel
 

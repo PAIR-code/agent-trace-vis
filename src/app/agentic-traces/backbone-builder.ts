@@ -49,20 +49,25 @@ export function buildBackboneLines(
   gaps: GapRect[],
   traceMaxX: number,
   lineColor: string,
-  marks: Mark[]
+  marks: Mark[],
+  /** Where the line begins: the axis origin, or for a subagent where it was launched. */
+  startX: number = BASE_OFFSET,
 ): BackboneLine[] {
   const lines: BackboneLine[] = [];
 
   // Add agent backbone line segments
   const backboneSegments: any[] = [];
-  let lastX = BASE_OFFSET;
+  let lastX = startX;
 
   gaps.forEach(gap => {
-    if (gap.x > lastX) {
-      backboneSegments.push({ x1: lastX, x2: gap.x, type: 'solid' });
+    const gapEnd = gap.x + gap.width;
+    if (gapEnd <= startX) return;
+    const gapX = Math.max(gap.x, startX);
+    if (gapX > lastX) {
+      backboneSegments.push({ x1: lastX, x2: gapX, type: 'solid' });
     }
-    backboneSegments.push({ x1: gap.x, x2: gap.x + gap.width, type: gap.compressed ? 'squiggle' : 'dotted' });
-    lastX = gap.x + gap.width;
+    backboneSegments.push({ x1: gapX, x2: gapEnd, type: gap.compressed ? 'squiggle' : 'dotted' });
+    lastX = gapEnd;
   });
 
   if (lastX < traceMaxX) {
