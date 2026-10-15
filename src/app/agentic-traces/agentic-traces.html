@@ -132,6 +132,7 @@
         <div class="row-lanes" [style.width.px]="contentWidth()" [style.padding-top.px]="60 + 18">
           <!-- Subagent branches: from the parent's agent line down to the subagent's -->
           <svg class="subagent-links" *ngIf="subagentConnectors().length > 0"
+               [class.layer-dimmed]="layersService.anyLayerEnabled()"
                [style.top.px]="60 + 18" [attr.width]="contentWidth()" [attr.height]="contentHeight()">
             <g *ngFor="let c of subagentConnectors()">
               <line [attr.x1]="c.x" [attr.y1]="c.y1" [attr.x2]="c.x" [attr.y2]="c.y2" [attr.stroke]="c.color" />

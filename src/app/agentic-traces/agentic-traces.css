@@ -454,6 +454,13 @@ app-analysis-toolbar {
   opacity: 0.8;
 }
 
+/* Fade with the track backbones while a search/highlight layer is active */
+.subagent-links.layer-dimmed {
+  opacity: .3;
+  filter: grayscale(1);
+  transition: opacity .15s, filter .15s;
+}
+
 /* Reorder grip: a full-height strip just past the row's right end */
 .row-drag-handle {
   position: absolute;
