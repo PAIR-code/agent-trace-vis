@@ -26,6 +26,15 @@ import { classifyTool } from './tools';
 import { getAgentColor } from './colors';
 import { hashString } from './layout-utils';
 
+/**
+ * Some harnesses prefix every tool result with
+ * `Created At: <iso>\nCompleted At: <iso>\n`. Those lines are noise in the
+ * sidebar preview (the raw observation still has them), so drop them.
+ */
+function stripTimestampHeader(content: string): string {
+  return content.replace(/^(?:(?:Created|Completed) At:[^\n]*\n?){1,2}/, '').trim();
+}
+
 /** Parses OpenTraces records into `ReasoningTrace`s. Fetching is `DatasetService`'s job. */
 @Injectable({
   providedIn: 'root'
@@ -83,8 +92,9 @@ export class TraceLoaderService {
             } else if (obs.output_summary) {
               toolText += `\n\n${obs.output_summary}`;
             } else if (obs.content) {
-              const preview = obs.content.length > 300 ? obs.content.slice(0, 300) + '...' : obs.content;
-              toolText += `\n\n${preview}`;
+              const content = stripTimestampHeader(obs.content);
+              const preview = content.length > 300 ? content.slice(0, 300) + '...' : content;
+              if (preview) toolText += `\n\n${preview}`;
             }
             const obsId = `${stepId}_obs_${tcIdx}`;
             nodes.push(createNode(obsId, TraceNodeType.TOOL_DATA, toolText, stepType, combinedData));
