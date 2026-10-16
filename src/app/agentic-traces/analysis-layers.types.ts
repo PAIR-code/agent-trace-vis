@@ -135,4 +135,16 @@ export const ANALYSIS_PRESETS: AnalysisPreset[] = [
     mode: 'semantic',
     description: 'General stalling detection',
   },
+  {
+    name: 'Suspicious behavior',
+    query: 'Agent is doing something the user might find suspicious',
+    mode: 'semantic',
+    description: 'Detects potentially suspicious agent actions',
+  },
+  {
+    name: 'Out-of-scope files',
+    query: 'Agent is looking at or editing files that are outside the expected context',
+    mode: 'semantic',
+    description: 'Detects file access outside the expected context',
+  },
 ];
