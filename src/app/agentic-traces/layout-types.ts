@@ -145,10 +145,17 @@ export interface LayoutOutput {
   timeTicks: Array<{ label: string, x: number }>;
 }
 
+/**
+ * What the x axis measures: elapsed time, cumulative tokens, or sequence (one
+ * unit per node, for traces with no timestamps; shown as "Steps").
+ */
+export type AxisMode = 'time' | 'tokens' | 'sequence';
+
 export interface LayoutParams {
   traces: TraceEntry[];
   selectedTraceIds: Set<string>;
-  yAxisMode: 'time' | 'tokens';
+  /** The effective axis: callers resolve an unavailable 'time' to 'sequence' first. */
+  yAxisMode: AxisMode;
   hideGaps: boolean;
   selectedTokenTypes?: Set<string>;
   containerWidth?: number;

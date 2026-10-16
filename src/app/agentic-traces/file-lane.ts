@@ -25,10 +25,16 @@
  */
 
 import { FileEvent, normalizeFilePath } from './file-events';
+import type { AxisMode } from './layout-types';
 import { Mark } from './marks';
 
 /** Height of one expanded file row. */
 export const FILE_ROW_HEIGHT = 24;
+
+/** Width of an edit bar on the time / tokens axes. */
+const EDIT_WIDTH = 7;
+/** Edit bar height in sequence mode: every slot the same, matching the speech bars. */
+const SLOT_EDIT_HEIGHT = 18;
 
 export interface FileViewMarker {
   x: number;
@@ -64,8 +70,13 @@ export interface FileLane {
   totalHeight: number;
 }
 
-/** Lays out one trace's file events against its marks. */
-export function buildFileLane(events: FileEvent[], marks: Mark[], contentWidth: number): FileLane {
+/**
+ * Lays out one trace's file events against its marks. In sequence mode the
+ * marks are slot-sized bars (see marks.ts): edits take that width and a
+ * constant height, and view dots sit at the slot's center.
+ */
+export function buildFileLane(events: FileEvent[], marks: Mark[], contentWidth: number, mode: AxisMode = 'time'): FileLane {
+  const slots = mode === 'sequence';
   const markById = new Map(marks.map(m => [m.id, m]));
   const placed = events
     .filter(ev => markById.has(ev.nodeId))
@@ -89,7 +100,7 @@ export function buildFileLane(events: FileEvent[], marks: Mark[], contentWidth: 
   const drawn = marks.filter(m => !m.hidden);
   const endX = Math.max(
     drawn.length > 0 ? Math.max(...drawn.map(m => m.x + m.width)) : contentWidth,
-    ...placed.map(e => e.x));
+    ...placed.map(e => e.x + (slots ? e.node.width : 0)));
 
   const rows = [...groups.entries()].map(([key, evs]): FileRow & { key: string } => {
     const first = evs[0];
@@ -103,15 +114,15 @@ export function buildFileLane(events: FileEvent[], marks: Mark[], contentWidth: 
       startX: first.x,
       endX,
       views: evs.filter(e => e.kind !== 'edit').map(e => ({
-        x: e.x,
+        x: slots ? e.x + e.node.width / 2 : e.x,
         isSearch: e.kind === 'search',
         label: e.kind === 'search' ? `${basename}: ${e.node.text || 'grep search'}` : `${basename}: viewed`,
         node: e.node,
       })),
       edits: evs.filter(e => e.kind === 'edit').map(e => ({
         x: e.x,
-        width: 7,
-        barHeight: linesToBarHeight(e.linesCount),
+        width: slots ? e.node.width : EDIT_WIDTH,
+        barHeight: slots ? SLOT_EDIT_HEIGHT : linesToBarHeight(e.linesCount),
         label: e.linesCount > 0 ? `${basename}: ${e.linesCount} lines written` : `${basename}: written`,
         node: e.node,
       })),

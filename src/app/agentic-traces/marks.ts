@@ -26,8 +26,8 @@
 
 import { getAgentColor } from './colors';
 import { ChannelId, channelCenter } from './channels';
-import { BASE_OFFSET, ReasoningStepType, ReasoningTraceNode, ReasoningTraceStep, TraceNodeType } from './layout-types';
-import { getStepTokens, stepAxisTokens, truncate, wordCount } from './layout-utils';
+import { AxisMode, BASE_OFFSET, ReasoningStepType, ReasoningTraceNode, ReasoningTraceStep, TraceNodeType } from './layout-types';
+import { getStepTokens, stepAxisLength, truncate, wordCount } from './layout-utils';
 import { fileAccess, toolIcon } from './tools';
 import { XAxis } from './x-scale';
 
@@ -86,6 +86,8 @@ interface MarkSpec {
 
 const ICON = 12;
 const SPEECH_WIDTH = 7;
+/** Sequence mode: space left between a bar and the next slot. */
+const SLOT_GUTTER = 2;
 
 /** Placement rules for each node type. */
 const MARK_SPECS: Record<string, MarkSpec> = {
@@ -112,14 +114,20 @@ function anchorY(anchor: Anchor, center: number, height: number): number {
   }
 }
 
-/** Speech (user/response) height: 10–22px by step tokens; constant in tokens mode. */
-function speechHeight(tokens: number, maxTokens: number, mode: 'time' | 'tokens'): number {
-  if (mode === 'tokens') return 18;
+/** Speech (user/response) height: 10–22px by step tokens; constant off the time axis. */
+const SPEECH_FIXED_HEIGHT = 18;
+function speechHeight(tokens: number, maxTokens: number, mode: AxisMode): number {
+  if (mode !== 'time') return SPEECH_FIXED_HEIGHT;
   return Math.round(Math.min(22, 10 + 12 * tokens / maxTokens));
 }
 
-/** Thinking-block depth: 8–40px by thinking tokens; constant in tokens mode. */
-function effortHeight(tokens: number, maxTokens: number, mode: 'time' | 'tokens'): number {
+/**
+ * Thinking-block depth: 8–40px by thinking tokens. Constant off the time axis:
+ * 30px in tokens mode (the block still spans its step), speech-bar height in
+ * sequence mode (it is one slot, the mirror of the response bar above the line).
+ */
+function effortHeight(tokens: number, maxTokens: number, mode: AxisMode): number {
+  if (mode === 'sequence') return SPEECH_FIXED_HEIGHT;
   if (mode === 'tokens') return 30;
   return 8 + 32 * tokens / maxTokens;
 }
@@ -169,11 +177,11 @@ function sizeTokens(step: ReasoningTraceStep, node: ReasoningTraceNode, tokenTyp
   return step.token_usage ? getStepTokens(step.token_usage, tokenTypes) : wordCount(node.text);
 }
 
-/** Axis position (ms or tokens) where a step starts and ends; NaN if unknown. */
-function stepRange(steps: ReasoningTraceStep[], i: number, mode: 'time' | 'tokens',
-                   tokensBefore: number, tokenTypes?: Set<string>): [number, number] {
+/** Axis position (ms, tokens or nodes) where a step starts and ends; NaN if unknown. */
+function stepRange(steps: ReasoningTraceStep[], i: number, mode: AxisMode,
+                   before: number, tokenTypes?: Set<string>): [number, number] {
   const step = steps[i];
-  if (mode === 'tokens') return [tokensBefore, tokensBefore + stepAxisTokens(step, tokenTypes)];
+  if (mode !== 'time') return [before, before + stepAxisLength(step, mode, tokenTypes)];
 
   const ms = (ts?: string) => ts ? new Date(ts).getTime() : NaN;
   let end = ms(step.completedAt);
@@ -193,7 +201,7 @@ function stepRange(steps: ReasoningTraceStep[], i: number, mode: 'time' | 'token
  * Places a mark for every node in the trace on the given axis.
  * Returns the marks and the right edge of the drawn content.
  */
-export function buildMarks(trace: MarkTraceInput, axis: XAxis, mode: 'time' | 'tokens',
+export function buildMarks(trace: MarkTraceInput, axis: XAxis, mode: AxisMode,
                            tokenTypes?: Set<string>): { marks: Mark[]; maxX: number } {
   const marks: Mark[] = [];
   let maxEffortTokens = 1;
@@ -206,13 +214,14 @@ export function buildMarks(trace: MarkTraceInput, axis: XAxis, mode: 'time' | 't
   }
 
   let maxX = 20;
-  let tokensBefore = 0;
+  // Cumulative axis position (tokens or nodes) of the steps so far; unused in time mode.
+  let before = 0;
   // Fallback x for nodes without a usable timestamp: march along after the previous mark.
   let cursorX = BASE_OFFSET;
 
   trace.steps.forEach((step, i) => {
-    const [start, end] = stepRange(trace.steps, i, mode, tokensBefore, tokenTypes);
-    tokensBefore = mode === 'tokens' ? end : 0;
+    const [start, end] = stepRange(trace.steps, i, mode, before, tokenTypes);
+    before = mode !== 'time' ? end : 0;
     const stepColor = step.color || getAgentColor(step.agentName || trace.agentName, step.model || trace.model);
     const stepX0 = axis.toX(start);
     const stepX1 = axis.toX(end);
@@ -249,12 +258,25 @@ export function buildMarks(trace: MarkTraceInput, axis: XAxis, mode: 'time' | 't
       const spec = isTool && node.stepType === ReasoningStepType.LIST_DIRECTORY ? LIST_DIR_SPEC
         : MARK_SPECS[node.type] ?? MARK_SPECS[TraceNodeType.TOOL_DATA];
 
-      let x = node.type === TraceNodeType.THINKING ? stepX0 : actionsX0 + actions.indexOf(node) * actionGap;
-      if (isNaN(x)) x = cursorX;
-
-      const width = spec.width === 'step'
-        ? Math.max(1, (isNaN(stepX1) ? x + ICON : stepX1) - x)
-        : spec.width;
+      // Sequence mode: the step is one slot per node, so each node sits in its
+      // own slot and nothing spans the step. Bars fill the slot (less a gutter);
+      // icons keep their shape and are centered in it. Otherwise reasoning
+      // spans the step and the actions trail it (see above).
+      const slot = mode === 'sequence' ? drawn.indexOf(node) : -1;
+      let x: number, width: number;
+      if (slot >= 0) {
+        const slotX = axis.toX(start + slot);
+        const slotW = axis.toX(start + slot + 1) - slotX;
+        // File-access nodes aren't drawn here, but the files lane takes their
+        // geometry, so they get the bar shape as well.
+        const isBar = spec.height === 'speech' || spec.height === 'effort' || fileAccess(node.stepType) !== null;
+        width = isBar ? Math.max(1, slotW - SLOT_GUTTER) : spec.width as number;
+        x = slotX + (slotW - width) / 2;
+      } else {
+        x = node.type === TraceNodeType.THINKING ? stepX0 : actionsX0 + actions.indexOf(node) * actionGap;
+        if (isNaN(x)) x = cursorX;
+        width = spec.width === 'step' ? Math.max(1, (isNaN(stepX1) ? x + ICON : stepX1) - x) : spec.width;
+      }
 
       const tokens = sizeTokens(step, node, tokenTypes);
       const height = spec.height === 'speech' ? speechHeight(tokens, trace.maxStepTokens, mode)

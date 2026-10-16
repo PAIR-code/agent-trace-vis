@@ -39,7 +39,7 @@ import { COLORS } from "./colors";
 import { MultiSelectDropdownComponent, DropdownItem } from "../shared/multi-select-dropdown.component";
 import { AnalysisToolbarComponent } from "./analysis-toolbar.component";
 import { ConversationViewerComponent } from "../shared/conversation-viewer.component";
-import { layoutTraces, TraceEntry, TraceLayout, TraceNodeType } from "./layout";
+import { AxisMode, hasTimestamps, layoutTraces, TraceEntry, TraceLayout, TraceNodeType } from "./layout";
 import { Mark } from "./marks";
 import { groupThreadMessages } from "./thread-helper";
 import { HuggingFaceImportComponent } from "./hugging-face-import.component";
@@ -114,7 +114,18 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   });
 
   selectedTraceIds = signal<Set<string>>(new Set());
-  yAxisMode = signal<"time" | "tokens">("time");
+  /** The X-axis the user picked. 'time' is kept even while unavailable (see effectiveAxisMode). */
+  yAxisMode = signal<AxisMode>("time");
+
+  /** Time mode needs timestamps; true when at least one selected trace has them. */
+  timeAvailable = computed(() => {
+    const selected = this.selectedTraces();
+    return selected.length === 0 || selected.some(t => hasTimestamps(t!.data));
+  });
+
+  /** The axis actually laid out: Time falls back to Steps while no selected trace has timestamps. */
+  effectiveAxisMode = computed<AxisMode>(() =>
+    this.yAxisMode() === 'time' && !this.timeAvailable() ? 'sequence' : this.yAxisMode());
   stretch = signal<boolean>(false);
   timeTicks = signal<{ label: string; x: number }[]>([]);
   hideGaps = signal<boolean>(false);
@@ -561,8 +572,8 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** Sets the Y-axis mode (time or tokens). */
-  setYAxisMode(mode: "time" | "tokens") {
+  /** Sets the X-axis mode (time, tokens or steps). */
+  setYAxisMode(mode: AxisMode) {
     this.yAxisMode.set(mode);
     this.processTraces();
   }
@@ -666,7 +677,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     const layout = layoutTraces({
       traces: this.traces(),
       selectedTraceIds: selectedIds,
-      yAxisMode: this.yAxisMode(),
+      yAxisMode: this.effectiveAxisMode(),
       hideGaps: this.hideGaps(),
       selectedTokenTypes: this.selectedTokenTypes(),
       containerWidth: this.containerWidth(),

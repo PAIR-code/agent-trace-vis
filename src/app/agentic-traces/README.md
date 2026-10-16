@@ -91,6 +91,14 @@ trace JSON ──trace-loader.service──▶ ReasoningTrace (steps → nodes)
 - **Channels** (`channels.ts`): the lanes' order, labels, heights and colors all
   come from this one list. Lane backgrounds, lane labels and mark y-positions
   are derived from it.
+- **X axis** (`AxisMode` in `layout-types.ts`): `time` (elapsed ms), `tokens`
+  (cumulative token usage, or word count where usage is missing) or `sequence`
+  (one slot per node, shown as "Steps" in the toolbar). All selected families
+  share one scale, so the longest fills the width. Time needs timestamps:
+  while no selected trace has any, the Time button is disabled and the layout
+  uses `sequence` instead (`effectiveAxisMode` in `agentic-traces.ts`); the
+  user's choice is remembered and comes back when a timestamped trace is
+  selected. `layoutTraces()` always receives the resolved mode.
 - **Collapsed rows**: by default a row is one lane with every mark and file
   marker on a single center line; `expand` (per row, or `Expand all` in the
   toolbar) opens it into the channel lanes plus the files lane. Collapsing is

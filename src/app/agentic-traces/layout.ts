@@ -21,9 +21,9 @@
  * Pure: the input traces are not modified.
  */
 
-import { ReasoningTrace, ReasoningTraceNode, ReasoningTraceStep, BASE_OFFSET, LayoutOutput, LayoutParams, TraceEntry, TraceLayout } from './layout-types';
+import { AxisMode, ReasoningTrace, ReasoningTraceNode, ReasoningTraceStep, BASE_OFFSET, LayoutOutput, LayoutParams, TraceEntry, TraceLayout } from './layout-types';
 import { getAgentColor } from './colors';
-import { getStepTokens, stepAxisTokens, wordCount } from './layout-utils';
+import { getStepTokens, stepAxisLength, wordCount } from './layout-utils';
 import { Mark, MarkTraceInput, buildMarks } from './marks';
 import { buildBackboneLines } from './backbone-builder';
 import { channelCenter, TRACK_HEIGHT } from './channels';
@@ -43,9 +43,9 @@ interface TraceMeta extends MarkTraceInput {
   title: string;
   data: ReasoningTrace;
   agentColor: string;
-  /** Axis origin: first timestamp (time mode) or 0 (tokens mode). */
+  /** Axis origin: first timestamp (time mode) or 0 (tokens / sequence mode). */
   startTime: number;
-  /** Axis length in ms or tokens. */
+  /** Axis length in ms, tokens or nodes. */
   duration: number;
   /** Entry id of the launching trace, when it is also selected. */
   parentId?: string;
@@ -53,7 +53,12 @@ interface TraceMeta extends MarkTraceInput {
   sourceId?: string;
 }
 
-function getTraceMetadata(trace: TraceEntry, yAxisMode: 'time' | 'tokens', tokenTypes?: Set<string>): TraceMeta {
+/** Whether a trace can be laid out on the time axis: at least one step has a timestamp. */
+export function hasTimestamps(data: ReasoningTrace | null | undefined): boolean {
+  return !!data?.steps?.some(s => s.timestamp || s.completedAt);
+}
+
+function getTraceMetadata(trace: TraceEntry, mode: AxisMode, tokenTypes?: Set<string>): TraceMeta {
   const data = (trace.data as ReasoningTrace) || {};
   const steps = data.steps || [];
 
@@ -63,7 +68,7 @@ function getTraceMetadata(trace: TraceEntry, yAxisMode: 'time' | 'tokens', token
 
   let startTime = 0;
   let duration = 0;
-  if (yAxisMode === 'time') {
+  if (mode === 'time') {
     const timestamps: number[] = [];
     steps.forEach((s: ReasoningTraceStep) => {
       if (s.timestamp) timestamps.push(new Date(s.timestamp).getTime());
@@ -74,7 +79,7 @@ function getTraceMetadata(trace: TraceEntry, yAxisMode: 'time' | 'tokens', token
       duration = Math.max(...timestamps) - startTime;
     }
   } else {
-    duration = steps.reduce((sum, s) => sum + stepAxisTokens(s, tokenTypes), 0);
+    duration = steps.reduce((sum, s) => sum + stepAxisLength(s, mode, tokenTypes), 0);
   }
 
   const maxStepTokens = Math.max(1, ...steps.map(s => s.token_usage
@@ -121,18 +126,18 @@ function launchedChild(node: Pick<ReasoningTraceNode, 'data'>, child: TraceMeta)
     (!!child.sourceId && Array.isArray(tc.subagent_trajectory_refs) && tc.subagent_trajectory_refs.includes(child.sourceId)));
 }
 
-/** Parent's cumulative tokens through the step that launched `child`, or 0 if that step isn't found. */
-function launchTokens(parent: TraceMeta, child: TraceMeta, tokenTypes?: Set<string>): number {
-  let tokens = 0;
+/** Parent's cumulative axis length (tokens or nodes) through the step that launched `child`, or 0 if that step isn't found. */
+function launchOffset(parent: TraceMeta, child: TraceMeta, mode: AxisMode, tokenTypes?: Set<string>): number {
+  let offset = 0;
   for (const step of parent.steps) {
-    tokens += stepAxisTokens(step, tokenTypes);
-    if (step.nodes.some(n => launchedChild(n, child))) return tokens;
+    offset += stepAxisLength(step, mode, tokenTypes);
+    if (step.nodes.some(n => launchedChild(n, child))) return offset;
   }
   return 0;
 }
 
 /** Groups the selected traces into families, keeping the selection's order of roots. */
-function buildFamilies(metas: TraceMeta[], yAxisMode: 'time' | 'tokens', tokenTypes?: Set<string>): Family[] {
+function buildFamilies(metas: TraceMeta[], mode: AxisMode, tokenTypes?: Set<string>): Family[] {
   const byId = new Map(metas.map(m => [m.id, m]));
   const children = new Map<string, TraceMeta[]>();
   const roots: TraceMeta[] = [];
@@ -145,18 +150,18 @@ function buildFamilies(metas: TraceMeta[], yAxisMode: 'time' | 'tokens', tokenTy
   return roots.map(root => {
     const members: FamilyMember[] = [];
     const visit = (meta: TraceMeta, depth: number, parent?: TraceMeta, parentOffset = 0) => {
-      const offset = parent && yAxisMode === 'tokens' ? parentOffset + launchTokens(parent, meta, tokenTypes) : 0;
+      const offset = parent && mode !== 'time' ? parentOffset + launchOffset(parent, meta, mode, tokenTypes) : 0;
       members.push({ meta, depth, parent, offset });
       for (const c of children.get(meta.id) ?? []) visit(c, depth + 1, meta, offset);
     };
     visit(root, 0);
 
     // Time mode: the earliest timestamp in the family (ignoring traces with
-    // none). Tokens mode: 0, with members offset into it.
+    // none). Tokens / sequence mode: 0, with members offset into it.
     const timed = members.filter(m => m.meta.duration > 0 || m.meta.startTime > 0);
-    const start = yAxisMode === 'time' && timed.length > 0 ? Math.min(...timed.map(m => m.meta.startTime)) : 0;
+    const start = mode === 'time' && timed.length > 0 ? Math.min(...timed.map(m => m.meta.startTime)) : 0;
     const end = Math.max(start, ...members.map(m =>
-      yAxisMode === 'time' ? m.meta.startTime + m.meta.duration : m.offset + m.meta.duration));
+      mode === 'time' ? m.meta.startTime + m.meta.duration : m.offset + m.meta.duration));
     return { members, start, duration: end - start };
   });
 }
@@ -167,8 +172,7 @@ function memberAxis(axis: XAxis, offset: number): XAxis {
 }
 
 export function layoutTraces(params: LayoutParams): LayoutOutput {
-  const { traces, selectedTraceIds, yAxisMode, hideGaps, selectedTokenTypes, containerWidth, stretch } = params;
-  const compressGaps = hideGaps && yAxisMode === 'time';
+  const { traces, selectedTraceIds, yAxisMode: mode, hideGaps, selectedTokenTypes, containerWidth, stretch } = params;
 
   const avail = containerWidth && containerWidth > 0 ? containerWidth : 1000;
   const targetSpan = Math.max(400, avail - BASE_OFFSET - LABEL_GUTTER);
@@ -176,9 +180,10 @@ export function layoutTraces(params: LayoutParams): LayoutOutput {
   const metas = [...selectedTraceIds]
     .map(id => traces.find(t => t.id === id))
     .filter((trace): trace is TraceEntry => !!trace?.data)
-    .map(trace => getTraceMetadata(trace, yAxisMode, selectedTokenTypes));
+    .map(trace => getTraceMetadata(trace, mode, selectedTokenTypes));
+  const compressGaps = hideGaps && mode === 'time';
 
-  const families = buildFamilies(metas, yAxisMode, selectedTokenTypes);
+  const families = buildFamilies(metas, mode, selectedTokenTypes);
 
   // All families share one scale (so durations are comparable) unless stretched.
   const maxDuration = Math.max(1, ...families.map(f => f.duration));
@@ -190,10 +195,10 @@ export function layoutTraces(params: LayoutParams): LayoutOutput {
     const scale = stretch && family.duration > 0 ? targetSpan / family.duration : baseScale;
     const linear = buildAxis(family.start, scale);
     const members = family.members.map(m => ({
-      ...m, ...buildMarks(m.meta, memberAxis(linear, m.offset), yAxisMode, selectedTokenTypes),
+      ...m, ...buildMarks(m.meta, memberAxis(linear, m.offset), mode, selectedTokenTypes),
     }));
     const maxX = Math.max(...members.map(m => m.maxX));
-    const gaps = yAxisMode === 'time'
+    const gaps = mode === 'time'
       ? findIdleGaps(members.flatMap(m => markExtents(m.marks)), family.start, scale, baseScale) : [];
     const fillMultiplier = compressGaps ? fillScaleMultiplier(gaps, scale, maxX, targetSpan) : 1;
     return { family, scale, members, gaps, fillMultiplier };
@@ -207,7 +212,7 @@ export function layoutTraces(params: LayoutParams): LayoutOutput {
     const multiplier = (stretch || firstPass.length === 1) ? p.fillMultiplier : sharedMultiplier;
     const axis = buildAxis(p.family.start, p.scale * multiplier, p.gaps, compressGaps);
     const laid = p.members.map(m => ({
-      ...m, ...(compressGaps ? buildMarks(m.meta, memberAxis(axis, m.offset), yAxisMode, selectedTokenTypes) : m),
+      ...m, ...(compressGaps ? buildMarks(m.meta, memberAxis(axis, m.offset), mode, selectedTokenTypes) : m),
     }));
     const marksOf = new Map(laid.map(m => [m.meta.id, m.marks]));
     return laid.map(m => {
@@ -224,14 +229,15 @@ export function layoutTraces(params: LayoutParams): LayoutOutput {
     });
   });
 
-  // 3. Ticks for the shared ruler (none when traces are stretched individually).
+  // 3. Ticks for the shared ruler (none when traces are stretched individually,
+  //    or on the sequence axis, which has no units worth labeling).
   let timeTicks: Array<{ label: string; x: number }> = [];
-  if (!stretch) {
+  if (!stretch && mode !== 'sequence') {
     if (compressGaps && firstPass.length > 0) {
       const scale = baseScale * sharedMultiplier;
       timeTicks = computeTicks('time', targetSpan / scale, scale, true);
     } else {
-      timeTicks = computeTicks(yAxisMode, maxDuration, baseScale, hideGaps);
+      timeTicks = computeTicks(mode, maxDuration, baseScale, hideGaps);
     }
   }
 
@@ -249,7 +255,7 @@ export function layoutTraces(params: LayoutParams): LayoutOutput {
     agentColor: meta.agentColor,
     marks,
     backbone,
-    files: buildFileLane(extractFileEvents(meta.data), marks, contentWidth),
+    files: buildFileLane(extractFileEvents(meta.data), marks, contentWidth, mode),
     depth,
     parent,
   }));

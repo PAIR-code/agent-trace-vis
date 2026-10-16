@@ -18,17 +18,21 @@
     </app-multi-select-dropdown>
   </div>
 
-  <!-- X Axis Toggle -->
+  <!-- X Axis Toggle. Time is disabled when no selected trace has timestamps; the choice is remembered. -->
   <div class="selector-group">
     <label class="selector-label">X Axis</label>
     <div class="timeline-toggle">
-      <button class="timeline-btn" [class.active]="yAxisMode() === 'time'" (click)="setYAxisMode('time')">Time</button>
-      <button class="timeline-btn" [class.active]="yAxisMode() === 'tokens'" (click)="setYAxisMode('tokens')">Tokens</button>
+      <button class="timeline-btn" [class.active]="effectiveAxisMode() === 'time'" (click)="setYAxisMode('time')"
+              [disabled]="!timeAvailable()"
+              [title]="timeAvailable() ? '' : 'No timestamps in the selected traces'">Time</button>
+      <button class="timeline-btn" [class.active]="effectiveAxisMode() === 'tokens'" (click)="setYAxisMode('tokens')">Tokens</button>
+      <button class="timeline-btn" [class.active]="effectiveAxisMode() === 'sequence'" (click)="setYAxisMode('sequence')"
+              title="One slot per event, in order">Steps</button>
     </div>
   </div>
 
   <!-- Hide Gaps Checkbox -->
-  <div class="selector-group" *ngIf="yAxisMode() === 'time'">
+  <div class="selector-group" *ngIf="effectiveAxisMode() === 'time'">
     <label class="selector-label" style="display: flex; align-items: center; gap: 4px; color: rgba(255,255,255,0.7); font-size: 0.7rem;">
       <input type="checkbox" [ngModel]="hideGaps()" (ngModelChange)="hideGaps.set($event); processTraces()" style="margin: 0;">
       Hide Gaps

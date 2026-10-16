@@ -19,6 +19,8 @@
  * @fileoverview Small shared helpers: ids, time labels, text, and token counts.
  */
 
+import type { AxisMode } from './layout-types';
+
 /** Computes a short deterministic 32-bit hash for a string. */
 export function hashString(str: string): string {
   let hash = 0;
@@ -79,4 +81,12 @@ export function stepAxisTokens(step: any, selectedTypes?: Set<string>): number {
   const tokens = getStepTokens(step.token_usage, selectedTypes);
   if (tokens > 0) return tokens;
   return wordCount(step.nodes?.map((n: any) => n.text).join(' ') || step.content || step.reasoning_content);
+}
+
+/**
+ * Length of a step on a non-time axis: its tokens in tokens mode, or one unit
+ * per node in sequence mode (time mode without timestamps).
+ */
+export function stepAxisLength(step: any, mode: AxisMode, selectedTypes?: Set<string>): number {
+  return mode === 'sequence' ? Math.max(1, step.nodes?.length ?? 0) : stepAxisTokens(step, selectedTypes);
 }

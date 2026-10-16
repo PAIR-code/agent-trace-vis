@@ -24,7 +24,7 @@
  * each gap is compressed to a fixed width (drawn as a squiggle).
  */
 
-import { BASE_OFFSET } from './layout-types';
+import { AxisMode, BASE_OFFSET } from './layout-types';
 import { formatElapsedTime } from './layout-utils';
 
 /** Pixel width a hidden (compressed) gap is drawn at. */
@@ -154,11 +154,12 @@ function formatTokens(tokens: number): string {
  * would be misleading, so ticks are unlabeled and only show the interval spacing.
  */
 export function computeTicks(
-  yAxisMode: 'time' | 'tokens',
+  yAxisMode: AxisMode,
   span: number,
   scale: number,
   hideGaps: boolean,
 ): Array<{ label: string; x: number }> {
+  if (yAxisMode === 'sequence') return [];
   const intervals = yAxisMode === 'time' ? TIME_INTERVALS : TOKEN_INTERVALS;
   const interval = niceInterval(span, intervals);
   const ticks: Array<{ label: string; x: number }> = [];
