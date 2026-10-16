@@ -64,3 +64,19 @@ for (const c of CHANNELS) {
 export function channelCenter(id: ChannelId): number {
   return CHANNEL_CENTERS.get(id)!;
 }
+
+/**
+ * The collapsed track: one lane with every channel (and the file markers)
+ * stacked on a single center line. Marks keep their size and anchoring; only
+ * the line they hang off changes (see `collapsedY`).
+ */
+export const COLLAPSED_TRACK = { height: LANE_HEIGHT, center: LANE_HEIGHT / 2, background: '#ebf0f4' };
+
+/**
+ * A mark's y in the collapsed track. Mark y's are anchored to their channel's
+ * center (marks.ts), so `y - channelCenter` is the anchor offset: re-apply it
+ * to the shared center line.
+ */
+export function collapsedY(mark: { y: number; channel: ChannelId }): number {
+  return mark.y - channelCenter(mark.channel) + COLLAPSED_TRACK.center;
+}

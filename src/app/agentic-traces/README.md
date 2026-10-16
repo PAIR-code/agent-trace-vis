@@ -91,6 +91,12 @@ trace JSON ──trace-loader.service──▶ ReasoningTrace (steps → nodes)
 - **Channels** (`channels.ts`): the lanes' order, labels, heights and colors all
   come from this one list. Lane backgrounds, lane labels and mark y-positions
   are derived from it.
+- **Collapsed rows**: by default a row is one lane with every mark and file
+  marker on a single center line; `expand` (per row, or `Expand all` in the
+  toolbar) opens it into the channel lanes plus the files lane. Collapsing is
+  purely presentational: a mark's `y` is an offset from its channel's center,
+  so `collapsedY()` re-applies that offset to the shared line and the backbone
+  is translated to match. Layout is not re-run.
 - **Marks** (`marks.ts`): every trace node becomes exactly one `Mark`.
   `MARK_SPECS` gives each node type:
   - a channel;

@@ -10,11 +10,12 @@
   right: 12px;
   z-index: 20;
   overflow: hidden;
-  pointer-events: auto;
+  pointer-events: none; /* spans the row; only the chevron and text (below) take clicks */
   display: flex;
   align-items: baseline;
   gap: 4px;
 }
+.row-trace-title > * { pointer-events: auto; }
 
 .row-trace-title-text {
   font-size: 0.7rem;
@@ -23,11 +24,51 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s ease;
 }
+.row-trace-title:hover .row-trace-title-text { color: #0f172a; text-decoration: underline; text-decoration-color: #94a3b8; text-underline-offset: 2px; }
 
 /* Subagent rows: lighter title, placed at the branch point */
 .row-trace-title.is-subagent .row-trace-title-text { font-weight: 600; color: #475569; }
 .subagent-tag { font-weight: 500; color: #94a3b8; margin-right: 2px; }
+
+/* Disclosure chevron before the title: expands / collapses the row into lanes */
+.expand-toggle {
+  flex-shrink: 0;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  margin-left: -2px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.expand-toggle:hover { background: rgba(0, 0, 0, 0.08); color: #0f172a; }
+.expand-toggle svg { display: block; }
+
+/* Collapsed track: file markers overlay the marks on the shared line.
+   (.files-svg.collapsed-files outranks the later .files-svg { position: relative }.) */
+.files-svg.collapsed-files {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 12;
+  pointer-events: none; /* only the markers take events */
+  transition: opacity 0.3s ease;
+}
+.files-svg.collapsed-files .file-marker { pointer-events: auto; }
+.files-svg.collapsed-files.hidden { opacity: 0; }
+.files-svg.collapsed-files.hidden .file-marker { pointer-events: none; }
 
 /* Lane labels, right-aligned (first row only) */
 .lane-label,
@@ -47,7 +88,9 @@
   right: 8px;
   z-index: 20;
   transform: translateY(-50%);
+  transition: opacity 0.3s ease;
 }
+.lane-label.hidden { opacity: 0; }
 
 /* ── Channel lanes ── */
 .row-main-track {
@@ -56,6 +99,7 @@
   flex-direction: column;
   width: 100%;
   flex-shrink: 0;
+  transition: height 0.3s ease;
 }
 
 .track-base-layer {
@@ -67,9 +111,11 @@
   transition: filter 0.3s ease, opacity 0.3s ease;
 }
 
+/* Lanes animate between the expanded and collapsed heights (see laneHeight in trace-track.ts) */
 .row-lane {
   position: relative;
   flex-shrink: 0;
+  transition: height 0.3s ease;
 }
 
 /* Lane backgrounds fade to gray while searching (one element, so the filter is cheap). */
@@ -90,6 +136,11 @@
 
 .track-lines-layer path {
   transition: d 0.3s ease;
+}
+
+/* Backbone slides between the agent line (expanded) and the shared line (collapsed) */
+.track-lines-layer .backbone {
+  transition: transform 0.3s ease;
 }
 
 .track-nodes-layer {
@@ -174,6 +225,8 @@
   border-radius: 0 0 8px 8px;
   z-index: 10;
   cursor: default;
+  overflow: hidden; /* so it can animate shut when the row is collapsed */
+  transition: height 0.3s ease;
 }
 
 .files-lane-bg {

@@ -1,4 +1,13 @@
-<div class="row-trace-title" [class.is-subagent]="trace().depth > 0" [style.left.px]="trace().parent ? trace().parent!.x + 8 : 0">
+<!-- Title row: clicking anywhere on it (chevron or text) expands / collapses the row -->
+<div class="row-trace-title" [class.is-subagent]="trace().depth > 0" [style.left.px]="trace().parent ? trace().parent!.x + 8 : 0"
+     (click)="onToggleExpand($event)">
+  <!-- Disclosure chevron: ▸ collapsed (one line), ▾ expanded (lanes) -->
+  <button class="expand-toggle" type="button" (click)="onToggleExpand($event)"
+          [title]="expanded() ? 'Collapse to one line' : 'Expand into lanes'">
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <polyline [attr.points]="expanded() ? '6 9 12 15 18 9' : '9 6 15 12 9 18'"></polyline>
+    </svg>
+  </button>
   <span class="row-trace-title-text" [title]="trace().title">
     @if (trace().depth > 0) {
       <span class="subagent-tag">[subagent]</span>
@@ -7,28 +16,34 @@
   </span>
 </div>
 
-<!-- Channel lanes, backbone and marks -->
-<div class="row-main-track" [style.width.px]="width()" [style.height.px]="trackHeight">
+<!--
+  Channel lanes, backbone and marks. Collapsed: one lane, every mark on its
+  center line. Everything stays in the DOM across the toggle so heights,
+  positions and opacities can transition (see trace-track.css).
+-->
+<div class="row-main-track" [class.collapsed]="!expanded()" [style.width.px]="width()" [style.height.px]="trackHeight()">
   @if (showLabels()) {
     @for (ch of channels; track ch.id) {
-      <span class="lane-label" [style.top.px]="channelCenter(ch.id)">{{ ch.label }}</span>
+      <span class="lane-label" [class.hidden]="!expanded()" [style.top.px]="channelCenter(ch.id)">{{ ch.label }}</span>
     }
   }
 
   <!-- Lanes and backbone (faded while a search is active) -->
   <div class="track-base-layer" [class.layer-dimmed]="searching()">
     @for (ch of channels; track ch.id) {
-      <div class="row-lane" [style.height.px]="ch.height" [style.background]="ch.background"></div>
+      <div class="row-lane" [style.height.px]="laneHeight(ch)" [style.background]="ch.background"></div>
     }
-    <svg class="track-lines-layer" [attr.width]="width()" [attr.height]="trackHeight">
-      @for (line of trace().backbone; track line.id) {
-        <path [attr.d]="line.path"
-              [attr.stroke]="line.stroke"
-              [attr.stroke-width]="line.strokeWidth"
-              [attr.stroke-dasharray]="line.strokeDasharray || 'none'"
-              [attr.opacity]="line.opacity"
-              fill="none" />
-      }
+    <svg class="track-lines-layer" [attr.width]="width()" [attr.height]="trackHeight()">
+      <g class="backbone" [style.transform]="backboneTransform()">
+        @for (line of trace().backbone; track line.id) {
+          <path [attr.d]="line.path"
+                [attr.stroke]="line.stroke"
+                [attr.stroke-width]="line.strokeWidth"
+                [attr.stroke-dasharray]="line.strokeDasharray || 'none'"
+                [attr.opacity]="line.opacity"
+                fill="none" />
+        }
+      </g>
     </svg>
   </div>
 
@@ -43,7 +58,7 @@
              [class.selected]="selectedId() === node.id"
              [class.is-hovered]="hoveredId() === node.id"
              [style.left.px]="node.x"
-             [style.top.px]="node.y"
+             [style.top.px]="markY(node)"
              [style.width.px]="node.width"
              [style.height.px]="node.height"
              [style.--mark-fill]="node.color"
@@ -65,12 +80,59 @@
       }
     }
   </div>
+
+  <!-- Collapsed: file markers (dots per view, bars per edit) on the shared line, no labels or lifespan lines. Fades out when expanded. -->
+  @if (trace().files.rows.length > 0) {
+    <svg class="files-svg collapsed-files" [class.hidden]="expanded()" [attr.width]="width()" [attr.height]="trackHeight()">
+      <g [attr.transform]="collapsedFilesTransform">
+        @for (row of trace().files.rows; track row.filePath) {
+          <g class="file-row" [class.active]="isRowActive(row)" [attr.opacity]="isRowDimmed(row) ? 0.3 : null">
+            @for (view of row.views; track view.node.id) {
+              @if (searchColor(view.node.id); as c) {
+                <circle class="file-search-halo" [attr.cx]="view.x" cy="14" r="8" [attr.fill]="c" />
+              }
+            }
+            @for (edit of row.edits; track edit.node.id) {
+              @if (searchColor(edit.node.id); as c) {
+                <rect class="file-search-halo" rx="4" [attr.fill]="c"
+                      [attr.x]="edit.x - 4" y="10" [attr.width]="edit.width + 8" [attr.height]="edit.barHeight + 8" />
+              }
+            }
+            @for (view of row.views; track view.node.id) {
+              <circle class="file-marker view" cy="14" [attr.cx]="view.x"
+                      [attr.r]="selectedId() === view.node.id ? 5 : hoveredId() === view.node.id ? 4.5 : 3"
+                      [class.search]="view.isSearch"
+                      [class.is-hovered]="hoveredId() === view.node.id"
+                      [class.selected]="selectedId() === view.node.id"
+                      [class.dimmed]="searching() && !searchColor(view.node.id)"
+                      (click)="onSelect(view.node, $event)"
+                      (mouseenter)="markHover.emit(view.node.id)"
+                      (mouseleave)="markHover.emit(null)"
+                      [attr.title]="view.label" />
+            }
+            @for (edit of row.edits; track edit.node.id) {
+              <rect class="file-marker edit" rx="1.5" y="14"
+                    [attr.x]="edit.x" [attr.width]="edit.width" [attr.height]="edit.barHeight"
+                    [class.plan]="row.isPlan"
+                    [class.is-hovered]="hoveredId() === edit.node.id"
+                    [class.selected]="selectedId() === edit.node.id"
+                    [class.dimmed]="searching() && !searchColor(edit.node.id)"
+                    (click)="onSelect(edit.node, $event)"
+                    (mouseenter)="markHover.emit(edit.node.id)"
+                    (mouseleave)="markHover.emit(null)"
+                    [attr.title]="edit.label" />
+            }
+          </g>
+        }
+      </g>
+    </svg>
+  }
 </div>
 
-<!-- Files lane: one row per file (see file-lane.ts); collapsed, rows overlap in one lane -->
+<!-- Files lane: one row per file (see file-lane.ts); with files collapsed, rows overlap in one lane. Shrinks to 0 when the row is collapsed. -->
 @if (trace().files.rows.length > 0) {
   <div class="files-lane" [class.collapsed]="!filesExpanded()"
-       [style.width.px]="width()" [style.min-height.px]="filesLane.height">
+       [style.width.px]="width()" [style.height.px]="filesLaneHeight()">
     <!-- Background only, so dimming it during search leaves markers untouched -->
     <div class="files-lane-bg" [style.background]="filesLane.background"
          [class.layer-dimmed]="searching()"></div>

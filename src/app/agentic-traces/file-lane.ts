@@ -126,7 +126,8 @@ export function buildFileLane(events: FileEvent[], marks: Mark[], contentWidth: 
 
   return {
     rows: rows.map(({ key, ...row }) => row),
-    totalHeight: Math.max(FILE_ROW_HEIGHT, rows.length * FILE_ROW_HEIGHT + 8),
+    // Rows are FILE_ROW_HEIGHT apart; the last row's edit bars reach 40px below its top.
+    totalHeight: Math.max(FILE_ROW_HEIGHT, (rows.length - 1) * FILE_ROW_HEIGHT + 40),
   };
 }
 

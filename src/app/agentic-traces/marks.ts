@@ -89,8 +89,9 @@ const SPEECH_WIDTH = 7;
 
 /** Placement rules for each node type. */
 const MARK_SPECS: Record<string, MarkSpec> = {
+  // The conversation (user and agent) sits above the line; thinking hangs below it.
   [TraceNodeType.USER_INPUT]: { channel: 'user',  anchor: 'above',  width: SPEECH_WIDTH, height: 'speech' },
-  [TraceNodeType.RESPONSE]:   { channel: 'user',  anchor: 'below',  width: SPEECH_WIDTH, height: 'speech', agentFill: true },
+  [TraceNodeType.RESPONSE]:   { channel: 'user',  anchor: 'above',  width: SPEECH_WIDTH, height: 'speech', agentFill: true },
   [TraceNodeType.THINKING]:   { channel: 'agent', anchor: 'hang',   width: 'step',       height: 'effort', agentFill: true },
   // A tool call with no logged result is still a tool call: same lane as one with a result.
   [TraceNodeType.TOOL_CALL]:  { channel: 'tools', anchor: 'center', width: ICON,         height: ICON },

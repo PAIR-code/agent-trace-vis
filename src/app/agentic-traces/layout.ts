@@ -36,6 +36,9 @@ export * from './layout-types';
 /** Space reserved right of the timeline for channel labels. */
 const LABEL_GUTTER = 140;
 
+/** Minimum space kept right of the last drawn mark (clear of the row's reorder handle). */
+const CONTENT_MARGIN = 40;
+
 interface TraceMeta extends MarkTraceInput {
   title: string;
   data: ReasoningTrace;
@@ -232,9 +235,12 @@ export function layoutTraces(params: LayoutParams): LayoutOutput {
     }
   }
 
-  // 4. Content dimensions from drawn marks.
+  // 4. Content dimensions from drawn marks. The label gutter is already inside
+  //    the axis span; marks that overrun the axis end (a last step with no end
+  //    time places its actions after its timestamp) spill into it. Only grow
+  //    the content when they'd otherwise be clipped.
   const drawn = rows.flatMap(r => r.marks).filter(m => !m.hidden);
-  const contentWidth = Math.max(avail, ...drawn.map(m => m.x + m.width + LABEL_GUTTER));
+  const contentWidth = Math.max(avail, ...drawn.map(m => m.x + m.width + CONTENT_MARGIN));
   const contentHeight = Math.max(TRACK_HEIGHT, ...drawn.map(m => m.y + m.height)) + 100;
 
   const layouts: TraceLayout[] = rows.map(({ meta, marks, backbone, depth, parent }) => ({

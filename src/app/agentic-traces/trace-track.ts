@@ -25,7 +25,7 @@
  */
 
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
-import { CHANNELS, FILES_LANE, TRACK_HEIGHT, channelCenter } from './channels';
+import { CHANNELS, COLLAPSED_TRACK, Channel, FILES_LANE, TRACK_HEIGHT, channelCenter, collapsedY } from './channels';
 import { COLORS } from './colors';
 import { FILE_ROW_HEIGHT, FileRow } from './file-lane';
 import { TraceLayout } from './layout-types';
@@ -58,17 +58,50 @@ export class TraceTrackComponent {
   /** Colors of the enabled search layers that match each mark id. */
   searchColors = input<Map<string, string[]>>(new Map());
   filesExpanded = input(false);
+  /**
+   * Expanded: the channel lanes plus the files lane. Collapsed (default): one
+   * lane with every mark and file marker stacked on a single center line.
+   */
+  expanded = input(false);
 
   markSelect = output<Mark>();
   markHover = output<string | null>();
   toggleFiles = output<void>();
+  toggleExpand = output<void>();
 
   readonly colors = COLORS;
   readonly channels = CHANNELS;
-  readonly trackHeight = TRACK_HEIGHT;
   readonly channelCenter = channelCenter;
   readonly filesLane = FILES_LANE;
   readonly fileRowHeight = FILE_ROW_HEIGHT;
+
+  trackHeight = computed(() => this.expanded() ? TRACK_HEIGHT : COLLAPSED_TRACK.height);
+
+  /**
+   * Lane heights animate between the two modes: collapsed, the agent lane is
+   * the single lane and the others shrink to nothing.
+   */
+  laneHeight(ch: Channel): number {
+    if (this.expanded()) return ch.height;
+    return ch.id === 'agent' ? COLLAPSED_TRACK.height : 0;
+  }
+
+  /** Files lane height: 0 when the row is collapsed, else by its own show-all state. */
+  filesLaneHeight = computed(() => {
+    if (!this.expanded()) return 0;
+    return this.filesExpanded() ? Math.max(FILES_LANE.height, this.trace().files.totalHeight) : FILES_LANE.height;
+  });
+
+  /** The backbone is laid out on the agent line; collapsed, shift it to the shared line. */
+  backboneTransform = computed(() =>
+    this.expanded() ? 'none' : `translate(0, ${COLLAPSED_TRACK.center - channelCenter('agent')}px)`);
+
+  /** File markers draw at y=14 within their row group (see the files lane markup). */
+  collapsedFilesTransform = `translate(0, ${COLLAPSED_TRACK.center - 14})`;
+
+  markY(mark: Mark): number {
+    return this.expanded() ? mark.y : collapsedY(mark);
+  }
 
   /**
    * Search glow per matched mark: a box-shadow in each matching layer's color.
@@ -109,5 +142,11 @@ export class TraceTrackComponent {
     event.stopPropagation();
     event.preventDefault();
     this.toggleFiles.emit();
+  }
+
+  onToggleExpand(event: Event) {
+    event.stopPropagation();
+    event.preventDefault();
+    this.toggleExpand.emit();
   }
 }

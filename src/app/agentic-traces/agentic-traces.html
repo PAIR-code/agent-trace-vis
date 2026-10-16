@@ -18,9 +18,9 @@
     </app-multi-select-dropdown>
   </div>
 
-  <!-- Y Axis Toggle -->
+  <!-- X Axis Toggle -->
   <div class="selector-group">
-    <label class="selector-label">Y Axis</label>
+    <label class="selector-label">X Axis</label>
     <div class="timeline-toggle">
       <button class="timeline-btn" [class.active]="yAxisMode() === 'time'" (click)="setYAxisMode('time')">Time</button>
       <button class="timeline-btn" [class.active]="yAxisMode() === 'tokens'" (click)="setYAxisMode('tokens')">Tokens</button>
@@ -41,6 +41,14 @@
       <input type="checkbox" [ngModel]="stretch()" (ngModelChange)="stretch.set($event); processTraces()" style="margin: 0;">
       Fill space
     </label>
+  </div>
+
+  <!-- Expand / collapse every row (rows also have their own toggle) -->
+  <div class="selector-group">
+    <button class="timeline-btn" type="button" (click)="toggleExpandAll()"
+            [title]="allExpanded() ? 'Collapse every row to one line' : 'Expand every row into lanes'">
+      {{ allExpanded() ? 'Collapse all' : 'Expand all' }}
+    </button>
   </div>
 
   <!-- Token Options Dropdown -->
@@ -162,9 +170,11 @@
               [searching]="layersService.anyLayerEnabled()"
               [searchColors]="searchColors()"
               [filesExpanded]="expandedFileTraceIds().has(t.id)"
+              [expanded]="expandedTraceIds().has(t.id)"
               (markSelect)="selectMark($event)"
               (markHover)="hoveredMarkId.set($event)"
-              (toggleFiles)="toggleTraceFiles(t.id)">
+              (toggleFiles)="toggleTraceFiles(t.id)"
+              (toggleExpand)="toggleTraceExpand(t.id)">
             </app-trace-track>
             <app-scrub-bar #bar
               [visible]="activeTraceId() === t.id"

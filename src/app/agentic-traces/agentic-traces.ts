@@ -48,7 +48,7 @@ import { measureDrop } from "./drag-drop-helper";
 import { TraceTrackComponent } from "./trace-track";
 import { ScrubBarComponent, ScrubEvent } from "./scrub-bar";
 import { depthOf, familyOf, familyOrder } from "./subagents";
-import { channelCenter, FILES_LANE, TRACK_HEIGHT } from "./channels";
+import { channelCenter, COLLAPSED_TRACK, FILES_LANE, TRACK_HEIGHT } from "./channels";
 
 /** Dev helpers exposed on `window` (a convention shared with the other pages). */
 type DevWindow = Window & { clearCache?: () => void; clearcache?: () => void };
@@ -200,23 +200,36 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   /**
    * Lines joining each subagent's agent line to its parent's, at the x where it
    * was launched. Drawn in one overlay over all rows, so y is relative to the
-   * row stack: each row is its track plus its files lane, with ROW_GAP between.
+   * row stack: each row is its track plus its files lane (expanded rows only),
+   * with ROW_GAP between.
    */
   subagentConnectors = computed<SubagentConnector[]>(() => {
     const rows = this.traceLayouts();
-    const expanded = this.expandedFileTraceIds();
-    const agentY = channelCenter('agent');
+    const expanded = this.expandedTraceIds();
+    const filesExpanded = this.expandedFileTraceIds();
+    // Top of each row, and the y of its agent line within it.
     const top = new Map<string, number>();
+    const agentY = new Map<string, number>();
     let y = 0;
     for (const r of rows) {
       top.set(r.id, y);
-      const files = r.files.rows.length === 0 ? 0
-        : expanded.has(r.id) ? Math.max(FILES_LANE.height, r.files.totalHeight) : FILES_LANE.height;
-      y += TRACK_HEIGHT + files + ROW_GAP;
+      if (expanded.has(r.id)) {
+        agentY.set(r.id, channelCenter('agent'));
+        const files = r.files.rows.length === 0 ? 0
+          : filesExpanded.has(r.id) ? Math.max(FILES_LANE.height, r.files.totalHeight) : FILES_LANE.height;
+        y += TRACK_HEIGHT + files + ROW_GAP;
+      } else {
+        agentY.set(r.id, COLLAPSED_TRACK.center);
+        y += COLLAPSED_TRACK.height + ROW_GAP;
+      }
     }
     return rows.flatMap(r => {
       if (!r.parent || !top.has(r.parent.id)) return [];
-      return [{ id: r.id, x: r.parent.x, y1: top.get(r.parent.id)! + agentY, y2: top.get(r.id)! + agentY, color: r.agentColor }];
+      return [{
+        id: r.id, x: r.parent.x, color: r.agentColor,
+        y1: top.get(r.parent.id)! + agentY.get(r.parent.id)!,
+        y2: top.get(r.id)! + agentY.get(r.id)!,
+      }];
     });
   });
 
@@ -414,7 +427,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
 
   isInteractiveElement(target: EventTarget | null): boolean {
     if (!target || !(target instanceof Element)) return false;
-    return !!target.closest('.vis-node, .file-marker, .file-label, .files-header, .scrub-bar, .row-drag-handle, button, input, select, a');
+    return !!target.closest('.vis-node, .file-marker, .file-label, .files-header, .scrub-bar, .row-drag-handle, .row-trace-title, button, input, select, a');
   }
 
   onTrackDragStart(event: DragEvent, index: number) {
@@ -676,6 +689,30 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     const expanded = new Set(this.expandedFileTraceIds());
     if (!expanded.delete(traceId)) expanded.add(traceId);
     this.expandedFileTraceIds.set(expanded);
+  }
+
+  /** Trace ids drawn as channel lanes; the rest are collapsed to a single line (see trace-track). */
+  readonly expandedTraceIds = signal<Set<string>>(new Set<string>());
+
+  /** True when every shown row is expanded (the toolbar button then offers "collapse all"). */
+  readonly allExpanded = computed(() => {
+    const rows = this.traceLayouts();
+    const expanded = this.expandedTraceIds();
+    return rows.length > 0 && rows.every(r => expanded.has(r.id));
+  });
+
+  /** Expands or collapses one trace row. */
+  toggleTraceExpand(traceId: string) {
+    const expanded = new Set(this.expandedTraceIds());
+    if (!expanded.delete(traceId)) expanded.add(traceId);
+    this.expandedTraceIds.set(expanded);
+  }
+
+  /** Expands every shown row, or collapses them all if they already are. */
+  toggleExpandAll() {
+    this.expandedTraceIds.set(this.allExpanded()
+      ? new Set<string>()
+      : new Set(this.traceLayouts().map(r => r.id)));
   }
 
   /** Toggles collapse/minimize state of the legend overlay. */
