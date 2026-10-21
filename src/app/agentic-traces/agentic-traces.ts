@@ -48,7 +48,7 @@ import { measureDrop } from "./drag-drop-helper";
 import { TraceTrackComponent } from "./trace-track";
 import { ScrubBarComponent, ScrubEvent } from "./scrub-bar";
 import { depthOf, familyOf, familyOrder } from "./subagents";
-import { channelCenter, COLLAPSED_TRACK, FILES_LANE, TRACK_HEIGHT } from "./channels";
+import { channelCenter, COLLAPSED_TRACK, FILES_LANE, laneGeometry, usedChannels } from "./channels";
 
 /** Dev helpers exposed on `window` (a convention shared with the other pages). */
 type DevWindow = Window & { clearCache?: () => void; clearcache?: () => void };
@@ -71,7 +71,6 @@ interface LegendEntry {
   color: string;
   isAI: boolean;
   border?: string;
-  isDiamond?: boolean;
 }
 
 
@@ -216,7 +215,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
    */
   subagentConnectors = computed<SubagentConnector[]>(() => {
     const rows = this.traceLayouts();
-    const expanded = this.expandedTraceIds();
+    const collapsed = this.collapsedTraceIds();
     const filesExpanded = this.expandedFileTraceIds();
     // Top of each row, and the y of its agent line within it.
     const top = new Map<string, number>();
@@ -224,11 +223,13 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     let y = 0;
     for (const r of rows) {
       top.set(r.id, y);
-      if (expanded.has(r.id)) {
-        agentY.set(r.id, channelCenter('agent'));
+      if (!collapsed.has(r.id)) {
+        // Same lane geometry the track draws: only the channels this row uses.
+        const lanes = laneGeometry(usedChannels(r.marks));
+        agentY.set(r.id, lanes.centers.get('agent') ?? channelCenter('agent'));
         const files = r.files.rows.length === 0 ? 0
           : filesExpanded.has(r.id) ? Math.max(FILES_LANE.height, r.files.totalHeight) : FILES_LANE.height;
-        y += TRACK_HEIGHT + files + ROW_GAP;
+        y += lanes.height + files + ROW_GAP;
       } else {
         agentY.set(r.id, COLLAPSED_TRACK.center);
         y += COLLAPSED_TRACK.height + ROW_GAP;
@@ -289,7 +290,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
         label: "Harness",
         color: COLORS.USER_BG,
         isAI: false,
-        isDiamond: true,
         border: `1.5px solid ${currentAgentColor}`,
       },
       { label: "Error", color: COLORS.ERROR_LIGHT, isAI: false },
@@ -702,28 +702,35 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     this.expandedFileTraceIds.set(expanded);
   }
 
-  /** Trace ids drawn as channel lanes; the rest are collapsed to a single line (see trace-track). */
-  readonly expandedTraceIds = signal<Set<string>>(new Set<string>());
+  /**
+   * Trace ids collapsed to a single line; the rest are drawn as channel lanes
+   * (see trace-track). Rows are open by default, so newly selected traces
+   * open without any bookkeeping.
+   */
+  readonly collapsedTraceIds = signal<Set<string>>(new Set<string>());
 
-  /** True when every shown row is expanded (the toolbar button then offers "collapse all"). */
-  readonly allExpanded = computed(() => {
-    const rows = this.traceLayouts();
-    const expanded = this.expandedTraceIds();
-    return rows.length > 0 && rows.every(r => expanded.has(r.id));
+  isTraceExpanded(traceId: string): boolean {
+    return !this.collapsedTraceIds().has(traceId);
+  }
+
+  /** True while any shown row is expanded (the toolbar button then offers "collapse all"). */
+  readonly anyExpanded = computed(() => {
+    const collapsed = this.collapsedTraceIds();
+    return this.traceLayouts().some(r => !collapsed.has(r.id));
   });
 
   /** Expands or collapses one trace row. */
   toggleTraceExpand(traceId: string) {
-    const expanded = new Set(this.expandedTraceIds());
-    if (!expanded.delete(traceId)) expanded.add(traceId);
-    this.expandedTraceIds.set(expanded);
+    const collapsed = new Set(this.collapsedTraceIds());
+    if (!collapsed.delete(traceId)) collapsed.add(traceId);
+    this.collapsedTraceIds.set(collapsed);
   }
 
-  /** Expands every shown row, or collapses them all if they already are. */
+  /** Collapses every shown row, or expands them all if none is open. */
   toggleExpandAll() {
-    this.expandedTraceIds.set(this.allExpanded()
-      ? new Set<string>()
-      : new Set(this.traceLayouts().map(r => r.id)));
+    this.collapsedTraceIds.set(this.anyExpanded()
+      ? new Set(this.traceLayouts().map(r => r.id))
+      : new Set<string>());
   }
 
   /** Toggles collapse/minimize state of the legend overlay. */

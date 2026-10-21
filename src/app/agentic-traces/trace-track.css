@@ -7,17 +7,18 @@
   position: absolute;
   top: -18px;
   left: 0;
-  right: 12px;
+  right: 0;
   z-index: 20;
   overflow: hidden;
-  pointer-events: none; /* spans the row; only the chevron and text (below) take clicks */
+  cursor: pointer; /* the whole strip toggles the row (click handler on the container) */
   display: flex;
   align-items: baseline;
   gap: 4px;
 }
-.row-trace-title > * { pointer-events: auto; }
 
 .row-trace-title-text {
+  flex: 0 1 auto;
+  min-width: 0;
   font-size: 0.7rem;
   font-weight: 700;
   color: #1e293b;
@@ -34,17 +35,17 @@
 .row-trace-title.is-subagent .row-trace-title-text { font-weight: 600; color: #475569; }
 .subagent-tag { font-weight: 500; color: #94a3b8; margin-right: 2px; }
 
-/* Disclosure chevron before the title: expands / collapses the row into lanes */
+/* Disclosure chevron at the row's right end (just before the drag handle): expands / collapses the row into lanes */
 .expand-toggle {
   flex-shrink: 0;
   align-self: center;
+  margin-left: auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 14px;
   height: 14px;
   padding: 0;
-  margin-left: -2px;
   border: none;
   border-radius: 3px;
   background: transparent;
@@ -70,7 +71,7 @@
 .files-svg.collapsed-files.hidden { opacity: 0; }
 .files-svg.collapsed-files.hidden .file-marker { pointer-events: none; }
 
-/* Lane labels, right-aligned (first row only) */
+/* Lane labels, right-aligned, on every row */
 .lane-label,
 .files-label {
   font-size: 0.55rem;
@@ -178,7 +179,8 @@
 .vis-node.user_input { background: var(--user-bg); border: 1.5px solid var(--user-border); border-radius: 2px; }
 .vis-node.response { background: var(--mark-fill); border-radius: 2px; }
 .vis-node.thinking { background: var(--mark-fill); border-radius: 0 0 3px 3px; z-index: 5; }
-.vis-node.system { background: var(--user-bg); border: 1.5px solid var(--mark-border); transform: rotate(45deg); }
+/* Harness messages: a tool-style circle, outlined in the step's agent color */
+.vis-node.system { background: var(--user-bg); border: 1.5px solid var(--mark-border); border-radius: 50%; }
 .vis-node.tool_call,
 .vis-node.tool_data { background: var(--user-bg); border: 1.5px solid var(--tool-line); border-radius: 50%; }
 .vis-node.error { background: var(--error-light); border-radius: 50%; }
@@ -187,6 +189,8 @@
 /* Icons */
 .vis-node.command { background: #6b7280; border: none; border-radius: 3px; }
 .vis-node.command.is-failed { background: var(--error); }
+/* A write to one of the agent's own plan / scratch files: a file edit bar, but white */
+.vis-node.artifact { background: #ffffff; border: 1px solid var(--tool-line); border-radius: 1.5px; }
 .command-content {
   display: flex;
   justify-content: center;

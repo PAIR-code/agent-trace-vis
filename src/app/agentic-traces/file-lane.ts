@@ -26,15 +26,15 @@
 
 import { FileEvent, normalizeFilePath } from './file-events';
 import type { AxisMode } from './layout-types';
-import { Mark } from './marks';
+import type { Mark } from './marks';
 
 /** Height of one expanded file row. */
 export const FILE_ROW_HEIGHT = 24;
 
 /** Width of an edit bar on the time / tokens axes. */
-const EDIT_WIDTH = 7;
+export const EDIT_WIDTH = 7;
 /** Edit bar height in sequence mode: every slot the same, matching the speech bars. */
-const SLOT_EDIT_HEIGHT = 18;
+export const SLOT_EDIT_HEIGHT = 18;
 
 export interface FileViewMarker {
   x: number;
@@ -143,7 +143,7 @@ export function buildFileLane(events: FileEvent[], marks: Mark[], contentWidth: 
 }
 
 /** Lines written → bar height: 1 line ≈ 8px, 100 lines ≈ 21px, capped at 26px. */
-function linesToBarHeight(linesCount: number): number {
+export function linesToBarHeight(linesCount: number): number {
   if (linesCount <= 0) return 6;
   return Math.min(26, Math.round(6 + Math.log1p(linesCount) * 3.2));
 }

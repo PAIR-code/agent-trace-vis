@@ -208,12 +208,12 @@ export function toolIcon(stepType: S | undefined): 'command' | 'search' | undefi
 
 /** Input keys that name a file, most specific first (harnesses disagree on naming). */
 export const PATH_KEYS = [
-  'TargetFile', 'AbsolutePath', 'NotebookPath', 'file_path', 'filePath',
+  'TargetFile', 'AbsolutePath', 'NotebookPath', 'Path', 'file_path', 'filePath',
   'filepath', 'path', 'file', 'filename', 'file_name', 'target_file',
   'absolute_path', 'notebook_path', 'uri', 'document', 'src', 'dest',
 ];
 /** Input keys that name a search directory (or occasionally a single file). */
-export const SEARCH_PATH_KEYS = ['SearchPath', 'search_path', 'searchPath'];
+export const SEARCH_PATH_KEYS = ['SearchPath', 'SearchDirectory', 'search_path', 'searchPath'];
 
 /** Trims whitespace and surrounding quotes / backticks. */
 export function stripQuotes(s: string): string {

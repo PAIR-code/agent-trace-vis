@@ -28,7 +28,7 @@ import { Mark, MarkTraceInput, buildMarks } from './marks';
 import { buildBackboneLines } from './backbone-builder';
 import { channelCenter, TRACK_HEIGHT } from './channels';
 import { XAxis, buildAxis, findIdleGaps, fillScaleMultiplier, computeTicks } from './x-scale';
-import { extractFileEvents } from './file-events';
+import { FileEvent, artifactNodes, extractFileEvents } from './file-events';
 import { buildFileLane } from './file-lane';
 
 export * from './layout-types';
@@ -51,6 +51,8 @@ interface TraceMeta extends MarkTraceInput {
   parentId?: string;
   parentToolCallId?: string;
   sourceId?: string;
+  /** Every file the trace touched (file-events.ts); the files lane draws the non-artifact ones. */
+  fileEvents: FileEvent[];
 }
 
 /** Whether a trace can be laid out on the time axis: at least one step has a timestamp. */
@@ -86,9 +88,12 @@ function getTraceMetadata(trace: TraceEntry, mode: AxisMode, tokenTypes?: Set<st
     ? getStepTokens(s.token_usage, tokenTypes)
     : wordCount(s.nodes?.map(n => n.text).join(' ') || (s as any).content || (s as any).reasoning_content)));
 
+  const fileEvents = extractFileEvents(data);
+
   return {
     id: trace.id, title: trace.title, data, steps, agentName, model, agentColor, startTime, duration, maxStepTokens,
     parentId: trace.parentId, parentToolCallId: trace.parentToolCallId, sourceId: data.sourceId,
+    fileEvents, artifactNodes: artifactNodes(fileEvents),
   };
 }
 
@@ -255,7 +260,7 @@ export function layoutTraces(params: LayoutParams): LayoutOutput {
     agentColor: meta.agentColor,
     marks,
     backbone,
-    files: buildFileLane(extractFileEvents(meta.data), marks, contentWidth, mode),
+    files: buildFileLane(meta.fileEvents.filter(e => !e.isArtifact), marks, contentWidth, mode),
     depth,
     parent,
   }));

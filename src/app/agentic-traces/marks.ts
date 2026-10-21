@@ -26,6 +26,7 @@
 
 import { getAgentColor } from './colors';
 import { ChannelId, channelCenter } from './channels';
+import { EDIT_WIDTH, SLOT_EDIT_HEIGHT, linesToBarHeight } from './file-lane';
 import { AxisMode, BASE_OFFSET, ReasoningStepType, ReasoningTraceNode, ReasoningTraceStep, TraceNodeType } from './layout-types';
 import { getStepTokens, stepAxisLength, truncate, wordCount } from './layout-utils';
 import { fileAccess, toolIcon } from './tools';
@@ -33,8 +34,12 @@ import { XAxis } from './x-scale';
 
 /** Styling hints for a mark; shape and base colors come from CSS keyed on `type`. */
 export interface MarkLook {
-  /** Glyph drawn inside the mark (replaces the type's shape). */
-  icon?: 'command' | 'search';
+  /**
+   * Glyph drawn inside the mark (replaces the type's shape). `artifact`: a
+   * write to one of the agent's own plan / scratch files, drawn on the tools
+   * line as a plain box.
+   */
+  icon?: 'command' | 'search' | 'artifact';
   /** Only set where the border follows the step's agent color (system marks). */
   borderColor?: string;
   /** A tool call whose observation reported an error. */
@@ -78,8 +83,11 @@ interface MarkSpec {
   anchor: Anchor;
   /** px; 'step' = spans the whole step. */
   width: number | 'step';
-  /** px; 'speech' = scaled by step tokens; 'effort' = scaled by thinking tokens. */
-  height: number | 'speech' | 'effort';
+  /**
+   * px; 'speech' = scaled by step tokens; 'effort' = scaled by thinking tokens;
+   * 'lines' = scaled by lines written, like a file edit bar.
+   */
+  height: number | 'speech' | 'effort' | 'lines';
   /** Filled with the step's agent color. */
   agentFill?: boolean;
 }
@@ -104,6 +112,12 @@ const MARK_SPECS: Record<string, MarkSpec> = {
 
 /** Directory listings sit below the tools line, clear of other tool results. */
 const LIST_DIR_SPEC: MarkSpec = { ...MARK_SPECS[TraceNodeType.TOOL_DATA], anchor: 'below' };
+
+/**
+ * A write to one of the agent's own plan / scratch files: its own channel,
+ * with the files lane's edit-bar encoding (hangs down, sized by lines).
+ */
+const ARTIFACT_SPEC: MarkSpec = { channel: 'artifacts', anchor: 'hang', width: EDIT_WIDTH, height: 'lines' };
 
 function anchorY(anchor: Anchor, center: number, height: number): number {
   switch (anchor) {
@@ -170,6 +184,12 @@ export interface MarkTraceInput {
   model?: string;
   /** Largest step token count; speech marks are scaled against it. */
   maxStepTokens: number;
+  /**
+   * File-tool nodes that only touched the agent's own artifacts, with the lines
+   * they wrote (see `artifactNodes` in file-events.ts). Drawn on the tools line
+   * as edit bars rather than hidden in favor of the files lane.
+   */
+  artifactNodes?: Map<string, number>;
 }
 
 /** Tokens used to size a node's mark: its step's token usage, else its word count. */
@@ -255,7 +275,12 @@ export function buildMarks(trace: MarkTraceInput, axis: XAxis, mode: AxisMode,
       }
 
       const isTool = node.type === TraceNodeType.TOOL_DATA || node.type === TraceNodeType.TOOL_CALL;
-      const spec = isTool && node.stepType === ReasoningStepType.LIST_DIRECTORY ? LIST_DIR_SPEC
+      // A file tool that only wrote the agent's own artifacts has nothing for
+      // the files lane: it's drawn on the tools line as an edit bar instead.
+      const artifactLines = trace.artifactNodes?.get(node.id);
+      const isArtifact = artifactLines !== undefined;
+      const spec = isArtifact ? ARTIFACT_SPEC
+        : isTool && node.stepType === ReasoningStepType.LIST_DIRECTORY ? LIST_DIR_SPEC
         : MARK_SPECS[node.type] ?? MARK_SPECS[TraceNodeType.TOOL_DATA];
 
       // Sequence mode: the step is one slot per node, so each node sits in its
@@ -281,16 +306,19 @@ export function buildMarks(trace: MarkTraceInput, axis: XAxis, mode: AxisMode,
       const tokens = sizeTokens(step, node, tokenTypes);
       const height = spec.height === 'speech' ? speechHeight(tokens, trace.maxStepTokens, mode)
         : spec.height === 'effort' ? effortHeight(tokens, maxEffortTokens, mode)
+        : spec.height === 'lines' ? (mode === 'sequence' ? SLOT_EDIT_HEIGHT : linesToBarHeight(artifactLines ?? 0))
         : spec.height;
 
+      const look = markLook(node, stepColor);
+      if (isArtifact) look.icon = 'artifact';
       marks.push({
         ...base,
         type: node.type,
         channel: spec.channel,
         x, y: anchorY(spec.anchor, channelCenter(spec.channel), height), width, height,
         color: spec.agentFill ? stepColor : null,
-        look: markLook(node, stepColor),
-        hidden: fileAccess(node.stepType) !== null || undefined,
+        look,
+        hidden: (fileAccess(node.stepType) !== null && !isArtifact) || undefined,
       });
 
       cursorX = x + width + (k === 0 ? ICON : 0);

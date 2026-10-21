@@ -25,7 +25,7 @@
  */
 
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
-import { CHANNELS, COLLAPSED_TRACK, Channel, FILES_LANE, TRACK_HEIGHT, channelCenter, collapsedY } from './channels';
+import { CHANNELS, COLLAPSED_TRACK, Channel, ChannelId, FILES_LANE, channelCenter, collapsedY, laneGeometry, usedChannels } from './channels';
 import { COLORS } from './colors';
 import { FILE_ROW_HEIGHT, FileRow } from './file-lane';
 import { TraceLayout } from './layout-types';
@@ -49,8 +49,6 @@ import { Mark } from './marks';
 export class TraceTrackComponent {
   trace = input.required<TraceLayout>();
   width = input.required<number>();
-  /** Show channel labels (only the first row does). */
-  showLabels = input(false);
   hoveredId = input<string | null>(null);
   selectedId = input<string | null>(null);
   /** True while any search layer is enabled, even one with no matches. */
@@ -59,10 +57,10 @@ export class TraceTrackComponent {
   searchColors = input<Map<string, string[]>>(new Map());
   filesExpanded = input(false);
   /**
-   * Expanded: the channel lanes plus the files lane. Collapsed (default): one
-   * lane with every mark and file marker stacked on a single center line.
+   * Expanded: the channel lanes plus the files lane. Collapsed: one lane with
+   * every mark and file marker stacked on a single center line.
    */
-  expanded = input(false);
+  expanded = input(true);
 
   markSelect = output<Mark>();
   markHover = output<string | null>();
@@ -71,18 +69,34 @@ export class TraceTrackComponent {
 
   readonly colors = COLORS;
   readonly channels = CHANNELS;
-  readonly channelCenter = channelCenter;
   readonly filesLane = FILES_LANE;
   readonly fileRowHeight = FILE_ROW_HEIGHT;
 
-  trackHeight = computed(() => this.expanded() ? TRACK_HEIGHT : COLLAPSED_TRACK.height);
+  /**
+   * Only the channels this trace uses are drawn (see `usedChannels`). Marks are
+   * laid out against the full channel set (marks.ts), so their y is shifted to
+   * the trace's own lane centers here, the same way collapsing shifts them.
+   */
+  shownChannels = computed(() => usedChannels(this.trace().marks));
+  geometry = computed(() => laneGeometry(this.shownChannels()));
+
+  trackHeight = computed(() => this.expanded() ? this.geometry().height : COLLAPSED_TRACK.height);
+
+  isShown(ch: Channel): boolean {
+    return this.shownChannels().has(ch.id);
+  }
+
+  /** Center y of a channel in this trace's track (expanded). */
+  laneCenter(id: ChannelId): number {
+    return this.geometry().centers.get(id) ?? channelCenter(id);
+  }
 
   /**
    * Lane heights animate between the two modes: collapsed, the agent lane is
-   * the single lane and the others shrink to nothing.
+   * the single lane and the others shrink to nothing. Unused lanes are 0 either way.
    */
   laneHeight(ch: Channel): number {
-    if (this.expanded()) return ch.height;
+    if (this.expanded()) return this.isShown(ch) ? ch.height : 0;
     return ch.id === 'agent' ? COLLAPSED_TRACK.height : 0;
   }
 
@@ -92,15 +106,19 @@ export class TraceTrackComponent {
     return this.filesExpanded() ? Math.max(FILES_LANE.height, this.trace().files.totalHeight) : FILES_LANE.height;
   });
 
-  /** The backbone is laid out on the agent line; collapsed, shift it to the shared line. */
-  backboneTransform = computed(() =>
-    this.expanded() ? 'none' : `translate(0, ${COLLAPSED_TRACK.center - channelCenter('agent')}px)`);
+  /** The backbone is laid out on the agent line; shift it to where that line is drawn. */
+  backboneTransform = computed(() => {
+    const target = this.expanded() ? this.laneCenter('agent') : COLLAPSED_TRACK.center;
+    const dy = target - channelCenter('agent');
+    return dy === 0 ? 'none' : `translate(0, ${dy}px)`;
+  });
 
   /** File markers draw at y=14 within their row group (see the files lane markup). */
   collapsedFilesTransform = `translate(0, ${COLLAPSED_TRACK.center - 14})`;
 
   markY(mark: Mark): number {
-    return this.expanded() ? mark.y : collapsedY(mark);
+    if (!this.expanded()) return collapsedY(mark);
+    return mark.y - channelCenter(mark.channel) + this.laneCenter(mark.channel);
   }
 
   /**

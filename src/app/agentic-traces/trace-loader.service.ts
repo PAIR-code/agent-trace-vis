@@ -175,6 +175,13 @@ export class TraceLoaderService {
     const agentList = Array.from(agentMap.values());
 
     const meta = traceData.metadata || {};
+    /** `file://` URIs (or local paths) from metadata, as local paths; undefined if none. */
+    const localPaths = (v: unknown): string[] | undefined => {
+      if (!Array.isArray(v)) return undefined;
+      const paths = v.filter((s): s is string => typeof s === 'string' && s.length > 0)
+        .map(uri => decodeURIComponent(uri.replace(/^file:\/\//, '')).replace(/\/+$/, ''));
+      return paths.length ? paths : undefined;
+    };
     return {
       id: traceId,
       title: title,
@@ -184,6 +191,7 @@ export class TraceLoaderService {
       sourceId: traceData.trace_id || traceData.session_id || undefined,
       parentSourceId: typeof meta['parent_trace_id'] === 'string' ? meta['parent_trace_id'] : undefined,
       parentToolCallId: typeof meta['parent_tool_call_id'] === 'string' ? meta['parent_tool_call_id'] : undefined,
+      artifactDirs: localPaths(meta['artifact_dirs']),
     };
   }
 }

@@ -99,12 +99,17 @@ trace JSON ──trace-loader.service──▶ ReasoningTrace (steps → nodes)
   uses `sequence` instead (`effectiveAxisMode` in `agentic-traces.ts`); the
   user's choice is remembered and comes back when a timestamped trace is
   selected. `layoutTraces()` always receives the resolved mode.
-- **Collapsed rows**: by default a row is one lane with every mark and file
-  marker on a single center line; `expand` (per row, or `Expand all` in the
-  toolbar) opens it into the channel lanes plus the files lane. Collapsing is
-  purely presentational: a mark's `y` is an offset from its channel's center,
-  so `collapsedY()` re-applies that offset to the shared line and the backbone
-  is translated to match. Layout is not re-run.
+- **Row expansion**: by default a row shows its channel lanes plus the files
+  lane; `collapse` (per row, or `Collapse all` in the toolbar) folds it into one
+  lane with every mark and file marker on a single center line. Both are purely
+  presentational: a mark's `y` is an offset from its channel's center, so
+  `collapsedY()` re-applies that offset to the shared line and the backbone is
+  translated to match. Layout is not re-run.
+- **Unused channels are skipped**: a row only draws the channels that have a
+  mark in it (plus `agent`, where the backbone runs; see `usedChannels` /
+  `laneGeometry` in `channels.ts`). Marks are still laid out against the full
+  channel set, and `trace-track` shifts them to the row's own lane centers the
+  same way collapsing does. The page uses the same geometry for row heights.
 - **Marks** (`marks.ts`): every trace node becomes exactly one `Mark`.
   `MARK_SPECS` gives each node type:
   - a channel;
@@ -117,6 +122,13 @@ trace JSON ──trace-loader.service──▶ ReasoningTrace (steps → nodes)
   - `file-lane.ts` lays out one row per file.
   - Markers reuse their node's mark x, so they line up with the main track and
     share its hover, selection and search state.
+  - **Artifacts** are the agent's own plan / scratch files: a path under the
+    trace's `metadata.artifact_dirs` (the Jetski converter emits the
+    conversation's brain dir), or a write with an explicit `ArtifactMetadata` /
+    `IsArtifact` flag. Exact signals only; the filename-based `isPlan` is not
+    used for this. A file tool whose files are all artifacts is left out of the
+    files lane and drawn in the `artifacts` channel instead, as a white edit bar
+    with the files lane's sizing (`ARTIFACT_SPEC` in `marks.ts`).
 - **Search**: while a search layer is on:
   - Matched marks keep their color and get a `box-shadow` glow in the layer's
     color.

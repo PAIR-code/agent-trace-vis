@@ -50,8 +50,8 @@
   <!-- Expand / collapse every row (rows also have their own toggle) -->
   <div class="selector-group">
     <button class="timeline-btn" type="button" (click)="toggleExpandAll()"
-            [title]="allExpanded() ? 'Collapse every row to one line' : 'Expand every row into lanes'">
-      {{ allExpanded() ? 'Collapse all' : 'Expand all' }}
+            [title]="anyExpanded() ? 'Collapse every row to one line' : 'Expand every row into lanes'">
+      {{ anyExpanded() ? 'Collapse all' : 'Expand all' }}
     </button>
   </div>
 
@@ -110,8 +110,7 @@
             <div class="legend-color" 
                  [style.background-color]="entry.color" 
                  [style.border]="entry.border || ((entry.isAI || entry.color === '#ffffff') ? '1px solid #9ca3af' : 'none')"
-                 [style.border-radius]="entry.isDiamond ? '0' : '50%'"
-                 [style.transform]="entry.isDiamond ? 'rotate(45deg)' : 'none'"></div>
+                 style="border-radius: 50%"></div>
             <span class="legend-label">
               <ng-container *ngIf="entry.subLabel; else simpleLabel">
                 <span class="legend-main-label">{{ entry.label }}</span>
@@ -168,13 +167,12 @@
             <app-trace-track
               [trace]="t"
               [width]="contentWidth()"
-              [showLabels]="i === 0"
               [hoveredId]="hoveredMarkId()"
               [selectedId]="selectedMark()?.id ?? null"
               [searching]="layersService.anyLayerEnabled()"
               [searchColors]="searchColors()"
               [filesExpanded]="expandedFileTraceIds().has(t.id)"
-              [expanded]="expandedTraceIds().has(t.id)"
+              [expanded]="isTraceExpanded(t.id)"
               (markSelect)="selectMark($event)"
               (markHover)="hoveredMarkId.set($event)"
               (toggleFiles)="toggleTraceFiles(t.id)"

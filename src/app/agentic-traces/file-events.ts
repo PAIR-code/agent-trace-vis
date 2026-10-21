@@ -30,13 +30,27 @@ export interface FileEvent {
   kind: FileAccess;
   /** Lines written (edits only). */
   linesCount: number;
-  /** A plan / spec / todo document. */
+  /** A plan / spec / todo document, by filename. Heuristic. */
   isPlan: boolean;
+  /**
+   * One of the agent's own scratch files or plans: under the harness's
+   * artifact dir, or written with an explicit artifact flag. Exact, not by
+   * name. Drawn in the artifacts channel, not in the files lane.
+   */
+  isArtifact: boolean;
 }
 
 /** All file events in a trace, in trace order. */
 export function extractFileEvents(trace: ReasoningTrace): FileEvent[] {
   const events: FileEvent[] = [];
+  const artifactDirs = trace.artifactDirs ?? [];
+  const push = (nodeId: string, filePath: string, kind: FileAccess, linesCount: number, input: unknown) =>
+    events.push({
+      nodeId, filePath, kind, linesCount,
+      isPlan: isPlanPath(filePath, input),
+      isArtifact: isArtifactEvent(filePath, input, artifactDirs),
+    });
+
   for (const step of trace.steps) {
     for (const node of step.nodes) {
       if (!node.data) continue;
@@ -47,24 +61,34 @@ export function extractFileEvents(trace: ReasoningTrace): FileEvent[] {
         // Tools that aren't file tools but still write files as a side effect.
         // The mark stays in the tools lane; the write shows in the files lane.
         for (const filePath of extractIndirectWrites(node.stepType, input, node.data.observation)) {
-          events.push({ nodeId: node.id, filePath, kind: 'edit', linesCount: 0, isPlan: isPlanPath(filePath, input) });
+          push(node.id, filePath, 'edit', 0, input);
         }
         continue;
       }
 
       const toolName: string = node.data.toolCall?.tool_name ?? node.text ?? '';
       for (const filePath of extractFilePaths(input, toolName, node.data.observation)) {
-        events.push({
-          nodeId: node.id,
-          filePath,
-          kind,
-          linesCount: kind === 'edit' ? countEditLines(input) : 0,
-          isPlan: isPlanPath(filePath, input),
-        });
+        push(node.id, filePath, kind, kind === 'edit' ? countEditLines(input) : 0, input);
       }
     }
   }
   return events;
+}
+
+/**
+ * File-tool nodes whose every file is an artifact, with the lines they wrote.
+ * Those nodes have nothing to show in the files lane, so their mark is drawn
+ * on the tools line, sized like a file edit bar.
+ */
+export function artifactNodes(events: FileEvent[]): Map<string, number> {
+  const lines = new Map<string, number>();
+  const mixed = new Set<string>();
+  for (const e of events) {
+    if (e.isArtifact) lines.set(e.nodeId, (lines.get(e.nodeId) ?? 0) + e.linesCount);
+    else mixed.add(e.nodeId);
+  }
+  for (const id of mixed) lines.delete(id);
+  return lines;
 }
 
 /** Normalizes a file path for matching the same file across events. */
@@ -239,4 +263,22 @@ function isPlanPath(filePath: string, input: unknown): boolean {
   const obj = asObject(input);
   const artifactType = obj['ArtifactMetadata']?.ArtifactType;
   return obj['IsArtifact'] === true || (typeof artifactType === 'string' && artifactType.toLowerCase().includes('plan'));
+}
+
+/**
+ * Whether a file is one of the agent's own scratch files / plans. Only exact
+ * signals: the path is under a recorded artifact dir, or the tool call said so.
+ */
+function isArtifactEvent(filePath: string, input: unknown, artifactDirs: string[]): boolean {
+  if (artifactDirs.length > 0) {
+    const p = normalizeFilePath(filePath);
+    if (artifactDirs.some(dir => p === dir || p.startsWith(dir + '/'))) return true;
+  }
+  return hasArtifactFlag(input);
+}
+
+/** The tool input explicitly marks the file as an artifact. */
+function hasArtifactFlag(input: unknown): boolean {
+  const obj = asObject(input);
+  return obj['IsArtifact'] === true || typeof obj['ArtifactMetadata'] === 'object' && obj['ArtifactMetadata'] !== null;
 }

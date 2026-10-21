@@ -1,30 +1,31 @@
-<!-- Title row: clicking anywhere on it (chevron or text) expands / collapses the row -->
+<!-- Title row: clicking anywhere on it (text or chevron) expands / collapses the row -->
 <div class="row-trace-title" [class.is-subagent]="trace().depth > 0" [style.left.px]="trace().parent ? trace().parent!.x + 8 : 0"
      (click)="onToggleExpand($event)">
-  <!-- Disclosure chevron: ▸ collapsed (one line), ▾ expanded (lanes) -->
-  <button class="expand-toggle" type="button" (click)="onToggleExpand($event)"
-          [title]="expanded() ? 'Collapse to one line' : 'Expand into lanes'">
-    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-      <polyline [attr.points]="expanded() ? '6 9 12 15 18 9' : '9 6 15 12 9 18'"></polyline>
-    </svg>
-  </button>
   <span class="row-trace-title-text" [title]="trace().title">
     @if (trace().depth > 0) {
       <span class="subagent-tag">[subagent]</span>
     }
     {{ trace().title }}
   </span>
+  <!-- Disclosure chevron at the row's right end, by the drag handle: ▾ expanded (lanes), ▸ collapsed (one line) -->
+  <button class="expand-toggle" type="button" (click)="onToggleExpand($event)"
+          [title]="expanded() ? 'Collapse to one line' : 'Expand into lanes'">
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <polyline [attr.points]="expanded() ? '6 9 12 15 18 9' : '9 6 15 12 9 18'"></polyline>
+    </svg>
+  </button>
 </div>
 
 <!--
-  Channel lanes, backbone and marks. Collapsed: one lane, every mark on its
-  center line. Everything stays in the DOM across the toggle so heights,
-  positions and opacities can transition (see trace-track.css).
+  Channel lanes, backbone and marks. Only the channels this trace uses are
+  drawn. Collapsed: one lane, every mark on its center line. Everything stays
+  in the DOM across the toggle so heights, positions and opacities can
+  transition (see trace-track.css).
 -->
 <div class="row-main-track" [class.collapsed]="!expanded()" [style.width.px]="width()" [style.height.px]="trackHeight()">
-  @if (showLabels()) {
-    @for (ch of channels; track ch.id) {
-      <span class="lane-label" [class.hidden]="!expanded()" [style.top.px]="channelCenter(ch.id)">{{ ch.label }}</span>
+  @for (ch of channels; track ch.id) {
+    @if (isShown(ch)) {
+      <span class="lane-label" [class.hidden]="!expanded()" [style.top.px]="laneCenter(ch.id)">{{ ch.label }}</span>
     }
   }
 
@@ -138,9 +139,7 @@
          [class.layer-dimmed]="searching()"></div>
 
     <div class="files-header" [style.height.px]="filesExpanded() ? fileRowHeight : filesLane.height">
-      @if (showLabels()) {
-        <span class="files-label">{{ filesLane.label }}</span>
-      }
+      <span class="files-label">{{ filesLane.label }}</span>
       <button class="files-toggle" type="button" (click)="onToggleFiles($event)"
               [title]="filesExpanded() ? 'Hide files' : 'Show all files (' + trace().files.rows.length + ')'">
         {{ filesExpanded() ? 'hide all' : 'show all' }}

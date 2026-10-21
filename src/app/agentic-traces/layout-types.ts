@@ -69,6 +69,12 @@ export interface ReasoningTrace {
   /** For a subagent trace: the launching trace's id and tool call. */
   parentSourceId?: string;
   parentToolCallId?: string;
+  /**
+   * Where the harness keeps the agent's own scratch files and plans, as local
+   * paths (from `metadata.artifact_dirs`). Writes there are drawn in their own
+   * lane instead of the files lane (see `isArtifact` in file-events.ts).
+   */
+  artifactDirs?: string[];
 }
 
 import { TokenUsage } from './trace';

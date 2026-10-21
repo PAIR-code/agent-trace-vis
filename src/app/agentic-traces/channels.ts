@@ -24,7 +24,7 @@
  */
 
 /** Channel ids. Which channel a mark sits in is decided by MARK_SPECS in marks.ts. */
-export type ChannelId = 'user' | 'agent' | 'tools';
+export type ChannelId = 'user' | 'agent' | 'tools' | 'artifacts';
 
 export interface Channel {
   id: ChannelId;
@@ -41,6 +41,8 @@ export const CHANNELS: readonly Channel[] = [
   { id: 'user', label: 'user / agent conversation', height: LANE_HEIGHT, background: '#f4f7f9' },
   { id: 'agent', label: 'agent internal processes', height: LANE_HEIGHT, background: '#ebf0f4' },
   { id: 'tools', label: 'tools', height: LANE_HEIGHT, background: '#dde3ea' },
+  // The agent's own plan / scratch files (see `isArtifact` in file-events.ts).
+  { id: 'artifacts', label: 'scratch files', height: LANE_HEIGHT, background: '#d6dde5' },
 ];
 
 /**
@@ -79,4 +81,33 @@ export const COLLAPSED_TRACK = { height: LANE_HEIGHT, center: LANE_HEIGHT / 2, b
  */
 export function collapsedY(mark: { y: number; channel: ChannelId }): number {
   return mark.y - channelCenter(mark.channel) + COLLAPSED_TRACK.center;
+}
+
+/**
+ * Channels a trace actually uses: those with a drawn mark, plus `agent`, where
+ * the backbone runs. Unused channels aren't drawn for that trace.
+ */
+export function usedChannels(marks: ReadonlyArray<{ channel: ChannelId; hidden?: boolean }>): Set<ChannelId> {
+  const used = new Set<ChannelId>(['agent']);
+  for (const m of marks) if (!m.hidden) used.add(m.channel);
+  return used;
+}
+
+/** Lane positions when only `shown` channels are drawn, in `CHANNELS` order. */
+export interface LaneGeometry {
+  /** Track height: the shown channels' heights summed. */
+  height: number;
+  /** Center y of each shown channel, relative to the track. */
+  centers: Map<ChannelId, number>;
+}
+
+export function laneGeometry(shown: ReadonlySet<ChannelId>): LaneGeometry {
+  const centers = new Map<ChannelId, number>();
+  let top = 0;
+  for (const c of CHANNELS) {
+    if (!shown.has(c.id)) continue;
+    centers.set(c.id, top + c.height / 2);
+    top += c.height;
+  }
+  return { height: top, centers };
 }
