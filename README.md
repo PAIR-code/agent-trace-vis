@@ -15,6 +15,10 @@ A timeline-based visualization for structured agent traces (e.g., from coding ag
 - **Route**: `/#/agentic-traces`
 - **Data format**: JSON files following the [OpenTraces](https://www.opentraces.ai) schema
 
+#### Bringing your own traces
+
+The repo ships with sample traces in [`sample_data/traces/`](sample_data/traces/) (GitHub Copilot agent-mode sessions), so `npm start` shows real data right away. To look at your own agent's traces you need them as OpenTraces JSON; the easiest path is to use (or adapt) one of the converters in [`converters/`](converters/). See [`converters/README.md`](converters/README.md) for how to convert your Copilot chats and how to write a converter for another agent.
+
 ### Unstructured Reasoning (Graph)
 A force-directed graph visualization for comparing multiple rollouts of unstructured chain-of-thought reasoning (e.g., RLVR-trained models solving math problems). Segments reasoning into chunks, embeds them, and visualizes structural patterns across traces.
 
@@ -42,16 +46,19 @@ A sentence-level visualization for analyzing how messages in multi-turn conversa
 npm install
 npm start
 ```
-The app will run at `http://localhost:4200`. By default, the build script automatically detects, copies, and manifests all data from your sibling data folder.
+The app will run at `http://localhost:4200`. Before each start/build, `generate-manifest.js` copies the bundled `sample_data/` plus (if present) your sibling data folder into `public/assets/data/` and writes a manifest of the datasets it found.
 
 ### 2. Expected Directory Layout
 ```
 parent/
 ├── agent-trace-vis/        ← this app
-└── reasoning_vis_data/     ← your data
-    ├── traces/             ← agentic trace JSON folders (e.g., website_updates)
+│   └── sample_data/        ← small datasets checked into the repo
+│       └── traces/
+└── reasoning_vis_data/     ← your own data (optional, not in git)
+    ├── traces/             ← agentic trace JSON folders, one per dataset
     └── rlvr_vs_base/       ← unstructured reasoning datasets
 ```
+Each sub-folder of `traces/` becomes one dataset in the UI; folders with the same name in both roots are merged.
 
 ### 3. Building & Deploying (Netlify)
 

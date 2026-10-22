@@ -129,7 +129,9 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   timeTicks = signal<{ label: string; x: number }[]>([]);
   hideGaps = signal<boolean>(false);
   isLegendCollapsed = signal<boolean>(false);
-  selectedTokenTypes = signal<Set<string>>(new Set(['input_tokens', 'output_tokens']));
+  // Output tokens by default: input tokens grow with context every step, so
+  // they would make the tokens axis track history length rather than work done.
+  selectedTokenTypes = signal<Set<string>>(new Set(['output_tokens']));
   tokenMetricOptions = signal<Array<{ id: string; label: string }>>([
     { id: 'input_tokens', label: 'Input Tokens' },
     { id: 'output_tokens', label: 'Output Tokens' },

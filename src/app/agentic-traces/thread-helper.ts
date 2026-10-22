@@ -26,6 +26,7 @@
 
 import { Mark } from './marks';
 import { TraceNodeType, ReasoningTraceStep } from './layout-types';
+import type { TokenUsage } from './trace';
 
 export interface ThreadMessage {
   id: string;
@@ -53,6 +54,8 @@ export function groupThreadMessages(activeTraceId: string | undefined, nodes: Ma
   let currentTurnChildren: Mark[] = [];
   let currentTurnSteps = new Set<ReasoningTraceStep>();
   let turnStartNode: Mark | null = null;
+  // Set by the user step that opened the turn, when the trace reports usage per turn rather than per step.
+  let turnTotals: TokenUsage | undefined;
 
   const flushAgentTurn = () => {
     if (currentTurnChildren.length === 0 || !turnStartNode) return;
@@ -61,6 +64,7 @@ export function groupThreadMessages(activeTraceId: string | undefined, nodes: Ma
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
     let totalCacheReadTokens = 0;
+    let totalReasoningTokens = 0;
     let modelName: string | undefined = undefined;
     let agentName = 'Agent';
     let turnColor: string | null = null;
@@ -74,22 +78,25 @@ export function groupThreadMessages(activeTraceId: string | undefined, nodes: Ma
         totalOutputTokens += step.token_usage.output_tokens || 0;
         totalCacheReadTokens += step.token_usage.cache_read_tokens || 0;
       }
+      totalReasoningTokens += step.reasoningTokens || 0;
     });
 
     if (!turnColor && turnStartNode.color) {
       turnColor = turnStartNode.color;
     }
 
+    const summed = (totalInputTokens > 0 || totalOutputTokens > 0) ? {
+      input_tokens: totalInputTokens,
+      output_tokens: totalOutputTokens,
+      cache_read_tokens: totalCacheReadTokens
+    } : undefined;
     const turnData = {
       agentName,
       model: modelName,
       actionCount: currentTurnChildren.length,
       stepCount: currentTurnSteps.size,
-      token_usage: (totalInputTokens > 0 || totalOutputTokens > 0) ? {
-        input_tokens: totalInputTokens,
-        output_tokens: totalOutputTokens,
-        cache_read_tokens: totalCacheReadTokens
-      } : undefined,
+      token_usage: turnTotals ?? summed,
+      reasoningTokens: totalReasoningTokens > 0 ? totalReasoningTokens : undefined,
       steps: Array.from(currentTurnSteps)
     };
 
@@ -108,6 +115,7 @@ export function groupThreadMessages(activeTraceId: string | undefined, nodes: Ma
     currentTurnChildren = [];
     currentTurnSteps.clear();
     turnStartNode = null;
+    turnTotals = undefined;
   };
 
   for (const node of filteredNodes) {
@@ -115,6 +123,7 @@ export function groupThreadMessages(activeTraceId: string | undefined, nodes: Ma
     // User input or System message breaks the agent turn
     if (node.type === TraceNodeType.USER_INPUT || node.type === TraceNodeType.SYSTEM) {
       flushAgentTurn();
+      turnTotals = node.stepRef?.turnTokenUsage;
 
       groups.push({
         id: node.id,

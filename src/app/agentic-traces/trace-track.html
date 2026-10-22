@@ -69,6 +69,9 @@
              (click)="onSelect(node, $event)"
              (mouseenter)="markHover.emit(node.id)"
              (mouseleave)="markHover.emit(null)">
+          @if (node.span) {
+            <div class="duration-bar" [style.width.px]="node.span - node.width"></div>
+          }
           @if (node.look.icon === 'command') {
             <div class="command-content">&gt;_</div>
           } @else if (node.look.icon === 'search') {

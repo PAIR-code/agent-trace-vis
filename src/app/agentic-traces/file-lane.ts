@@ -121,7 +121,7 @@ export function buildFileLane(events: FileEvent[], marks: Mark[], contentWidth: 
       })),
       edits: evs.filter(e => e.kind === 'edit').map(e => ({
         x: e.x,
-        width: slots ? e.node.width : EDIT_WIDTH,
+        width: slots ? e.node.width : Math.max(EDIT_WIDTH, e.node.span ?? 0),
         barHeight: slots ? SLOT_EDIT_HEIGHT : linesToBarHeight(e.linesCount),
         label: e.linesCount > 0 ? `${basename}: ${e.linesCount} lines written` : `${basename}: written`,
         node: e.node,

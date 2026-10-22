@@ -24,13 +24,17 @@ let allowedDatasets = datasetsEnv ? datasetsEnv.split(',').map(s => s.trim()) : 
 
 const publicOnly = process.argv.includes('--public-only') || process.env.PUBLIC_ONLY === 'true';
 if (publicOnly && !allowedDatasets) {
-  allowedDatasets = ['website_updates', 'rlvr_vs_base'];
+  allowedDatasets = ['website_updates', 'copilot_chats', 'rlvr_vs_base'];
 }
 
+// Data is merged from two roots, in order (later roots overlay earlier ones):
+//   1. sample_data/          - small datasets checked into this repo
+//   2. ../reasoning_vis_data - your own data, kept out of git (optional)
+const sampleDataDir = path.join(__dirname, 'sample_data');
 const srcDataDir = path.join(__dirname, '../reasoning_vis_data');
+const srcDataDirs = [sampleDataDir, srcDataDir].filter(d => fs.existsSync(d));
 const destDataDir = path.join(__dirname, 'public/assets/data');
 
-const srcTracesDir = path.join(srcDataDir, 'traces');
 const destTracesDir = path.join(destDataDir, 'traces');
 const manifestPath = path.join(destTracesDir, 'manifest.json');
 
@@ -71,44 +75,47 @@ function getDatasetName(id) {
 }
 
 try {
-  if (!fs.existsSync(srcDataDir)) {
-    console.error(`Source data directory not found at: ${srcDataDir}`);
-    process.exit(1);
+  if (srcDataDirs.length === 0) {
+    console.warn(`No data found. Looked for ${sampleDataDir} and ${srcDataDir}.`);
+  } else if (!fs.existsSync(srcDataDir)) {
+    console.log(`No private data folder at ${srcDataDir}; using bundled sample_data only.`);
   }
 
   // 1. Clean the destination data directory
   cleanDirSync(destDataDir);
   fs.mkdirSync(destDataDir, { recursive: true });
 
-  // 2. Copy the relevant data folders
+  // 2. Copy the relevant data folders from each root
   if (allowedDatasets) {
     console.log(`Preparing dataset build with specific folders: ${allowedDatasets.join(', ')}...`);
     for (const dataset of allowedDatasets) {
-      // Try copying from traces subdirectory
-      const srcTraceSub = path.join(srcTracesDir, dataset);
-      const destTraceSub = path.join(destTracesDir, dataset);
-      if (fs.existsSync(srcTraceSub)) {
-        copyDirSync(srcTraceSub, destTraceSub);
-        console.log(`Copied dataset: traces/${dataset}`);
-        continue;
-      }
+      let found = false;
+      for (const root of srcDataDirs) {
+        // Try copying from traces subdirectory
+        const srcTraceSub = path.join(root, 'traces', dataset);
+        if (fs.existsSync(srcTraceSub)) {
+          copyDirSync(srcTraceSub, path.join(destTracesDir, dataset));
+          console.log(`Copied dataset: traces/${dataset} (from ${path.basename(root)})`);
+          found = true;
+          continue;
+        }
 
-      // Try copying from root source directory (e.g. rlvr_vs_base)
-      const srcRootSub = path.join(srcDataDir, dataset);
-      const destRootSub = path.join(destDataDir, dataset);
-      if (fs.existsSync(srcRootSub)) {
-        copyDirSync(srcRootSub, destRootSub);
-        console.log(`Copied dataset: ${dataset}`);
-        continue;
+        // Try copying from root source directory (e.g. rlvr_vs_base)
+        const srcRootSub = path.join(root, dataset);
+        if (fs.existsSync(srcRootSub)) {
+          copyDirSync(srcRootSub, path.join(destDataDir, dataset));
+          console.log(`Copied dataset: ${dataset} (from ${path.basename(root)})`);
+          found = true;
+        }
       }
-
-      console.warn(`Warning: Dataset folder "${dataset}" not found in source data.`);
+      if (!found) console.warn(`Warning: Dataset folder "${dataset}" not found in source data.`);
     }
   } else {
     console.log("Preparing ALL datasets build...");
-    // Copy everything in traces and rlvr_vs_base
-    copyDirSync(srcDataDir, destDataDir);
-    console.log("Copied all source datasets.");
+    for (const root of srcDataDirs) {
+      copyDirSync(root, destDataDir);
+      console.log(`Copied all datasets from ${root}`);
+    }
   }
 
   // 3. Scan the copied traces and generate the manifest.json

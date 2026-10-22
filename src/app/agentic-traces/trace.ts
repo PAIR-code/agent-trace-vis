@@ -16,12 +16,32 @@
  */
 
 /**
- * @fileoverview Type definitions for the OpenTraces protocol format (v0.7.0).
- * Reference: https://opentraces.ai/schema/latest
+ * @fileoverview The OpenTraces trace format, mirrored 1:1 from the canonical
+ * schema. Mirrors opentraces-schema 0.9.0.
+ *
+ * Canonical source (Pydantic models; the single source of truth):
+ *   https://github.com/JayFarei/opentraces/blob/main/packages/opentraces-schema/src/opentraces_schema/models.py
+ * Docs: https://opentraces.ai/schema/latest
+ *
+ * ============================================================================
+ *  DO NOT ADD, REMOVE OR RENAME FIELDS HERE THAT ARE NOT IN THE CANONICAL
+ *  SCHEMA. This file must stay a faithful copy so that any OpenTraces file
+ *  loads here and anything we write loads in other OpenTraces tools.
+ * ============================================================================
+ *
+ * The only changes allowed in this file are those that track a new upstream
+ * schema version (bump the version above when you do). Everything the
+ * visualizer needs beyond the schema goes through the one sanctioned
+ * free-form field, `TraceRecord.metadata`; the keys we use there are typed
+ * and documented in `trace-extensions.ts`. Viewer-internal derived types live
+ * in `layout-types.ts`. Neither of those is part of the format.
+ *
+ * Conventions: optional fields in the models (`X | None` or a default) are
+ * optional here; `dict[str, Any]` is `Record<string, any>`.
  */
 
 export interface TraceRecord {
-  schema_version: string; // e.g. "0.7.0"
+  schema_version: string; // e.g. "0.9.0"
   trace_id: string; // UUID for this trace
   session_id: string; // Agent's native session ID
   content_hash?: string;
@@ -38,9 +58,10 @@ export interface TraceRecord {
   metrics?: Metrics;
   security?: SecurityMetadata;
   attribution?: Attribution;
+  /** Free-form. The only place for data outside the schema; see trace-extensions.ts. */
   metadata?: Record<string, any>;
-  execution_context?: string | null;
-  lifecycle?: string;
+  execution_context?: 'devtime' | 'runtime' | null;
+  lifecycle?: 'provisional' | 'final';
   git_links?: GitLink[];
   generation_index?: number;
   context_tree_summary?: any;
@@ -66,10 +87,29 @@ export interface Environment {
   shell?: string;
   vcs?: VCS;
   language_ecosystem?: string[];
+  // Schema 0.8.0: optional dependency-pin / runtime-identity fields.
+  resolved_dependencies?: PinRecord[] | null;
+  interpreter?: Interpreter | null;
+  arch?: string | null;
+  platform?: string | null;
+  abi_tag?: string | null;
+}
+
+export interface PinRecord {
+  name: string;
+  version?: string | null;
+  hash?: string | null;
+  marker?: string | null;
+  source?: string | null;
+}
+
+export interface Interpreter {
+  name?: string | null;
+  version?: string | null;
 }
 
 export interface VCS {
-  type: string;
+  type: 'git' | 'none';
   base_commit?: string;
   branch?: string;
   diff?: string;
@@ -84,7 +124,7 @@ export interface Step {
   system_prompt_hash?: string;
   agent_role?: string;
   parent_step?: number;
-  call_type?: string;
+  call_type?: 'main' | 'subagent' | 'warmup' | null;
   subagent_trajectory_ref?: string;
   tools_available?: string[];
   tool_calls?: ToolCall[];
@@ -100,8 +140,6 @@ export interface ToolCall {
   tool_name: string;
   input?: Record<string, any>;
   duration_ms?: number;
-  /** Trace ids of subagents this call launched (extension; see convert_jetski_db.py). */
-  subagent_trajectory_refs?: string[];
 }
 
 export interface Observation {
@@ -113,7 +151,11 @@ export interface Observation {
 
 export interface Snippet {
   file_path: string;
-  content: string;
+  start_line?: number | null;
+  end_line?: number | null;
+  language?: string | null;
+  text?: string | null;
+  source_step?: number | null;
 }
 
 export interface TokenUsage {

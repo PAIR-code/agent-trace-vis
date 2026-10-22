@@ -168,6 +168,17 @@
               opacity 0.2s ease, box-shadow 0.2s ease;
 }
 .vis-node * { pointer-events: none; }
+/* How long a tool ran: a thin bar from the icon to the moment it returned. */
+.vis-node .duration-bar {
+  position: absolute;
+  left: 100%;
+  top: calc(50% - 1px);
+  height: 2px;
+  border-radius: 1px;
+  background: currentColor;
+  opacity: 0.45;
+  z-index: -1;
+}
 .vis-node:hover, .vis-node.is-hovered, .vis-node.selected {
   z-index: 20;
   opacity: 1;

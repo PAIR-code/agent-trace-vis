@@ -74,13 +74,53 @@ export function getStepTokens(usage: any, selectedTypes?: Set<string>): number {
 }
 
 /**
- * Tokens a step occupies on the tokens-mode axis: its selected token usage, or
- * (if that is zero/missing) a word count of its text as a stand-in.
+ * Tokens a step occupies on the tokens-mode axis: its selected token usage;
+ * else its reasoning tokens (a part of output, so only when output tokens are
+ * selected; some harnesses report those per step but totals only per turn);
+ * else a word count of its text as a stand-in.
  */
 export function stepAxisTokens(step: any, selectedTypes?: Set<string>): number {
   const tokens = getStepTokens(step.token_usage, selectedTypes);
   if (tokens > 0) return tokens;
+  if (step.reasoningTokens > 0 && (!selectedTypes || selectedTypes.has('output_tokens'))) return step.reasoningTokens;
   return wordCount(step.nodes?.map((n: any) => n.text).join(' ') || step.content || step.reasoning_content);
+}
+
+/** Rough token count of a text (about four characters per token). */
+export function estimateTokens(text: string | undefined): number {
+  return Math.ceil((text || '').length / 4);
+}
+
+/**
+ * How a step's length on the tokens axis divides among its nodes: the tokens
+ * the model produced went to its reasoning, to each tool call's arguments
+ * (a file edit's new content, a command line, ...) and to its reply, so each
+ * gets a share of the axis and the same distance means the same tokens
+ * whatever they were spent on. Exact where the trace says so (per-step
+ * reasoning tokens); otherwise each part's share is estimated from the size of
+ * its text. Returns, per node id, its [start, end] offset within the step in
+ * axis units (`length` is the step's total length).
+ */
+export function stepTokenSegments(step: any, length: number): Map<string, [number, number]> {
+  const nodes: any[] = step.nodes ?? [];
+  const weightOf = (n: any): number => {
+    if (n.type === 'THINKING') return step.reasoningTokens || estimateTokens(n.text);
+    if (n.data?.toolCall) {
+      const input = n.data.toolCall.input;
+      return estimateTokens(typeof input === 'string' ? input : JSON.stringify(input ?? {}));
+    }
+    return estimateTokens(n.text);
+  };
+  const weights = nodes.map(n => Math.max(1, weightOf(n)));
+  const total = weights.reduce((a, b) => a + b, 0) || 1;
+  const segments = new Map<string, [number, number]>();
+  let at = 0;
+  nodes.forEach((n, i) => {
+    const w = length * weights[i] / total;
+    segments.set(n.id, [at, at + w]);
+    at += w;
+  });
+  return segments;
 }
 
 /**

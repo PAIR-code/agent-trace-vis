@@ -106,6 +106,10 @@ export interface ReasoningTraceStep {
   stepType?: ReasoningStepType;
   nodes: ReasoningTraceNode[];
   token_usage?: TokenUsage;
+  /** Reasoning tokens (a breakdown of output tokens); from `metadata.reasoning_tokens`. */
+  reasoningTokens?: number;
+  /** On a user step: totals for the turn it opens; from `metadata.turn_token_usage`. */
+  turnTokenUsage?: TokenUsage;
   color?: string;
 }
 

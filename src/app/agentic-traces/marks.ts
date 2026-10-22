@@ -28,7 +28,7 @@ import { getAgentColor } from './colors';
 import { ChannelId, channelCenter } from './channels';
 import { EDIT_WIDTH, SLOT_EDIT_HEIGHT, linesToBarHeight } from './file-lane';
 import { AxisMode, BASE_OFFSET, ReasoningStepType, ReasoningTraceNode, ReasoningTraceStep, TraceNodeType } from './layout-types';
-import { getStepTokens, stepAxisLength, truncate, wordCount } from './layout-utils';
+import { getStepTokens, stepAxisLength, stepTokenSegments, truncate, wordCount } from './layout-utils';
 import { fileAccess, toolIcon } from './tools';
 import { XAxis } from './x-scale';
 
@@ -62,6 +62,12 @@ export interface Mark {
   look: MarkLook;
   /** Not drawn in the main track (file events live in the files lane). */
   hidden?: boolean;
+  /**
+   * How far a tool call extends along the axis, in px from the icon's left
+   * edge: until it returned in time mode (when its duration is known), the
+   * tokens it consumed in tokens mode. Drawn as a thin bar behind the icon.
+   */
+  span?: number;
   // Trace data, passed through for the conversation panel, search and files lane.
   label: string;
   text: string;
@@ -94,6 +100,8 @@ interface MarkSpec {
 
 const ICON = 12;
 const SPEECH_WIDTH = 7;
+/** Narrowest a step-spanning bar (thinking) gets in time mode, so a fast step is still visible. */
+const MIN_SPAN = 4;
 /** Sequence mode: space left between a bar and the next slot. */
 const SLOT_GUTTER = 2;
 
@@ -192,8 +200,20 @@ export interface MarkTraceInput {
   artifactNodes?: Map<string, number>;
 }
 
-/** Tokens used to size a node's mark: its step's token usage, else its word count. */
+/** Epoch ms of an ISO timestamp; NaN if missing. */
+const ms = (ts?: string) => ts ? new Date(ts).getTime() : NaN;
+
+/**
+ * Tokens used to size a node's mark. A thinking block is sized by what the
+ * model produced (reasoning tokens, else output tokens, else its word count),
+ * never by prompt size: input tokens grow with context every step and would
+ * make depth track history length rather than effort. Other marks use the
+ * step's selected token usage, else their word count.
+ */
 function sizeTokens(step: ReasoningTraceStep, node: ReasoningTraceNode, tokenTypes?: Set<string>): number {
+  if (node.type === TraceNodeType.THINKING) {
+    return step.reasoningTokens || step.token_usage?.output_tokens || wordCount(node.text);
+  }
   return step.token_usage ? getStepTokens(step.token_usage, tokenTypes) : wordCount(node.text);
 }
 
@@ -203,7 +223,6 @@ function stepRange(steps: ReasoningTraceStep[], i: number, mode: AxisMode,
   const step = steps[i];
   if (mode !== 'time') return [before, before + stepAxisLength(step, mode, tokenTypes)];
 
-  const ms = (ts?: string) => ts ? new Date(ts).getTime() : NaN;
   let end = ms(step.completedAt);
   // No completion time: an agent step lasts until the next agent step starts.
   // User and system messages end the span: they're outside events the agent
@@ -262,6 +281,9 @@ export function buildMarks(trace: MarkTraceInput, axis: XAxis, mode: AxisMode,
     const actionGap = actions.length > 1 && !isNaN(limitX)
       ? Math.max(0, Math.min(ICON, (limitX - actionsX0 - ICON) / (actions.length - 1)))
       : ICON;
+    // Tokens mode: the step's length is shared out among its nodes by the
+    // tokens each consumed, so reasoning and tool calls each get their own span.
+    const segments = mode === 'tokens' ? stepTokenSegments(step, end - start) : null;
 
     step.nodes.forEach((node, k) => {
       const base = {
@@ -288,7 +310,7 @@ export function buildMarks(trace: MarkTraceInput, axis: XAxis, mode: AxisMode,
       // icons keep their shape and are centered in it. Otherwise reasoning
       // spans the step and the actions trail it (see above).
       const slot = mode === 'sequence' ? drawn.indexOf(node) : -1;
-      let x: number, width: number;
+      let x: number, width: number, span: number | undefined;
       if (slot >= 0) {
         const slotX = axis.toX(start + slot);
         const slotW = axis.toX(start + slot + 1) - slotX;
@@ -297,10 +319,31 @@ export function buildMarks(trace: MarkTraceInput, axis: XAxis, mode: AxisMode,
         const isBar = spec.height === 'speech' || spec.height === 'effort' || fileAccess(node.stepType) !== null;
         width = isBar ? Math.max(1, slotW - SLOT_GUTTER) : spec.width as number;
         x = slotX + (slotW - width) / 2;
+      } else if (segments?.has(node.id)) {
+        const [s0, s1] = segments.get(node.id)!;
+        x = axis.toX(start + s0);
+        const segW = axis.toX(start + s1) - x;
+        if (spec.width === 'step') {
+          width = Math.max(MIN_SPAN, segW);
+        } else {
+          width = spec.width;
+          if (segW > width) span = segW;
+        }
       } else {
         x = node.type === TraceNodeType.THINKING ? stepX0 : actionsX0 + actions.indexOf(node) * actionGap;
         if (isNaN(x)) x = cursorX;
-        width = spec.width === 'step' ? Math.max(1, (isNaN(stepX1) ? x + ICON : stepX1) - x) : spec.width;
+        width = spec.width === 'step' ? Math.max(MIN_SPAN, (isNaN(stepX1) ? x + ICON : stepX1) - x) : spec.width;
+
+        // Time mode with per-node timing (e.g. tool start / duration, when the
+        // model finished generating): place by the real times instead of the
+        // step-order heuristic above.
+        if (mode === 'time') {
+          const ownStart = node.timestamp !== step.timestamp ? axis.toX(ms(node.timestamp)) : NaN;
+          const ownEnd = axis.toX(ms(node.completedAt));
+          if (!isNaN(ownStart)) x = ownStart;
+          if (node.type === TraceNodeType.THINKING && !isNaN(ownEnd)) width = Math.max(MIN_SPAN, ownEnd - x);
+          else if (!isNaN(ownStart) && !isNaN(ownEnd) && ownEnd - x > width) span = ownEnd - x;
+        }
       }
 
       const tokens = sizeTokens(step, node, tokenTypes);
@@ -319,6 +362,7 @@ export function buildMarks(trace: MarkTraceInput, axis: XAxis, mode: AxisMode,
         color: spec.agentFill ? stepColor : null,
         look,
         hidden: (fileAccess(node.stepType) !== null && !isArtifact) || undefined,
+        span,
       });
 
       cursorX = x + width + (k === 0 ? ICON : 0);

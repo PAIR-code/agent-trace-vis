@@ -23,7 +23,7 @@
 
 import { AxisMode, ReasoningTrace, ReasoningTraceNode, ReasoningTraceStep, BASE_OFFSET, LayoutOutput, LayoutParams, TraceEntry, TraceLayout } from './layout-types';
 import { getAgentColor } from './colors';
-import { getStepTokens, stepAxisLength, wordCount } from './layout-utils';
+import { stepAxisLength, stepAxisTokens } from './layout-utils';
 import { Mark, MarkTraceInput, buildMarks } from './marks';
 import { buildBackboneLines } from './backbone-builder';
 import { channelCenter, TRACK_HEIGHT } from './channels';
@@ -84,9 +84,7 @@ function getTraceMetadata(trace: TraceEntry, mode: AxisMode, tokenTypes?: Set<st
     duration = steps.reduce((sum, s) => sum + stepAxisLength(s, mode, tokenTypes), 0);
   }
 
-  const maxStepTokens = Math.max(1, ...steps.map(s => s.token_usage
-    ? getStepTokens(s.token_usage, tokenTypes)
-    : wordCount(s.nodes?.map(n => n.text).join(' ') || (s as any).content || (s as any).reasoning_content)));
+  const maxStepTokens = Math.max(1, ...steps.map(s => stepAxisTokens(s, tokenTypes)));
 
   const fileEvents = extractFileEvents(data);
 
@@ -127,8 +125,9 @@ interface Family {
 /** Whether a node (or its mark) is the tool call that launched `child`. */
 function launchedChild(node: Pick<ReasoningTraceNode, 'data'>, child: TraceMeta): boolean {
   const tc = node.data?.toolCall;
+  const refs: string[] = node.data?.subagentRefs ?? [];
   return !!tc && (tc.tool_call_id === child.parentToolCallId ||
-    (!!child.sourceId && Array.isArray(tc.subagent_trajectory_refs) && tc.subagent_trajectory_refs.includes(child.sourceId)));
+    (!!child.sourceId && refs.includes(child.sourceId)));
 }
 
 /** Parent's cumulative axis length (tokens or nodes) through the step that launched `child`, or 0 if that step isn't found. */
