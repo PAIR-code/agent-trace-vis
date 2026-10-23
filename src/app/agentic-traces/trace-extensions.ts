@@ -47,6 +47,31 @@ export interface ToolTiming {
   started_at?: string;
 }
 
+export const TOOL_KINDS = [
+  'search.text',
+  'search.files',
+  'search.web',
+  'search.code',
+  'read.file',
+  'read.url',
+  'browse.directory',
+  'change.external',
+  'file.create',
+  'file.edit',
+  'file.edit.multiple',
+  'file.delete',
+  'notebook.edit',
+  'execute.command',
+  'delegate.agent',
+  'other',
+] as const;
+
+export type ToolKind = (typeof TOOL_KINDS)[number];
+
+function isToolKind(value: unknown): value is ToolKind {
+  return TOOL_KINDS.some(knownKind => knownKind === value);
+}
+
 /** The `metadata` keys the visualizer understands. All optional. */
 export interface TraceVisMetadata {
   /**
@@ -80,6 +105,13 @@ export interface TraceVisMetadata {
    * LLM call (steps then carry no `token_usage` of their own).
    */
   turn_token_usage?: Record<string, TokenUsage>;
+
+  /**
+   * Optional normalized tool kinds, keyed by the original `tool_name`.
+   * Calls keep their original names and inputs; this guides visualization.
+   * Missing or invalid entries use best-effort tool-name inference.
+   */
+  tool_kinds?: Record<string, ToolKind>;
 }
 
 /** Typed, null-safe access to the extension keys of a record's metadata. */
@@ -105,6 +137,10 @@ export function traceExtensions(record: Pick<TraceRecord, 'metadata'>) {
       return typeof n === 'number' && n > 0 ? n : undefined;
     },
     turnTokenUsage: (stepIndex: number): TokenUsage | undefined => turnUsage[String(stepIndex)],
+    toolKind: (toolName: string): ToolKind | undefined => {
+      const kind = rec<unknown>(meta.tool_kinds)[toolName];
+      return isToolKind(kind) ? kind : undefined;
+    },
     subagentRefs: (toolCallId: string): string[] => {
       const refs = subagentRefs[toolCallId];
       return Array.isArray(refs) ? refs.filter((s): s is string => typeof s === 'string') : [];

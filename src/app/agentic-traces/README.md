@@ -61,7 +61,7 @@ Mark                   the node as drawn: channel, x, y, width, height, look
 ```
 dataset.service: dataset list (manifest.json, Hugging Face, imports) → TraceEntry[]
 trace JSON ──trace-loader.service──▶ ReasoningTrace (steps → nodes)
-                  tools.ts: tool name → stepType + label
+                  tool_kinds → normalized kind → stepType + label
                                             │
                            layoutTraces()   │  layout.ts (pure, no DOM)
                                             ▼
@@ -80,10 +80,12 @@ trace JSON ──trace-loader.service──▶ ReasoningTrace (steps → nodes)
 - **Layout is pure.** `layoutTraces()` returns positioned data, and the
   components only draw it. To check a layout change, compare the layout output
   before and after the change.
-- **Tools** (`tools.ts`): each tool call is classified once, by tool name,
-  into a `stepType` and a display label. Everything downstream reads only the
-  `stepType`: `fileAccess()` decides whether a node goes in the files lane, and
-  `toolIcon()` picks its glyph. Nothing re-parses the label text.
+- **Tools** (`tools.ts`): each tool call's kind comes first from
+  `metadata.tool_kinds`, keyed by its original `tool_name`. If it is absent or
+  invalid, the loader makes a best-effort inference from the name. The resolved
+  kind maps to a `stepType` and display label; downstream rendering reads only
+  the `stepType`: `fileAccess()` decides whether a node goes in the files lane,
+  and `toolIcon()` picks its glyph. Nothing re-parses the label text.
   Files written as a side effect (a URL fetch's saved page, or shell output
   via redirects, `tee`, Python `open(.., 'w')`, `curl -o/-O`) also appear in the
   files lane as writes, while the tool's mark stays in the tools lane; see

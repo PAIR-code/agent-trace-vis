@@ -19,10 +19,10 @@ for the agent-trace-vis visualizer.
 
 Quick start
 -----------
-    python3 converters/convert_copilot_chat.py --list     # what sessions do I have?
-    python3 converters/convert_copilot_chat.py            # convert the 10 most recent
-    python3 converters/convert_copilot_chat.py <session>  # convert one (id prefix is fine)
-    npm start                                             # view them
+    python3 converters/convert_copilot_chat.py --list
+    python3 converters/convert_copilot_chat.py
+    python3 converters/convert_copilot_chat.py <session-id-or-prefix>
+    npm start
 
 No dependencies beyond the Python 3.8+ standard library. Output goes to the
 app's data folder (``../reasoning_vis_data/traces/copilot_chats/`` next to this
@@ -61,6 +61,8 @@ What the logs do and don't contain
   how much the model thought before each action.
 * Sessions without an agent-mode transcript (ask mode, older versions) still
   convert from the chat log alone, with less tool detail.
+* Copilot SDK sessions use a separate ``~/.copilot/session-state`` event log.
+  The same command discovers and converts those when present.
 
 Forking this for another agent's logs
 -------------------------------------
@@ -94,16 +96,14 @@ two and keep the third:
    the thinking lane can show the *amount* of thinking even when the words
    are unavailable.
 
-3. **Emit** -- ``to_opentraces()`` turns ``Turn`` dicts into an OpenTraces
-   v0.7.0 record. You should not need to touch it.
+3. **Emit** -- ``to_opentraces()`` turns ``Turn`` dicts into this project's
+   trace format, based on OpenTraces. Update ``tool_kind_for_name()`` when
+   adding support for new source tool names.
 
 What the visualizer reads, so your ``Turn`` dicts light up the right lanes:
 
-* ``tool_calls[].name`` decides the lane/icon by substring match (see
-  ``src/app/agentic-traces/tools.ts``): ``read_file``/``view`` -> file view,
-  ``edit``/``patch``/``write`` -> file edit, ``grep`` -> grep, ``find``/
-  ``file_search`` -> find, ``run``/``terminal``/``bash`` -> command, ``fetch``/
-  ``read_url`` -> URL, ``search_web`` -> web search.
+* ``metadata.tool_kinds`` classifies original tool names for visualization;
+  the tool calls keep their original names and inputs.
 * ``tool_calls[].input`` should name files under a recognised key
   (``filePath``, ``file_path``, ``path``, ``TargetFile``, ...) and commands
   under ``command``/``CommandLine``. For multi-file results, put one
@@ -118,13 +118,25 @@ import json
 import os
 import re
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Optional
+
+from copilot_sdk_source import (
+    SdkSession,
+    convert_sdk_session,
+    discover_sdk_sessions,
+    read_sdk_events,
+)
 
 SCHEMA_VERSION = "0.9.0"
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_DIR = os.path.dirname(SCRIPT_DIR)
 DEFAULT_OUTPUT = os.path.normpath(os.path.join(REPO_DIR, "..", "reasoning_vis_data", "traces", "copilot_chats"))
+DEFAULT_SDK_INPUT = os.path.join(os.path.expanduser("~"), ".copilot", "session-state")
+EXCLUDED_SESSION_IDS = {
+    "a0c54049-6e7b-4455-9f83-085929e42f19",
+    "4e70052c-011a-482c-90ef-f86f40ed9d24",
+}
 
 
 # ===========================================================================
@@ -577,13 +589,54 @@ def _parse_iso(s: Optional[str]) -> Optional[float]:
 # 3. Emit
 # ===========================================================================
 
+def tool_kind_for_name(name: str) -> str:
+    """Map Copilot tool names to the visualizer's normalized tool kinds."""
+    tool = name.lower()
+    if tool == "view":
+        return "read.file"
+    if tool in ("readpage", "openbrowserpage", "screenshotpage"):
+        return "read.url"
+    if tool in ("read_bash", "runplaywrightcode"):
+        return "execute.command"
+    if "chart" in tool:
+        return "read.file" if tool.startswith("get_") else "file.edit"
+    if "multi_replace" in tool or "multireplace" in tool:
+        return "file.edit.multiple"
+    if "delete_file" in tool or "remove_file" in tool:
+        return "file.delete"
+    if "notebook" in tool:
+        return "notebook.edit"
+    if any(part in tool for part in ("read_file", "view_file", "readfile", "viewfile")):
+        return "read.file"
+    if "grep" in tool or tool == "rg":
+        return "search.text"
+    if any(part in tool for part in ("file_search", "find_by_name")) or tool == "glob":
+        return "search.files"
+    if any(part in tool for part in ("search_web", "websearch", "google")):
+        return "search.web"
+    if "semantic_search" in tool or "code_search" in tool:
+        return "search.code"
+    if any(part in tool for part in ("list_dir", "list_directory", "listdir")) or tool in ("ls", "dir"):
+        return "browse.directory"
+    if any(part in tool for part in ("run_command", "run_in_terminal", "terminal")) or tool in ("bash", "sh", "cmd", "run"):
+        return "execute.command"
+    if any(part in tool for part in ("fetch", "read_url")):
+        return "read.url"
+    if any(part in tool for part in ("subagent", "spawn_agent", "invoke_agent", "delegate")):
+        return "delegate.agent"
+    if any(part in tool for part in ("write_file", "write_to_file", "create_file", "save_file")) or tool == "write":
+        return "file.create"
+    if any(part in tool for part in ("replace_file", "edit_file", "file_edit", "str_replace", "apply_patch", "patch", "modify_file")):
+        return "file.edit"
+    return "other"
+
+
 def to_opentraces(turns: List[dict], *, trace_id: str, title: str, agent: dict, metadata: dict) -> dict:
     """Neutral ``Turn`` dicts -> OpenTraces record.
 
-    Steps and tool calls contain only schema fields. Everything the schema has
-    no field for (per-call timing, reasoning token counts) goes into the
-    record's free-form ``metadata`` under the keys the visualizer documents in
-    ``src/app/agentic-traces/trace-extensions.ts``.
+    Steps and tool calls contain only schema fields. Normalized tool kinds and
+    other data the schema has no field for go into ``metadata`` under the keys
+    documented in ``src/app/agentic-traces/trace-extensions.ts``.
     """
     steps = []
     last_model = agent.get("model")
@@ -591,6 +644,7 @@ def to_opentraces(turns: List[dict], *, trace_id: str, title: str, agent: dict, 
     tool_timing: Dict[str, dict] = {}
     reasoning_tokens: Dict[str, int] = {}
     turn_token_usage: Dict[str, dict] = {}
+    tool_kinds: Dict[str, str] = {}
     for turn in turns:
         user_key = str(len(steps))
         steps.append({"step_index": len(steps), "role": "user",
@@ -616,6 +670,7 @@ def to_opentraces(turns: List[dict], *, trace_id: str, title: str, agent: dict, 
             for k, call in enumerate(msg["tool_calls"]):
                 call_id = call.get("id") or f"tc_{len(steps)}_{k}"
                 tc = {"tool_call_id": call_id, "tool_name": call["name"], "input": call.get("input") or {}}
+                tool_kinds[call["name"]] = tool_kind_for_name(call["name"])
                 if call.get("started_at"):
                     tool_timing[call_id] = {"started_at": call["started_at"]}
                 if call.get("duration_ms") is not None:
@@ -639,6 +694,9 @@ def to_opentraces(turns: List[dict], *, trace_id: str, title: str, agent: dict, 
             turn_token_usage[user_key] = dict(turn["token_usage"])
 
     timestamps = [s["timestamp"] for s in steps if s.get("timestamp")]
+    provided_tool_kinds = metadata.get("tool_kinds")
+    if isinstance(provided_tool_kinds, dict):
+        tool_kinds.update(provided_tool_kinds)
     record = {
         "schema_version": SCHEMA_VERSION,
         "trace_id": trace_id,
@@ -660,6 +718,7 @@ def to_opentraces(turns: List[dict], *, trace_id: str, title: str, agent: dict, 
             "reasoning_tokens": reasoning_tokens,
             "turn_token_usage": turn_token_usage,
             "total_reasoning_tokens": sum(reasoning_tokens.values()),
+            "tool_kinds": tool_kinds,
         },
     }
     if last_model and not agent.get("model"):
@@ -734,52 +793,90 @@ def main():
                                  epilog="Full notes, including how to adapt this script to another agent's "
                                         "logs, are in the module docstring at the top of the file.")
     ap.add_argument("session", nargs="*", help="session id(s) or id prefix(es) to convert")
-    ap.add_argument("-n", "--limit", type=int, default=10, help="convert the N most recent sessions (default 10)")
+    ap.add_argument("-n", "--limit", type=int, help="convert only the N most recent sessions")
     ap.add_argument("-i", "--input-dir", action="append",
                     help="VS Code 'User' directory to scan (repeatable; default: auto-detect)")
+    ap.add_argument("--sdk-input-dir", default=DEFAULT_SDK_INPUT,
+                    help=f"Copilot SDK session-state directory (default: {DEFAULT_SDK_INPUT})")
     ap.add_argument("-o", "--output-dir", default=DEFAULT_OUTPUT, help=f"output folder (default: {DEFAULT_OUTPUT})")
-    ap.add_argument("--list", action="store_true", help="list sessions and exit")
+    ap.add_argument("--list", action="store_true", help="list sessions from both Copilot sources")
     ap.add_argument("--no-scrub-home", action="store_true", help="keep your home directory in paths")
     args = ap.parse_args()
 
     user_dirs = args.input_dir or vscode_user_dirs()
-    sessions = discover_sessions(user_dirs)
-    if not sessions:
-        print("No chat sessions found. Looked in:\n  " + "\n  ".join(user_dirs or ["(no VS Code user dir detected)"]))
-        print("Use -i to point at your VS Code 'User' directory.")
-        return 1
-
-    # Drop sessions with no requests (VS Code creates one per window it opens).
-    states = {s.session_id: replay_chat_session(s.chat_path) for s in sessions}
-    sessions = [s for s in sessions if states[s.session_id].get("requests")]
-    if not sessions:
-        print("Found chat session files, but none contain any messages yet.")
+    candidates = []
+    for session in discover_sessions(user_dirs):
+        if session.session_id in EXCLUDED_SESSION_IDS:
+            continue
+        state = replay_chat_session(session.chat_path)
+        if state.get("requests"):
+            title = session_title(state, build_turns(state, [])) or session.session_id
+            candidates.append({
+                "session_id": session.session_id,
+                "modified_at": session.mtime,
+                "source": "VS Code Chat",
+                "title": title,
+                "session": session,
+            })
+    for session in discover_sdk_sessions(args.sdk_input_dir):
+        events = read_sdk_events(session.events_path)
+        if any(event.get("type") == "user.message" for event in events):
+            start = next((event for event in events if event.get("type") == "session.start"), {})
+            data = start.get("data") or {}
+            session_id = data.get("sessionId") or session.session_id
+            if session_id in EXCLUDED_SESSION_IDS:
+                continue
+            candidates.append({
+                "session_id": session_id,
+                "modified_at": session.modified_at,
+                "source": "Copilot SDK",
+                "title": f"Copilot SDK session {session.session_id[:8]}",
+                "session": session,
+                "events": events,
+            })
+    candidates.sort(key=lambda item: item["modified_at"], reverse=True)
+    if not candidates:
+        print("No Copilot chats found. Check the VS Code User directories or --sdk-input-dir.")
         return 1
 
     if args.list:
-        print(f"{'session':10} {'modified':17} {'agent':5} {'workspace':40} title")
-        for s in sessions:
-            st = states[s.session_id]
-            title = session_title(st, build_turns(st, []))
-            ws = (s.workspace_folder or "").replace("file://", "").replace(os.path.expanduser("~"), "~")
-            print(f"{s.session_id[:8]:10} {dt.datetime.fromtimestamp(s.mtime):%Y-%m-%d %H:%M}  "
-                  f"{'yes' if s.transcript_path else 'no ':5} {ws[-40:]:40} {title}")
-        print("\n'agent' = has a Copilot agent-mode transcript (tool inputs + reasoning); "
-              "'no' = results and messages only.")
+        print(f"{'session':10} {'modified':17} {'source':14} {'agent':5} title")
+        for candidate in candidates:
+            session = candidate["session"]
+            has_transcript = isinstance(session, Session) and bool(session.transcript_path)
+            print(f"{candidate['session_id'][:10]:10} "
+                  f"{dt.datetime.fromtimestamp(candidate['modified_at']):%Y-%m-%d %H:%M}  "
+                  f"{candidate['source']:14} {'yes' if has_transcript else 'no ':5} "
+                  f"{candidate['title']}")
+        print("\n'agent' indicates a VS Code Copilot Chat transcript with tool details.")
         return 0
 
     if args.session:
-        chosen = [s for s in sessions if any(s.session_id.startswith(p) for p in args.session)]
-        missing = [p for p in args.session if not any(s.session_id.startswith(p) for s in sessions)]
-        for p in missing:
-            print(f"  ✗ no session matching {p!r}")
+        chosen = []
+        for prefix in args.session:
+            matches = [item for item in candidates if item["session_id"].startswith(prefix)]
+            if len(matches) != 1:
+                print(f"  ✗ expected one session matching {prefix!r}, found {len(matches)}")
+                return 1
+            chosen.extend(matches)
     else:
-        chosen = sessions[:args.limit]
+        chosen = candidates[:args.limit] if args.limit is not None else candidates
 
     print(f"Converting {len(chosen)} session(s) to {args.output_dir}")
-    written = [convert_session(s, args.output_dir, scrub_home=not args.no_scrub_home) for s in chosen]
-    if any(written):
-        print("\nDone. Run `npm start` in agent-trace-vis and open the Agentic Traces view.")
+    for candidate in chosen:
+        session = candidate["session"]
+        if isinstance(session, Session):
+            convert_session(session, args.output_dir, scrub_home=not args.no_scrub_home)
+        else:
+            convert_sdk_session(
+                session,
+                candidate["events"],
+                args.output_dir,
+                scrub_home=not args.no_scrub_home,
+                to_opentraces=to_opentraces,
+                tool_kind_for_name=tool_kind_for_name,
+            )
+    print("\nDone. Run `npm start` in agent-trace-vis and open the Agentic Traces view.")
     return 0
 
 

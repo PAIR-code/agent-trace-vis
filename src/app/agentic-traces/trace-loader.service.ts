@@ -23,7 +23,7 @@ import { Injectable } from '@angular/core';
 import { ReasoningTrace, ReasoningTraceStep, ReasoningTraceNode, TraceNodeType, ReasoningStepType } from './layout';
 import { TraceRecord, Step, Agent } from './trace';
 import { traceExtensions } from './trace-extensions';
-import { classifyTool } from './tools';
+import { classifyTool, inferToolKind } from './tools';
 import { getAgentColor } from './colors';
 import { hashString } from './layout-utils';
 
@@ -36,7 +36,10 @@ function stripTimestampHeader(content: string): string {
   return content.replace(/^(?:(?:Created|Completed) At:[^\n]*\n?){1,2}/, '').trim();
 }
 
-/** Parses OpenTraces records into `ReasoningTrace`s. Fetching is `DatasetService`'s job. */
+/**
+ * Parses OpenTraces records into `ReasoningTrace`s. All sources share this
+ * path; tool kinds come from metadata first, then best-effort name inference.
+ */
 @Injectable({
   providedIn: 'root'
 })
@@ -96,7 +99,8 @@ export class TraceLoaderService {
         step.tool_calls.forEach((tc, tcIdx) => {
           const tcId = `${stepId}_tc_${tcIdx}`;
 
-          const { stepType, label: toolLabel } = classifyTool(tc);
+          const kind = ext.toolKind(tc.tool_name) ?? inferToolKind(tc.tool_name);
+          const { stepType, label: toolLabel } = classifyTool(tc, kind);
 
           // Find observation corresponding to this tool call
           const obs = step.observations?.find(o => o.source_call_id === tc.tool_call_id);

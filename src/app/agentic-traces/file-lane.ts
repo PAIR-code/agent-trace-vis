@@ -25,7 +25,7 @@
  */
 
 import { FileEvent, normalizeFilePath } from './file-events';
-import type { AxisMode } from './layout-types';
+import { ReasoningStepType, type AxisMode } from './layout-types';
 import type { Mark } from './marks';
 
 /** Height of one expanded file row. */
@@ -123,7 +123,9 @@ export function buildFileLane(events: FileEvent[], marks: Mark[], contentWidth: 
         x: e.x,
         width: slots ? e.node.width : Math.max(EDIT_WIDTH, e.node.span ?? 0),
         barHeight: slots ? SLOT_EDIT_HEIGHT : linesToBarHeight(e.linesCount),
-        label: e.linesCount > 0 ? `${basename}: ${e.linesCount} lines written` : `${basename}: written`,
+        label: e.node.stepType === ReasoningStepType.DELETE_FILE
+          ? `${basename}: deleted`
+          : e.linesCount > 0 ? `${basename}: ${e.linesCount} lines written` : `${basename}: written`,
         node: e.node,
       })),
       nodeIds: new Set(evs.map(e => e.nodeId)),

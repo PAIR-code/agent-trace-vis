@@ -15,27 +15,11 @@
  * limitations under the License.
  */
 
-/**
- * @fileoverview What kind of tool each tool call is, decided once.
- *
- * `TOOLS` maps tool names (which vary by agent harness) to a step type and a
- * label. The trace loader stores the step type on each node; everything
- * downstream (mark icons, the files lane) reads only that step type, via
- * `toolIcon` and `fileAccess` below. Labels are for display only.
- *
- * To support a new harness's tool names, add them to the matching entry.
- */
+/** @fileoverview Tool-kind normalization and helpers used by the visualizer. */
 
 import { ReasoningStepType as S } from './layout-types';
 import type { ToolCall } from './trace';
-
-interface ToolSpec {
-  stepType: S;
-  /** Whether a lower-cased tool name belongs to this entry. */
-  matches: (name: string) => boolean;
-  /** Display label; entries without one use `"<tool_name>: <file>"`. */
-  label?: (input: Record<string, any>, file: string | null, name: string) => string;
-}
+import type { ToolKind } from './trace-extensions';
 
 const has = (...subs: string[]) => (name: string) => subs.some(s => name.includes(s));
 const is = (...names: string[]) => (name: string) => names.includes(name);
@@ -44,127 +28,102 @@ const either = (...fs: ((name: string) => boolean)[]) => (name: string) => fs.so
 const field = (input: Record<string, any>, keys: string[], fallback: string) =>
   keys.map(k => input[k]).find(v => v) || fallback;
 
-const firstTitle = (list: unknown) =>
-  Array.isArray(list) ? (list as Array<{ title?: string } | undefined>)[0]?.title : undefined;
+const TOOL_KIND_STEP_TYPE: Record<ToolKind, S> = {
+  'search.text': S.GREP_SEARCH,
+  'search.files': S.FIND_BY_NAME,
+  'search.web': S.SEARCH_WEB,
+  'search.code': S.CODE_SEARCH,
+  'read.file': S.VIEW_FILE,
+  'read.url': S.READ_URL_CONTENT,
+  'browse.directory': S.LIST_DIRECTORY,
+  'change.external': S.GENERIC,
+  'file.create': S.WRITE_TO_FILE,
+  'file.edit': S.REPLACE_FILE_CONTENT,
+  'file.edit.multiple': S.MULTI_REPLACE_FILE_CONTENT,
+  'file.delete': S.DELETE_FILE,
+  'notebook.edit': S.NOTEBOOK_EDIT,
+  'execute.command': S.RUN_COMMAND,
+  'delegate.agent': S.INVOKE_SUBAGENT,
+  other: S.GENERIC,
+};
 
-/** Tool families, checked in order; the first match wins. */
-const TOOLS: ToolSpec[] = [
-  {
-    stepType: S.VIEW_FILE,
-    matches: either(
-      has('view_file', 'viewfile', 'read_file', 'readfile', 'fileread', 'file_read', 'view_content', 'read_content'),
-      is('view', 'read', 'cat', 'open')),
-    label: (_, file) => `View: ${file || 'file'}`,
-  },
-  {
-    stepType: S.MULTI_REPLACE_FILE_CONTENT,
-    matches: has('multi_replace', 'multireplace'),
-    label: (_, file) => `Edit: ${file || 'file'}`,
-  },
-  {
-    stepType: S.REPLACE_FILE_CONTENT,
-    matches: either(
-      has('replace_file', 'replacefile', 'edit_file', 'editfile', 'file_edit', 'fileedit', 'str_replace',
-          'apply_diff', 'patch', 'modify_file'),
-      is('edit', 'replace')),
-    label: (_, file) => `Edit: ${file || 'file'}`,
-  },
-  {
-    stepType: S.WRITE_TO_FILE,
-    matches: either(
-      has('write_to_file', 'writefile', 'write_file', 'file_write', 'filewrite', 'save_file'),
-      is('write', 'create_file')),
-    label: (_, file) => `Write: ${file || 'file'}`,
-  },
-  {
-    stepType: S.NOTEBOOK_EDIT,
-    matches: has('notebook'),
-    label: (_, file) => `Notebook: ${file || 'notebook'}`,
-  },
-  {
-    stepType: S.GREP_SEARCH,
-    matches: either(has('grep'), is('rg')),
-    label: input => `Grep: ${field(input, ['Query', 'query', 'pattern'], 'search')}`,
-  },
-  {
-    stepType: S.FIND_BY_NAME,
-    matches: either(has('find', 'file_search'), is('glob')),
-  },
-  {
-    stepType: S.LIST_DIRECTORY,
-    matches: either(has('list_directory', 'listdir', 'list_dir'), is('ls', 'dir')),
-    label: input => {
+function kindLabel(kind: ToolKind, input: Record<string, any>, file: string | null, name: string): string {
+  switch (kind) {
+    case 'search.text':
+      return `Search: ${field(input, ['Query', 'query', 'pattern'], name)}`;
+    case 'search.files':
+      return `Find: ${field(input, ['Pattern', 'pattern', 'Query', 'query', 'path'], name)}`;
+    case 'search.web':
+      return `Web: ${field(input, ['Query', 'query'], 'web search')}`;
+    case 'search.code':
+      return `Code search: ${field(input, ['Query', 'query', 'pattern'], name)}`;
+    case 'read.file':
+      return `View: ${file || 'file'}`;
+    case 'read.url':
+      return `URL: ${field(input, ['Url', 'url'], 'fetch')}`;
+    case 'browse.directory': {
       const dir = field(input, ['DirectoryPath', 'directory', 'path'], 'dir');
       return `List: ${dir.split('/').pop() || dir}`;
-    },
-  },
-  {
-    stepType: S.RUN_COMMAND,
-    matches: either(has('run_command', 'runcommand', 'execute', 'terminal'), is('bash', 'sh', 'cmd', 'run')),
-    label: input => `Run: ${field(input, ['CommandLine', 'command', 'cmd'], 'command')}`,
-  },
-  {
-    stepType: S.READ_URL_CONTENT,
-    matches: has('read_url', 'fetch'),
-    label: input => `URL: ${field(input, ['Url', 'url'], 'fetch')}`,
-  },
-  {
-    stepType: S.SEARCH_WEB,
-    matches: has('search_web', 'websearch', 'google'),
-    label: input => `Web: ${field(input, ['Query', 'query'], 'web search')}`,
-  },
-  {
-    stepType: S.CODE_SEARCH,
-    matches: has('code_search'),
-  },
-  {
-    stepType: S.INVOKE_SUBAGENT,
-    matches: has('subagent', 'spawn_agent', 'invoke_agent', 'delegate'),
-    label: input => {
+    }
+    case 'change.external':
+      return `External: ${name}`;
+    case 'file.create':
+      return `Create: ${file || 'file'}`;
+    case 'file.edit':
+    case 'file.edit.multiple':
+      return `Edit: ${file || 'file'}`;
+    case 'file.delete':
+      return `Delete: ${file || 'file'}`;
+    case 'notebook.edit':
+      return `Notebook: ${file || 'notebook'}`;
+    case 'execute.command':
+      return `Run: ${field(input, ['CommandLine', 'command', 'cmd'], 'command')}`;
+    case 'delegate.agent': {
       const role = stripQuotes(String(field(input, ['Role', 'role'], '')));
       return role ? `Subagent: ${role}` : 'Subagent';
-    },
-  },
-  // Dashboard-building agents: charts count as files (read with get_*, else written).
-  {
-    stepType: S.VIEW_FILE,
-    matches: name => name.includes('chart') && name.startsWith('get_'),
-    label: (input, _, name) => chartLabel(input, name),
-  },
-  {
-    stepType: S.REPLACE_FILE_CONTENT,
-    matches: has('chart'),
-    label: (input, _, name) => chartLabel(input, name),
-  },
-  {
-    stepType: S.GENERIC,
-    matches: has('metric'),
-    label: (input, _, name) => firstTitle(input['metrics']) ? `Metric: ${firstTitle(input['metrics'])}` : `Metric (${name})`,
-  },
-  { stepType: S.GENERIC, matches: has('filter'), label: (_, __, name) => `Filter (${name})` },
-  { stepType: S.GENERIC, matches: is('set_header'), label: input => input['title'] ? `Header: ${input['title']}` : 'Header' },
-  { stepType: S.GENERIC, matches: is('set_layout'), label: () => 'Layout' },
-  { stepType: S.GENERIC, matches: is('profile_data'), label: () => 'SQL Profile' },
-  { stepType: S.GENERIC, matches: is('ask_user'), label: () => 'Ask User' },
-  { stepType: S.GENERIC, matches: is('upsert_memories'), label: () => 'Save Memory' },
-  { stepType: S.GENERIC, matches: is('transition_phase'), label: () => 'Phase Transition' },
-];
-
-function chartLabel(input: Record<string, any>, name: string): string {
-  const title = firstTitle(input['charts']);
-  return title ? `Chart: ${title}` : `Chart (${name})`;
+    }
+    case 'other':
+      return file ? `${name}: ${file}` : name;
+  }
 }
 
-/** Step type and display label for a tool call. */
-export function classifyTool(tc: ToolCall): { stepType: S; label: string } {
-  const name = tc.tool_name.toLowerCase();
-  const spec = TOOLS.find(t => t.matches(name));
+/** Resolve the visual classification from a normalized kind and original call. */
+export function classifyTool(tc: ToolCall, kind: ToolKind): { stepType: S; label: string } {
   // Labels read fields only from object inputs (a raw string input is ignored).
   const input = typeof tc.input === 'object' && tc.input !== null ? tc.input as Record<string, any> : {};
   const path = inputFilePath(tc.input);
   const file = path ? path.split('/').pop() ?? null : null;
-  if (spec?.label) return { stepType: spec.stepType, label: spec.label(input, file, tc.tool_name) };
-  return { stepType: spec?.stepType ?? S.GENERIC, label: file ? `${tc.tool_name}: ${file}` : tc.tool_name };
+  return { stepType: TOOL_KIND_STEP_TYPE[kind], label: kindLabel(kind, input, file, tc.tool_name) };
+}
+
+/** Best-effort fallback for imports missing metadata.tool_kinds entries. */
+export function inferToolKind(toolName: string): ToolKind {
+  const name = toolName.toLowerCase();
+  if (name.includes('chart')) return name.startsWith('get_') ? 'read.file' : 'file.edit';
+  if (either(
+    has('view_file', 'viewfile', 'read_file', 'readfile', 'fileread', 'file_read', 'view_content', 'read_content'),
+    is('view', 'read', 'cat', 'open'))(name)) return 'read.file';
+  if (has('notebook')(name)) return 'notebook.edit';
+  if (has('delete_file', 'remove_file', 'deletefile', 'removefile')(name)) return 'file.delete';
+  if (has('multi_replace', 'multireplace')(name)) return 'file.edit.multiple';
+  if (either(
+    has('replace_file', 'replacefile', 'edit_file', 'editfile', 'file_edit', 'fileedit', 'str_replace',
+      'apply_diff', 'patch', 'modify_file'),
+    is('edit', 'replace'))(name)) return 'file.edit';
+  if (either(
+    has('write_to_file', 'writefile', 'write_file', 'file_write', 'filewrite', 'save_file'),
+    is('write', 'create_file'))(name)) return 'file.create';
+  if (either(has('grep'), is('rg'))(name)) return 'search.text';
+  if (either(has('find', 'file_search'), is('glob'))(name)) return 'search.files';
+  if (either(has('list_directory', 'listdir', 'list_dir'), is('ls', 'dir'))(name)) return 'browse.directory';
+  if (either(has('run_command', 'runcommand', 'execute', 'terminal'), is('bash', 'sh', 'cmd', 'run'))(name)) {
+    return 'execute.command';
+  }
+  if (has('read_url', 'fetch')(name)) return 'read.url';
+  if (has('search_web', 'websearch', 'google')(name)) return 'search.web';
+  if (has('code_search')(name)) return 'search.code';
+  if (has('subagent', 'spawn_agent', 'invoke_agent', 'delegate')(name)) return 'delegate.agent';
+  return 'other';
 }
 
 // ---------------------------------------------------------------------------
@@ -180,6 +139,7 @@ const FILE_ACCESS: Partial<Record<S, FileAccess>> = {
   [S.WRITE_TO_FILE]: 'edit',
   [S.REPLACE_FILE_CONTENT]: 'edit',
   [S.MULTI_REPLACE_FILE_CONTENT]: 'edit',
+  [S.DELETE_FILE]: 'edit',
   [S.NOTEBOOK_EDIT]: 'edit',
 };
 
