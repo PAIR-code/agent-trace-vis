@@ -116,7 +116,11 @@ trace JSON ──trace-loader.service──▶ ReasoningTrace (steps → nodes)
   `MARK_SPECS` gives each node type:
   - a channel;
   - an anchor on that channel's center line (`above` / `below` / `center` / `hang`);
-  - a width and a height.
+  - a width and a height. Width is either a fixed icon size or `'extent'`: a
+    rectangle (dialogue, reasoning, file edits, artifacts) exactly as long as
+    the node on the axis — its time range, its share of the step's tokens, or
+    its slot. All rectangles go through the same code path; icons instead show
+    a measured extent as a thin `span` bar.
 
   Shape and color are CSS, keyed on the mark's `type` (see `trace-track.css`).
 - **Files lane**:

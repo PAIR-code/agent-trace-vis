@@ -26,7 +26,7 @@
 
 import { getAgentColor } from './colors';
 import { ChannelId, channelCenter } from './channels';
-import { EDIT_WIDTH, SLOT_EDIT_HEIGHT, linesToBarHeight } from './file-lane';
+import { SLOT_EDIT_HEIGHT, linesToBarHeight } from './file-lane';
 import { AxisMode, BASE_OFFSET, ReasoningStepType, ReasoningTraceNode, ReasoningTraceStep, TraceNodeType } from './layout-types';
 import { getStepTokens, stepAxisLength, stepTokenSegments, truncate, wordCount } from './layout-utils';
 import { fileAccess, toolIcon } from './tools';
@@ -87,8 +87,12 @@ type Anchor =
 interface MarkSpec {
   channel: ChannelId;
   anchor: Anchor;
-  /** px; 'step' = spans the whole step. */
-  width: number | 'step';
+  /**
+   * px for icons (fixed size; a thin `span` bar shows any extent beyond it).
+   * 'extent' = a rectangle as long as the node itself on the axis: its time
+   * range, its share of the step's tokens, or its slot (see `extentRange`).
+   */
+  width: number | 'extent';
   /**
    * px; 'speech' = scaled by step tokens; 'effort' = scaled by thinking tokens;
    * 'lines' = scaled by lines written, like a file edit bar.
@@ -99,8 +103,7 @@ interface MarkSpec {
 }
 
 const ICON = 12;
-const SPEECH_WIDTH = 7;
-/** Narrowest a step-spanning bar (thinking) gets in time mode, so a fast step is still visible. */
+/** Narrowest a rectangle gets, so a short node is still visible. */
 const MIN_SPAN = 4;
 /** Sequence mode: space left between a bar and the next slot. */
 const SLOT_GUTTER = 2;
@@ -108,24 +111,31 @@ const SLOT_GUTTER = 2;
 /** Placement rules for each node type. */
 const MARK_SPECS: Record<string, MarkSpec> = {
   // The conversation (user and agent) sits above the line; thinking hangs below it.
-  [TraceNodeType.USER_INPUT]: { channel: 'user',  anchor: 'above',  width: SPEECH_WIDTH, height: 'speech' },
-  [TraceNodeType.RESPONSE]:   { channel: 'user',  anchor: 'above',  width: SPEECH_WIDTH, height: 'speech', agentFill: true },
-  [TraceNodeType.THINKING]:   { channel: 'agent', anchor: 'hang',   width: 'step',       height: 'effort', agentFill: true },
-  // A tool call with no logged result is still a tool call: same lane as one with a result.
-  [TraceNodeType.TOOL_CALL]:  { channel: 'tools', anchor: 'center', width: ICON,         height: ICON },
-  [TraceNodeType.SYSTEM]:     { channel: 'agent', anchor: 'center', width: ICON,         height: ICON },
-  [TraceNodeType.ERROR]:      { channel: 'agent', anchor: 'center', width: ICON,         height: ICON },
-  [TraceNodeType.TOOL_DATA]:  { channel: 'tools', anchor: 'center', width: ICON,         height: ICON },
+  // Rectangles: as long as the node itself on the axis.
+  [TraceNodeType.USER_INPUT]: { channel: 'user',  anchor: 'above',  width: 'extent', height: 'speech' },
+  [TraceNodeType.RESPONSE]:   { channel: 'user',  anchor: 'above',  width: 'extent', height: 'speech', agentFill: true },
+  [TraceNodeType.THINKING]:   { channel: 'agent', anchor: 'hang',   width: 'extent', height: 'effort', agentFill: true },
+  // Icons. A tool call with no logged result is still a tool call: same lane as one with a result.
+  [TraceNodeType.TOOL_CALL]:  { channel: 'tools', anchor: 'center', width: ICON,     height: ICON },
+  [TraceNodeType.SYSTEM]:     { channel: 'agent', anchor: 'center', width: ICON,     height: ICON },
+  [TraceNodeType.ERROR]:      { channel: 'agent', anchor: 'center', width: ICON,     height: ICON },
+  [TraceNodeType.TOOL_DATA]:  { channel: 'tools', anchor: 'center', width: ICON,     height: ICON },
 };
 
 /** Directory listings sit below the tools line, clear of other tool results. */
 const LIST_DIR_SPEC: MarkSpec = { ...MARK_SPECS[TraceNodeType.TOOL_DATA], anchor: 'below' };
 
 /**
- * A write to one of the agent's own plan / scratch files: its own channel,
- * with the files lane's edit-bar encoding (hangs down, sized by lines).
+ * A file edit: a rectangle hanging down, sized by lines written. Hidden in the
+ * main track; the files lane draws it with this mark's x and width.
  */
-const ARTIFACT_SPEC: MarkSpec = { channel: 'artifacts', anchor: 'hang', width: EDIT_WIDTH, height: 'lines' };
+const EDIT_SPEC: MarkSpec = { channel: 'tools', anchor: 'hang', width: 'extent', height: 'lines' };
+
+/**
+ * A write to one of the agent's own plan / scratch files: a file edit drawn in
+ * its own channel instead of the files lane.
+ */
+const ARTIFACT_SPEC: MarkSpec = { ...EDIT_SPEC, channel: 'artifacts' };
 
 function anchorY(anchor: Anchor, center: number, height: number): number {
   switch (anchor) {
@@ -298,52 +308,56 @@ export function buildMarks(trace: MarkTraceInput, axis: XAxis, mode: AxisMode,
 
       const isTool = node.type === TraceNodeType.TOOL_DATA || node.type === TraceNodeType.TOOL_CALL;
       // A file tool that only wrote the agent's own artifacts has nothing for
-      // the files lane: it's drawn on the tools line as an edit bar instead.
+      // the files lane: it's drawn in the artifacts channel instead.
       const artifactLines = trace.artifactNodes?.get(node.id);
       const isArtifact = artifactLines !== undefined;
       const spec = isArtifact ? ARTIFACT_SPEC
+        : fileAccess(node.stepType) === 'edit' ? EDIT_SPEC
         : isTool && node.stepType === ReasoningStepType.LIST_DIRECTORY ? LIST_DIR_SPEC
         : MARK_SPECS[node.type] ?? MARK_SPECS[TraceNodeType.TOOL_DATA];
 
-      // Sequence mode: the step is one slot per node, so each node sits in its
-      // own slot and nothing spans the step. Bars fill the slot (less a gutter);
-      // icons keep their shape and are centered in it. Otherwise reasoning
-      // spans the step and the actions trail it (see above).
-      const slot = mode === 'sequence' ? drawn.indexOf(node) : -1;
-      let x: number, width: number, span: number | undefined;
-      if (slot >= 0) {
-        const slotX = axis.toX(start + slot);
-        const slotW = axis.toX(start + slot + 1) - slotX;
-        // File-access nodes aren't drawn here, but the files lane takes their
-        // geometry, so they get the bar shape as well.
-        const isBar = spec.height === 'speech' || spec.height === 'effort' || fileAccess(node.stepType) !== null;
-        width = isBar ? Math.max(1, slotW - SLOT_GUTTER) : spec.width as number;
-        x = slotX + (slotW - width) / 2;
+      // The node's extent on the axis, in px. `measured` = it reflects the
+      // node's own time / tokens, not just the step-order heuristic.
+      let x0: number, x1: number, measured = false;
+      if (mode === 'sequence') {
+        // One slot per node, less a gutter.
+        const slot = drawn.indexOf(node);
+        x0 = axis.toX(start + slot);
+        x1 = axis.toX(start + slot + 1) - SLOT_GUTTER;
       } else if (segments?.has(node.id)) {
+        // Tokens: the node's share of the step's tokens.
         const [s0, s1] = segments.get(node.id)!;
-        x = axis.toX(start + s0);
-        const segW = axis.toX(start + s1) - x;
-        if (spec.width === 'step') {
-          width = Math.max(MIN_SPAN, segW);
-        } else {
-          width = spec.width;
-          if (segW > width) span = segW;
-        }
+        x0 = axis.toX(start + s0);
+        x1 = axis.toX(start + s1);
+        measured = true;
       } else {
-        x = node.type === TraceNodeType.THINKING ? stepX0 : actionsX0 + actions.indexOf(node) * actionGap;
-        if (isNaN(x)) x = cursorX;
-        width = spec.width === 'step' ? Math.max(MIN_SPAN, (isNaN(stepX1) ? x + ICON : stepX1) - x) : spec.width;
-
-        // Time mode with per-node timing (e.g. tool start / duration, when the
-        // model finished generating): place by the real times instead of the
-        // step-order heuristic above.
+        // Time: reasoning spans the step; actions follow in order (see above),
+        // each lasting until the next one, the last until the step's end.
+        const a = actions.indexOf(node);
+        x0 = a < 0 ? stepX0 : actionsX0 + a * actionGap;
+        x1 = a < 0 || a === actions.length - 1 ? stepX1 : actionsX0 + (a + 1) * actionGap;
+        if (isNaN(x0)) x0 = cursorX;
+        if (isNaN(x1)) x1 = x0 + ICON;
+        // Per-node timing (tool start / duration, when the model finished
+        // generating) overrides the heuristic.
         if (mode === 'time') {
           const ownStart = node.timestamp !== step.timestamp ? axis.toX(ms(node.timestamp)) : NaN;
           const ownEnd = axis.toX(ms(node.completedAt));
-          if (!isNaN(ownStart)) x = ownStart;
-          if (node.type === TraceNodeType.THINKING && !isNaN(ownEnd)) width = Math.max(MIN_SPAN, ownEnd - x);
-          else if (!isNaN(ownStart) && !isNaN(ownEnd) && ownEnd - x > width) span = ownEnd - x;
+          if (!isNaN(ownStart)) x0 = ownStart;
+          if (!isNaN(ownEnd)) { x1 = ownEnd; measured = true; }
         }
+      }
+
+      // Rectangles fill their extent. Icons keep their size (centered in a
+      // sequence slot) and show a measured extent as a thin `span` bar.
+      let x: number, width: number, span: number | undefined;
+      if (spec.width === 'extent') {
+        x = x0;
+        width = Math.max(mode === 'sequence' ? 1 : MIN_SPAN, x1 - x0);
+      } else {
+        width = spec.width;
+        x = mode === 'sequence' ? x0 + (x1 - x0 - width) / 2 : x0;
+        if (measured && x1 - x0 > width) span = x1 - x0;
       }
 
       const tokens = sizeTokens(step, node, tokenTypes);

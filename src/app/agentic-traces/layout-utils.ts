@@ -20,6 +20,7 @@
  */
 
 import type { AxisMode } from './layout-types';
+import { TraceNodeType } from './layout-types';
 
 /** Computes a short deterministic 32-bit hash for a string. */
 export function hashString(str: string): string {
@@ -104,7 +105,7 @@ export function estimateTokens(text: string | undefined): number {
 export function stepTokenSegments(step: any, length: number): Map<string, [number, number]> {
   const nodes: any[] = step.nodes ?? [];
   const weightOf = (n: any): number => {
-    if (n.type === 'THINKING') return step.reasoningTokens || estimateTokens(n.text);
+    if (n.type === TraceNodeType.THINKING) return step.reasoningTokens || estimateTokens(n.text);
     if (n.data?.toolCall) {
       const input = n.data.toolCall.input;
       return estimateTokens(typeof input === 'string' ? input : JSON.stringify(input ?? {}));

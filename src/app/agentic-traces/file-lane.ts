@@ -31,8 +31,6 @@ import type { Mark } from './marks';
 /** Height of one expanded file row. */
 export const FILE_ROW_HEIGHT = 24;
 
-/** Width of an edit bar on the time / tokens axes. */
-export const EDIT_WIDTH = 7;
 /** Edit bar height in sequence mode: every slot the same, matching the speech bars. */
 export const SLOT_EDIT_HEIGHT = 18;
 
@@ -100,7 +98,7 @@ export function buildFileLane(events: FileEvent[], marks: Mark[], contentWidth: 
   const drawn = marks.filter(m => !m.hidden);
   const endX = Math.max(
     drawn.length > 0 ? Math.max(...drawn.map(m => m.x + m.width)) : contentWidth,
-    ...placed.map(e => e.x + (slots ? e.node.width : 0)));
+    ...placed.map(e => e.x + (slots || e.kind === 'edit' ? e.node.width : 0)));
 
   const rows = [...groups.entries()].map(([key, evs]): FileRow & { key: string } => {
     const first = evs[0];
@@ -121,7 +119,7 @@ export function buildFileLane(events: FileEvent[], marks: Mark[], contentWidth: 
       })),
       edits: evs.filter(e => e.kind === 'edit').map(e => ({
         x: e.x,
-        width: slots ? e.node.width : Math.max(EDIT_WIDTH, e.node.span ?? 0),
+        width: e.node.width,
         barHeight: slots ? SLOT_EDIT_HEIGHT : linesToBarHeight(e.linesCount),
         label: e.node.stepType === ReasoningStepType.DELETE_FILE
           ? `${basename}: deleted`
