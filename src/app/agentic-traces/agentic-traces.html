@@ -31,11 +31,11 @@
     </div>
   </div>
 
-  <!-- Hide Gaps Checkbox -->
+  <!-- Show User Wait Checkbox -->
   <div class="selector-group" *ngIf="effectiveAxisMode() === 'time'">
     <label class="selector-label" style="display: flex; align-items: center; gap: 4px; color: rgba(255,255,255,0.7); font-size: 0.7rem;">
-      <input type="checkbox" [ngModel]="hideGaps()" (ngModelChange)="hideGaps.set($event); processTraces()" style="margin: 0;">
-      Hide Gaps
+      <input type="checkbox" [ngModel]="showUserWait()" (ngModelChange)="showUserWait.set($event); processTraces()" style="margin: 0;">
+      Show user wait
     </label>
   </div>
 

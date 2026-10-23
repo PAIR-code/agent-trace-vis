@@ -167,7 +167,7 @@ export interface LayoutParams {
   selectedTraceIds: Set<string>;
   /** The effective axis: callers resolve an unavailable 'time' to 'sequence' first. */
   yAxisMode: AxisMode;
-  hideGaps: boolean;
+  showUserWait?: boolean;
   selectedTokenTypes?: Set<string>;
   containerWidth?: number;
   stretch?: boolean;

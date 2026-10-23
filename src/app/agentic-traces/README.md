@@ -65,7 +65,7 @@ trace JSON ──trace-loader.service──▶ ReasoningTrace (steps → nodes)
                                             │
                            layoutTraces()   │  layout.ts (pure, no DOM)
                                             ▼
-   x-scale.ts   time/tokens → x, idle-gap compression, ticks
+   x-scale.ts   time/tokens → x, user-wait gap compression, ticks
    marks.ts     one Mark per node: channel, x, y, width, height, look
    backbone-builder.ts   agent line through the 'agent' channel
    file-events.ts + file-lane.ts   files lane rows and markers
@@ -154,8 +154,10 @@ trace JSON ──trace-loader.service──▶ ReasoningTrace (steps → nodes)
     axis** (`buildFamilies()` in `layout.ts`). In time mode a subagent's row
     therefore starts under the moment it was launched; in tokens mode it is
     offset to the parent's token count at the launching step.
-  - Idle gaps are found over the whole family, so a parent waiting on a
-    subagent is not "idle" and hide-gaps doesn't squash the subagent's work.
+  - Gaps represent periods waiting for user input. They are found over the
+    whole family, so a parent waiting on a subagent is not "waiting for user"
+    and gap compression doesn't squash the subagent's work. By default, user wait
+    gaps are hidden (compressed); toggling "Show user wait" expands them.
     Fill-space stretches the family, not each row.
   - Selecting a trace selects its subagents; the selection is kept in *family
     order* (`familyOrder()`), so subagent rows always follow their parent.

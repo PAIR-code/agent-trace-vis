@@ -127,7 +127,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     this.yAxisMode() === 'time' && !this.timeAvailable() ? 'sequence' : this.yAxisMode());
   stretch = signal<boolean>(false);
   timeTicks = signal<{ label: string; x: number }[]>([]);
-  hideGaps = signal<boolean>(false);
+  showUserWait = signal<boolean>(false);
   isLegendCollapsed = signal<boolean>(false);
   // Output tokens by default: input tokens grow with context every step, so
   // they would make the tokens axis track history length rather than work done.
@@ -680,7 +680,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
       traces: this.traces(),
       selectedTraceIds: selectedIds,
       yAxisMode: this.effectiveAxisMode(),
-      hideGaps: this.hideGaps(),
+      showUserWait: this.showUserWait(),
       selectedTokenTypes: this.selectedTokenTypes(),
       containerWidth: this.containerWidth(),
       stretch: this.stretch(),

@@ -27,7 +27,7 @@ import { stepAxisLength, stepAxisTokens } from './layout-utils';
 import { Mark, MarkTraceInput, buildMarks } from './marks';
 import { buildBackboneLines } from './backbone-builder';
 import { channelCenter, TRACK_HEIGHT } from './channels';
-import { XAxis, buildAxis, findIdleGaps, fillScaleMultiplier, computeTicks } from './x-scale';
+import { XAxis, buildAxis, findUserWaitGaps, fillScaleMultiplier, computeTicks } from './x-scale';
 import { FileEvent, artifactNodes, extractFileEvents } from './file-events';
 import { buildFileLane } from './file-lane';
 
@@ -93,11 +93,6 @@ function getTraceMetadata(trace: TraceEntry, mode: AxisMode, tokenTypes?: Set<st
     parentId: trace.parentId, parentToolCallId: trace.parentToolCallId, sourceId: data.sourceId,
     fileEvents, artifactNodes: artifactNodes(fileEvents),
   };
-}
-
-/** Pixel [left, right] extents of drawn marks, used to find idle gaps. */
-function markExtents(marks: Mark[]): Array<[number, number]> {
-  return marks.filter(m => !m.hidden).map(m => [m.x, m.x + m.width] as [number, number]);
 }
 
 // ─── Families ───────────────────────────────────────────────────────
@@ -176,7 +171,7 @@ function memberAxis(axis: XAxis, offset: number): XAxis {
 }
 
 export function layoutTraces(params: LayoutParams): LayoutOutput {
-  const { traces, selectedTraceIds, yAxisMode: mode, hideGaps, selectedTokenTypes, containerWidth, stretch } = params;
+  const { traces, selectedTraceIds, yAxisMode: mode, showUserWait, selectedTokenTypes, containerWidth, stretch } = params;
 
   const avail = containerWidth && containerWidth > 0 ? containerWidth : 1000;
   const targetSpan = Math.max(400, avail - BASE_OFFSET - LABEL_GUTTER);
@@ -185,7 +180,8 @@ export function layoutTraces(params: LayoutParams): LayoutOutput {
     .map(id => traces.find(t => t.id === id))
     .filter((trace): trace is TraceEntry => !!trace?.data)
     .map(trace => getTraceMetadata(trace, mode, selectedTokenTypes));
-  const compressGaps = hideGaps && mode === 'time';
+  // By default, user wait gaps in time mode are compressed/hidden; checking "Show user wait" shows them uncompressed.
+  const compressGaps = !showUserWait && mode === 'time';
 
   const families = buildFamilies(metas, mode, selectedTokenTypes);
 
@@ -193,8 +189,9 @@ export function layoutTraces(params: LayoutParams): LayoutOutput {
   const maxDuration = Math.max(1, ...families.map(f => f.duration));
   const baseScale = targetSpan / maxDuration;
 
-  // 1. Lay out each family on a linear axis and find its idle gaps. Gaps are
-  //    idle for the whole family: a parent waiting on a subagent isn't idle.
+  // 1. Lay out each family on a linear axis and find its user wait gaps. Gaps
+  //    are only periods spent waiting for the user to respond; tool calls,
+  //    thinking, and subagent work do not create gaps.
   const firstPass = families.map(family => {
     const scale = stretch && family.duration > 0 ? targetSpan / family.duration : baseScale;
     const linear = buildAxis(family.start, scale);
@@ -203,7 +200,7 @@ export function layoutTraces(params: LayoutParams): LayoutOutput {
     }));
     const maxX = Math.max(...members.map(m => m.maxX));
     const gaps = mode === 'time'
-      ? findIdleGaps(members.flatMap(m => markExtents(m.marks)), family.start, scale, baseScale) : [];
+      ? findUserWaitGaps(members, family.start, scale, baseScale) : [];
     const fillMultiplier = compressGaps ? fillScaleMultiplier(gaps, scale, maxX, targetSpan) : 1;
     return { family, scale, members, gaps, fillMultiplier };
   });
@@ -241,7 +238,7 @@ export function layoutTraces(params: LayoutParams): LayoutOutput {
       const scale = baseScale * sharedMultiplier;
       timeTicks = computeTicks('time', targetSpan / scale, scale, true);
     } else {
-      timeTicks = computeTicks(mode, maxDuration, baseScale, hideGaps);
+      timeTicks = computeTicks(mode, maxDuration, baseScale, false);
     }
   }
 

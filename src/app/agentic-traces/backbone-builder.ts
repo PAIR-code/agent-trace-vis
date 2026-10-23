@@ -19,9 +19,8 @@
  * @fileoverview Computes the main track (the backbone) drawn behind the agent row.
  * 
  * Shows the progress of execution over time:
- * - Solid lines: active execution or thinking.
- * - Dotted lines: idle waiting periods (waiting for API responses or delay).
- * - Squiggle segments: rate limit retry loops.
+ * - Solid lines: active execution, thinking, and tool use.
+ * - Dotted lines: idle waiting periods (waiting for user input when "show user wait" is on).
  */
 
 import { BackboneLine, BASE_OFFSET } from './layout-types';
@@ -60,14 +59,18 @@ export function buildBackboneLines(
   let lastX = startX;
 
   gaps.forEach(gap => {
+    // Hidden gaps have width 0 and are omitted completely.
+    if (gap.compressed || gap.width <= 0) return;
     const gapEnd = gap.x + gap.width;
     if (gapEnd <= startX) return;
     const gapX = Math.max(gap.x, startX);
+    if (gapX >= traceMaxX) return;
     if (gapX > lastX) {
       backboneSegments.push({ x1: lastX, x2: gapX, type: 'solid' });
     }
-    backboneSegments.push({ x1: gapX, x2: gapEnd, type: gap.compressed ? 'squiggle' : 'dotted' });
-    lastX = gapEnd;
+    const segEnd = Math.min(gapEnd, traceMaxX);
+    backboneSegments.push({ x1: gapX, x2: segEnd, type: 'dotted' });
+    lastX = segEnd;
   });
 
   if (lastX < traceMaxX) {
@@ -76,53 +79,18 @@ export function buildBackboneLines(
 
   backboneSegments.forEach((seg, segIndex) => {
     const segColor = getSegmentColor(seg.x1, marks, lineColor);
+    const path = `M ${seg.x1} ${cy} L ${seg.x2} ${cy}`;
+    const strokeDasharray = seg.type === 'dotted' ? '4,6' : undefined;
 
-    if (seg.type === 'squiggle') {
-      const x1 = seg.x1;
-      const x2 = seg.x2;
-
-      lines.push({
-        id: `${traceId}_agent_backbone_line_${segIndex}_p1`,
-        traceId,
-        path: `M ${x1} ${cy} L ${x1 + 10} ${cy}`,
-        stroke: segColor,
-        strokeWidth: 1.5,
-        opacity: 0.7,
-        strokeDasharray: '4,6'
-      });
-
-      lines.push({
-        id: `${traceId}_agent_backbone_line_${segIndex}_p2`,
-        traceId,
-        path: `M ${x1 + 10} ${cy} q 2.5 -5 5 0 q 2.5 5 5 0`,
-        stroke: segColor,
-        strokeWidth: 3,
-        opacity: 0.7,
-      });
-
-      lines.push({
-        id: `${traceId}_agent_backbone_line_${segIndex}_p3`,
-        traceId,
-        path: `M ${x1 + 20} ${cy} L ${x2} ${cy}`,
-        stroke: segColor,
-        strokeWidth: 1.5,
-        opacity: 0.7,
-        strokeDasharray: '4,6'
-      });
-    } else {
-      const path = `M ${seg.x1} ${cy} L ${seg.x2} ${cy}`;
-      const strokeDasharray = seg.type === 'dotted' ? '4,6' : undefined;
-
-      lines.push({
-        id: `${traceId}_agent_backbone_line_${segIndex}`,
-        traceId,
-        path,
-        stroke: segColor,
-        strokeWidth: seg.type === 'dotted' ? 1.5 : 3,
-        opacity: seg.type === 'dotted' ? 0.7 : 1,
-        strokeDasharray
-      });
-    }
+    lines.push({
+      id: `${traceId}_agent_backbone_line_${segIndex}`,
+      traceId,
+      path,
+      stroke: segColor,
+      strokeWidth: seg.type === 'dotted' ? 1.5 : 3,
+      opacity: seg.type === 'dotted' ? 0.7 : 1,
+      strokeDasharray
+    });
   });
 
   return lines;
