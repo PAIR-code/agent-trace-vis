@@ -123,9 +123,11 @@ from typing import Dict, List, Optional
 
 from copilot_sdk_source import (
     SdkSession,
+    build_turns as build_sdk_turns,
     convert_sdk_session,
     discover_sdk_sessions,
     read_sdk_events,
+    sdk_session_title,
 )
 
 SCHEMA_VERSION = "0.9.0"
@@ -826,11 +828,12 @@ def main():
             session_id = data.get("sessionId") or session.session_id
             if session_id in EXCLUDED_SESSION_IDS:
                 continue
+            turns = build_sdk_turns(events, data.get("selectedModel"))
             candidates.append({
                 "session_id": session_id,
                 "modified_at": session.modified_at,
                 "source": "Copilot SDK",
-                "title": f"Copilot SDK session {session.session_id[:8]}",
+                "title": sdk_session_title(data, turns, session_id),
                 "session": session,
                 "events": events,
             })

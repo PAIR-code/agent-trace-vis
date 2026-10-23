@@ -281,6 +281,29 @@ def build_turns(events: List[dict], default_model: Optional[str] = None) -> List
     return turns
 
 
+def sdk_session_title(start_data: dict, turns: List[dict], trace_id: str) -> str:
+    """Use an explicit session title when available, otherwise the first query."""
+    title_keys = ("title", "sessionTitle", "session_title", "sessionName", "session_name")
+    sources = (start_data, start_data.get("metadata"), start_data.get("context"))
+    title = next(
+        (
+            value.strip()
+            for source in sources
+            if isinstance(source, dict)
+            for key in title_keys
+            if isinstance((value := source.get(key)), str) and value.strip()
+        ),
+        "",
+    )
+    if not title and turns:
+        first_query = turns[0].get("user")
+        if isinstance(first_query, str):
+            title = " ".join(first_query.split())
+    if not title:
+        title = f"Copilot SDK session {trace_id[:8]}"
+    return title if len(title) <= 80 else title[:77] + "..."
+
+
 def convert_sdk_session(
     session: SdkSession,
     events: List[dict],
@@ -327,7 +350,7 @@ def convert_sdk_session(
             for call in message["tool_calls"]:
                 tool_kinds[call["name"]] = tool_kind_for_name(call["name"])
 
-    title = f"Copilot SDK session {trace_id[:8]}"
+    title = sdk_session_title(start_data, turns, trace_id)
     record = to_opentraces(
         turns,
         trace_id=trace_id,
