@@ -1,0 +1,229 @@
+{
+  "schema_version": "0.9.0",
+  "trace_id": "1fb9fe66-5f56-440c-94de-d5e7b29f2f69",
+  "session_id": "1fb9fe66-5f56-440c-94de-d5e7b29f2f69",
+  "timestamp_start": "2026-10-22T22:36:43.658Z",
+  "timestamp_end": "2026-10-22T22:37:06.793Z",
+  "task": {
+    "description": "run the demo please"
+  },
+  "agent": {
+    "name": "copilot-sdk",
+    "version": "1.0.95-0.unstable.r38345923974.g3754b70",
+    "model": "mai-code-1.1-flash"
+  },
+  "steps": [
+    {
+      "step_index": 0,
+      "role": "user",
+      "content": "run the demo please",
+      "timestamp": "2026-10-22T22:36:43.658Z"
+    },
+    {
+      "step_index": 1,
+      "role": "agent",
+      "model": "mai-code-1.1-flash",
+      "reasoning_content": "",
+      "content": "",
+      "tool_calls": [
+        {
+          "tool_call_id": "call_fLssK8jNIKq2liVlP5WEeP5n",
+          "tool_name": "view",
+          "input": {
+            "path": "~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/package.json",
+            "view_range": [
+              1,
+              220
+            ]
+          },
+          "duration_ms": 33
+        },
+        {
+          "tool_call_id": "call_gs4nJ19oLshEeXSDEVKBmqRT",
+          "tool_name": "view",
+          "input": {
+            "path": "~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/README.md",
+            "view_range": [
+              1,
+              220
+            ]
+          },
+          "duration_ms": 37
+        }
+      ],
+      "observations": [
+        {
+          "source_call_id": "call_fLssK8jNIKq2liVlP5WEeP5n",
+          "content": "{\n  \"name\": \"reasoning-trace-vis\",\n  \"version\": \"0.0.0\",\n  \"scripts\": {\n    \"ng\": \"ng\",\n    \"manifest\": \"node generate-manifest.js\",\n    \"prestart\": \"npm run manifest\",\n    \"start\": \"ng serve\",\n    \"prebuild\": \"npm run manifest\",\n    \"build\": \"ng build\",\n    \"build:public\": \"PUBLIC_ONLY=true npm run build\",\n    \"deploy:public\": \"npm run build:public && npx netlify deploy --dir=dist/reasoning-trace-vis/browser --prod --no-build\",\n    \"deploy\": \"npm run build:public && npx netlify deploy --dir=dist/reasoning-trace-vis/browser --prod --no-build\",\n    \"deploy:all\": \"npm run build && npx netlify deploy --dir=dist/reasoning-trace-vis/browser --prod --no-build\",\n    \"deploy:draft\": \"npm run build && npx netlify deploy --dir=dist/reasoning-trace-vis/browser --no-build\",\n    \"prewatch\": \"npm run manifest\",\n    \"watch\": \"ng build --watch --configuration development\",\n    \"typecheck\": \"tsc -p tsconfig.app.json --noEmit\",\n    \"lint\": \"eslint src\",\n    \"check\": \"npm run typecheck && npm run lint\",\n    \"prepare\": \"git rev-parse --git-dir >/dev/null 2>&1 && git config core.hooksPath .githooks || true\"\n  },\n  \"private\": true,\n  \"packageManager\": \"npm@10.9.0\",\n  \"dependencies\": {\n    \"@angular/common\": \"^21.2.0\",\n    \"@angular/compiler\": \"^21.2.0\",\n    \"@angular/core\": \"^21.2.0\",\n    \"@angular/forms\": \"^21.2.0\",\n    \"@angular/platform-browser\": \"^21.2.0\",\n    \"@angular/router\": \"^21.2.0\",\n    \"@huggingface/transformers\": \"^4.3.0\",\n    \"@types/d3\": \"^7.4.3\",\n    \"3d-force-graph\": \"^1.80.0\",\n    \"d3\": \"^7.9.0\",\n    \"katex\": \"^0.16.45\",\n    \"marked\": \"^18.0.3\",\n    \"rxjs\": \"~7.8.0\",\n    \"tslib\": \"^2.3.0\"\n  },\n  \"devDependencies\": {\n    \"@angular/build\": \"^21.2.1\",\n    \"@angular/cli\": \"^21.2.1\",\n    \"@angular/compiler-cli\": \"^21.2.0\",\n    \"@total-typescript/ts-reset\": \"^0.6.1\",\n    \"eslint\": \"^9.29.0\",\n    \"prettier\": \"^3.8.1\",\n    \"typescript\": \"~5.9.2\",\n    \"typescript-eslint\": \"^8.70.0\"\n  }\n}\n"
+        },
+        {
+          "source_call_id": "call_gs4nJ19oLshEeXSDEVKBmqRT",
+          "content": "# Reasoning Trace Visualization\n\n[Live Demo](https://agent-trace-vis.netlify.app)\n\nVisual tools for understanding AI agent reasoning traces. Built for researchers, engineers, and anyone trying to make sense of complex agentic behaviors.\n\nAs AI systems increasingly rely on multi-step reasoning and tool use, understanding what they actually do, and why, becomes critical. But most of this behavior is hidden: the implementation steps, tool calls, backtracking, and decision points that shape the final output. This project explores visual approaches to making these patterns legible, from structured agentic traces (where agents coordinate tools, sub-agents, and user interactions) to unstructured chain-of-thought reasoning (where we want to compare strategies across multiple rollouts of the same task). Our goal is to bridge the gap between deep-reading a single trace and aggregate metrics across thousands, supporting the mesoscale analysis needed to form and test hypotheses about how these systems behave.\n\n## Visualizations\n\n### Agentic Traces\nA timeline-based visualization for structured agent traces (e.g., from coding agents, tool-using LLMs). Each trace is one row with horizontal lanes: the user/agent conversation, the agent's internal processes (thinking), tool calls, and a files lane showing which files were read, searched, and edited. Supports search, model highlighting, and gap compression for long traces.\n\n- **Demo**: [Demo](https://agent-trace-vis.netlify.app/#/agentic-traces)\n- **Route**: `/#/agentic-traces`\n- **Data format**: JSON files following the [OpenTraces](https://www.opentraces.ai) schema\n\n#### Bringing your own traces\n\nThe repo ships with sample traces in [`sample_data/traces/`](sample_data/traces/) (GitHub Copilot agent-mode sessions), so `npm start` shows real data right away. To look at your own agent's traces you need them as OpenTraces JSON; the easiest path is to use (or adapt) one of the converters in [`converters/`](converters/). See [`converters/README.md`](converters/README.md) for how to convert your Copilot chats and how to write a converter for another agent.\n\n### Unstructured Reasoning (Graph)\nA force-directed graph visualization for comparing multiple rollouts of unstructured chain-of-thought reasoning (e.g., RLVR-trained models solving math problems). Segments reasoning into chunks, embeds them, and visualizes structural patterns across traces.\n\n- **Demo**: [Demo](https://agent-trace-vis.netlify.app/#/unstructured-reasoning-graph)\n- **Route**: `/#/unstructured-reasoning-graph`\n- **Data format**: JSON arrays of reasoning samples with `reasoning_content` and `score` fields\n\n### Unstructured Reasoning (Linear)\nA linear token-level visualization for comparing reasoning traces across datasets. Highlights token frequency and overlap across rollouts with multiple coloring schemes (chromogram, dataset, score-based).\n\n- **Demo**: [Demo](https://agent-trace-vis.netlify.app/#/unstructured-reasoning-linear)\n- **Route**: `/#/unstructured-reasoning-linear`\n- **Data format**: Same as the graph view\n\n### Conversational Arcs\nA sentence-level visualization for analyzing how messages in multi-turn conversations reference and build upon previous turns.\n\n- **Demo**: [Demo](https://agent-trace-vis.netlify.app/#/conversation-arcs)\n- **Route**: `/#/conversation-arcs`\n\n## Getting Started\n\n### 1. Setup & Run Locally\n```bash\nnpm install\nnpm start\n```\nThe app will run at `http://localhost:4200`. Before each start/build, `generate-manifest.js` copies the bundled `sample_data/` plus (if present) your sibling data folder into `public/assets/data/` and writes a manifest of the datasets it found.\n\n### 2. Expected Directory Layout\n```\nparent/\n├── agent-trace-vis/        ← this app\n│   └── sample_data/        ← small datasets checked into the repo\n│       └── traces/\n└── reasoning_vis_data/     ← your own data (optional, not in git)\n    ├── traces/             ← agentic trace JSON folders, one per dataset\n    └── rlvr_vs_base/       ← unstructured reasoning datasets\n```\nEach sub-folder of `traces/` becomes one dataset in the UI; folders with the same name in both roots are merged.\n\n### 3. Building & Deploying (Netlify)\n\nBuilding compiles the app locally to `dist/reasoning-trace-vis/browser/`. Deploying uploads those files to Netlify at [agent-trace-vis.netlify.app](https://agent-trace-vis.netlify.app).\n\nTo build and deploy a **Draft / Preview URL** with specific datasets:\n```bash\nDATASETS=my_custom_dataset npm run deploy:draft\n```\nOr with a custom alias name:\n```bash\nDATASETS=my_custom_dataset npm run deploy:draft -- --alias my-custom-alias\n```\n\nTo build and deploy to **Production**:\n```bash\n# Deploy default public datasets:\nnpm run deploy\n\n# Deploy all datasets (including private/internal ones):\nnpm run deploy:all\n\n# With specific datasets:\nDATASETS=website_updates,rlvr_vs_base npm run deploy\n```\n\nEach trace file should follow this structure:\n\n```json\n{\n  \"schema_version\": \"0.7.0\",\n  \"trace_id\": \"unique-id\",\n  \"session_id\": \"session-id\",\n  \"task\": {\n    \"description\": \"Human-readable title\"\n  },\n  \"steps\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"User message text\",\n      \"timestamp\": \"2024-01-01T00:00:00Z\"\n    },\n    {\n      \"role\": \"agent\",\n      \"model\": \"model-name\",\n      \"reasoning_content\": \"Internal thinking...\",\n      \"content\": \"Response to user\",\n      \"tool_calls\": [\n        {\n          \"tool_call_id\": \"tc_0\",\n          \"tool_name\": \"view_file\",\n          \"input\": { \"AbsolutePath\": \"/path/to/file\" }\n        }\n      ],\n      \"observations\": [\n        {\n          \"source_call_id\": \"tc_0\",\n          \"content\": \"File contents...\"\n        }\n      ],\n      \"timestamp\": \"2024-01-01T00:00:01Z\"\n    }\n  ]\n}\n```\n\n### Unstructured Reasoning Data\n\n1. Place your JSON dataset files in the sibling `reasoning_vis_data/rlvr_vs_base/` directory.\n2. Update the `datasets` array in `src/app/unstructured-traces/unstructured-reasoning-graph/unstructured-reasoning-graph.ts`\n\nEach dataset file should be a JSON array of objects with at minimum:\n\n```json\n[\n  {\n    \"reasoning_content\": \"Let me think about this step by step...\",\n    \"score\": 1,\n    \"problem\": \"What is 2+2?\"\n  }\n]\n```\n\n\n\n## License and Disclaimer\n\nAll software is licensed under the Apache License, Version 2.0 (Apache 2.0).\nYou may not use this file except in compliance with the Apache 2.0 license.\nYou may obtain a copy of the Apache 2.0 license at:\nhttps://www.apache.org/licenses/LICENSE-2.0.\n\nUnless required by applicable law or agreed to in writing, all software and\nmaterials distributed here under the Apache 2.0 licenses are distributed on an\n\"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or\nimplied. See the licenses for the specific language governing permissions and\nlimitations under those licenses.\n\nThis is not an official Google product.\n"
+        }
+      ],
+      "timestamp": "2026-10-22T22:36:43.675Z"
+    },
+    {
+      "step_index": 2,
+      "role": "agent",
+      "model": "mai-code-1.1-flash",
+      "reasoning_content": "**Running demo setup**\n\nI need to run a demo, which might require installing dependencies first. The user asked me to \"run the demo,\" so it seems crucial that the app keeps running continuously. I might do an async detached start after running `npm install`. Generally, a local server needs to remain active, so I might run `npm install` sync before starting with `npm start -- --host 0.0.0.0 --port 4200`. I'll also want to verify everything is ready with a curl command. If there are issues with the network, I'll need to address that as well.",
+      "content": "",
+      "tool_calls": [
+        {
+          "tool_call_id": "call_gxTfMquR0P8H8rNExa8BtXSs",
+          "tool_name": "bash",
+          "input": {
+            "command": "cd ~/Documents/github/reasoning_vis_oss_all/agent-trace-vis && npm install",
+            "description": "Install the app dependencies so the demo can run",
+            "mode": "sync",
+            "initial_wait": 180
+          },
+          "duration_ms": 5712
+        }
+      ],
+      "observations": [
+        {
+          "source_call_id": "call_gxTfMquR0P8H8rNExa8BtXSs",
+          "content": "(node:40510) ExperimentalWarning: Support for loading ES Module in require() is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\nnpm warn EBADENGINE Unsupported engine {\nnpm warn EBADENGINE   package: '@angular-devkit/architect@0.2102.24',\nnpm warn EBADENGINE   required: {\nnpm warn EBADENGINE     node: '^20.19.0 || ^22.12.0 || >=24.0.0',\nnpm warn EBADENGINE     npm: '^6.11.0 || ^7.5.6 || >=8.0.0',\nnpm warn EBADENGINE     yarn: '>= 1.13.0'\nnpm warn EBADENGINE   },\nnpm warn EBADENGINE   current: { node: 'v23.0.0', npm: '10.9.0' }\nnpm warn EBADENGINE }\nnpm warn EBADENGINE Unsupported engine {\nnpm warn EBADENGINE   package: '@angular-devkit/core@21.2.24',\nnpm warn EBADENGINE   required: {\nnpm warn EBADENGINE     node: '^20.19.0 || ^22.12.0 || >=24.0.0',\nnpm warn EBADENGINE     npm: '^6.11.0 || ^7.5.6 || >=8.0.0',\nnpm warn EBADENGINE     yarn: '>= 1.13.0'\nnpm warn EBADENGINE   },\nnpm warn EBADENGINE   current: { node: 'v23.0.0', npm: '10.9.0' }\nnpm warn EBADENGINE }\nnpm warn EBADENGINE Unsupported engine {\nnpm warn EBADENGINE   package: '@angular-devkit/schematics@21.2.24',\nnpm warn EBADENGINE   required: {\nnpm warn EBADENGINE     node: '^20.19.0 || ^22.12.0 || >=24.0.0',\nnpm warn EBADENGINE     npm: '^6.11.0 || ^7.5.6 || >=8.0.0',\nnpm warn EBADENGINE     yarn: '>= 1.13.0'\nnpm warn EBADENGINE   },\nnpm warn EBADENGINE   current: { node: 'v23.0.0', npm: '10.9.0' }\nnpm warn EBADENGINE }\nnpm warn EBADENGINE Unsupported engine {\nnpm warn EBADENGINE   package: '@angular/build@21.2.24',\nnpm warn EBADENGINE   required: {\nnpm warn EBADENGINE     node: '^20.19.0 || ^22.12.0 || >=24.0.0',\nnpm warn EBADENGINE     npm: '^6.11.0 || ^7.5.6 || >=8.0.0',\nnpm warn EBADENGINE     yarn: '>= 1.13.0'\nnpm warn EBADENGINE   },\nnpm warn EBADENGINE   current: { node: 'v23.0.0', npm: '10.9.0' }\nnpm warn EBADENGINE }\nnpm warn EBADENGINE Unsupported engine {\nnpm warn EBADENGINE   package: '@angular/cli@21.2.24',\nnpm warn EBADENGINE   required: {\nnpm warn EBADENGINE     node: '^20.19.0 || ^22.12.0 || >=24.0.0',\nnpm warn EBADENGINE     npm: '^6.11.0 || ^7.5.6 || >=8.0.0',\nnpm warn EBADENGINE     yarn: '>= 1.13.0'\nnpm warn EBADENGINE   },\nnpm warn EBADENGINE   current: { node: 'v23.0.0', npm: '10.9.0' }\nnpm warn EBADENGINE }\nnpm warn EBADENGINE Unsupported engine {\nnpm warn EBADENGINE   package: '@angular/common@21.2.25',\nnpm warn EBADENGINE   required: { node: '^20.19.0 || ^22.12.0 || >=24.0.0' },\nnpm warn EBADENGINE   current: { node: 'v23.0.0', npm: '10.9.0' }\nnpm warn EBADENGINE }\nnpm warn EBADENGINE Unsupported engine {\nnpm warn EBADENGINE   package: '@angular/compiler@21.2.25',\nnpm warn EBADENGINE   required: { node: '^20.19.0 || ^22.12.0 || >=24.0.0' },\nnpm warn EBADENGINE   current: { node: 'v23.0.0', npm: '10.9.0' }\nnpm warn EBADENGINE }\nnpm warn EBADENGINE Unsupported engine {\nnpm warn EBADENGINE   package: '@angular/compiler-cli@21.2.25',\nnpm warn EBADENGINE   required: { node: '^20.19.0 || ^22.12.0 || >=24.0.0' },\nnpm warn EBADENGINE   current: { node: 'v23.0.0', npm: '10.9.0' }\nnpm warn EBADENGINE }\nnpm warn EBADENGINE Unsupported engine {\nnpm warn EBADENGINE   package: '@angular/core@21.2.25',\nnpm warn EBADENGINE   required: { node: '^20.19.0 || ^22.12.0 || >=24.0.0' },\nnpm warn EBADENGINE   current: { node: 'v23.0.0', npm: '10.9.0' }\nnpm warn EBADENGINE }\nnpm warn EBADENGINE Unsupported engine {\nnpm warn EBADENGINE   package: '@angular/forms@21.2.25',\nnpm warn EBADENGINE   required: { node: '^20.19.0 || ^22.12.0 || >=24.0.0' },\nnpm warn EBADENGINE   current: { node: 'v23.0.0', npm: '10.9.0' }\nnpm warn EBADENGINE }\nnpm warn EBADENGINE Unsupported engine {\nnpm warn EBADENGINE   package: '@angular/platform-browser@21.2.25',\nnpm warn EBADENGINE   required: { node: '^20.19.0 || ^22.12.0 || >=24.0.0' },\nnpm warn EBADENGINE   current: { node: 'v23.0.0', npm: '10.9.0' }\nnpm warn EBADENGINE }\nnpm warn EBADENGINE Unsupported engine {\nnpm warn EBADENGINE   package: '@angular/router@21.2.25',\nnpm warn EBADENGINE   required: { node: '^20.19.0 || ^22.12.0 || >=24.0.0' },\nnpm warn EBADENGINE   current: { node: 'v23.0.0', npm: '10.9.0' }\nnpm warn EBADENGINE }\nnpm warn EBADENGINE Unsupported engine {\nnpm warn EBADENGINE   package: '@schematics/angular@21.2.24',\nnpm warn EBADENGINE   required: {\nnpm warn EBADENGINE     node: '^20.19.0 || ^22.12.0 || >=24.0.0',\nnpm warn EBADENGINE     npm: '^6.11.0 || ^7.5.6 || >=8.0.0',\nnpm warn EBADENGINE     yarn: '>= 1.13.0'\nnpm warn EBADENGINE   },\nnpm warn EBADENGINE   current: { node: 'v23.0.0', npm: '10.9.0' }\nnpm warn EBADENGINE }\nnpm warn EBADENGINE Unsupported engine {\nnpm warn EBADENGINE   package: 'eslint-visitor-keys@5.0.1',\nnpm warn EBADENGINE   required: { node: '^20.19.0 || ^22.13.0 || >=24' },\nnpm warn EBADENGINE   current: { node: 'v23.0.0', npm: '10.9.0' }\nnpm warn EBADENGINE }\nnpm notice operation is not supported.\nnpm notice operation is not supported.\n\n> reasoning-trace-vis@0.0.0 prepare\n> git rev-parse --git-dir >/dev/null 2>&1 && git config core.hooksPath .githooks || true\n\n\nup to date in 1s\n\n148 packages are looking for funding\n  run `npm fund` for details\n<shellId: 0 completed with exit code 0>"
+        }
+      ],
+      "timestamp": "2026-10-22T22:36:49.659Z"
+    },
+    {
+      "step_index": 3,
+      "role": "agent",
+      "model": "mai-code-1.1-flash",
+      "reasoning_content": "**Starting the app**\n\nI see that the installation succeeded, so my next step is to start the app. It might work under Node 23, even though there’s a warning from the Angular engine. I’ll probably use port 4200 and go for an async detached option with `--host 0.0.0.0`. Seems like I might need to specify `npm start -- --host 0.0.0.0 --port 4200`. Running it detached should keep the server active, so let's move forward with that!",
+      "content": "",
+      "tool_calls": [
+        {
+          "tool_call_id": "call_1USD6fywDi1OeZTIfuH8vVzA",
+          "tool_name": "bash",
+          "input": {
+            "command": "cd ~/Documents/github/reasoning_vis_oss_all/agent-trace-vis && npm start -- --host 0.0.0.0 --port 4200",
+            "description": "Start the Angular demo app and keep it running in the background",
+            "mode": "async",
+            "detach": true,
+            "initial_wait": 30
+          },
+          "duration_ms": 166
+        }
+      ],
+      "observations": [
+        {
+          "source_call_id": "call_1USD6fywDi1OeZTIfuH8vVzA",
+          "content": "<command started in detached background with shellId: 1>"
+        }
+      ],
+      "timestamp": "2026-10-22T22:37:00.191Z"
+    },
+    {
+      "step_index": 4,
+      "role": "agent",
+      "model": "mai-code-1.1-flash",
+      "reasoning_content": "**Verifying server status**\n\nI need to check if the server is listening properly. My go-to method might be using a curl command targeted at localhost:4200. I think I’ll just run a simple bash command for this. It should confirm if everything is working as expected. I'm curious to see if that does the trick! Let's hope it reveals the server status clearly.",
+      "content": "",
+      "tool_calls": [
+        {
+          "tool_call_id": "call_DQp9lwBml6c1Bmc8KWrIJKk9",
+          "tool_name": "bash",
+          "input": {
+            "command": "curl -I http://localhost:4200",
+            "description": "Check that the demo app started successfully and is serving HTTP on the default port",
+            "mode": "sync",
+            "initial_wait": 20
+          },
+          "duration_ms": 99
+        }
+      ],
+      "observations": [
+        {
+          "source_call_id": "call_DQp9lwBml6c1Bmc8KWrIJKk9",
+          "content": "% Total    % Received % Xferd  Average Speed   Time    Time     Time  Current\n                                 Dload  Upload   Total   Spent    Left  Speed\n\r  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0\r  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0\nHTTP/1.1 200 OK\r\nVary: Origin\r\nContent-Type: text/html\r\nCache-Control: no-cache\r\nDate: Thu, 22 Oct 2026 22:37:06 GMT\r\nConnection: keep-alive\r\nKeep-Alive: timeout=5\n<shellId: 2 completed with exit code 0>"
+        }
+      ],
+      "timestamp": "2026-10-22T22:37:03.466Z"
+    },
+    {
+      "step_index": 5,
+      "role": "agent",
+      "model": "mai-code-1.1-flash",
+      "reasoning_content": "",
+      "content": "Started the demo and it’s serving locally.\n\nOpen:\n- http://localhost:4200\n- http://localhost:4200/#/agentic-traces\n\nThe app is running in the background from the project root.",
+      "tool_calls": [],
+      "observations": [],
+      "timestamp": "2026-10-22T22:37:06.793Z"
+    }
+  ],
+  "metrics": {
+    "total_steps": 6,
+    "total_input_tokens": 86786,
+    "total_output_tokens": 1133
+  },
+  "metadata": {
+    "source": "copilot-sdk",
+    "source_format": "events.jsonl",
+    "source_file": "~/.copilot/session-state/1fb9fe66-5f56-440c-94de-d5e7b29f2f69/events.jsonl",
+    "workspace_folder": "~/Documents/github/reasoning_vis_oss_all/agent-trace-vis",
+    "repository": "PAIR-code/agent-trace-vis",
+    "producer": "copilot-agent",
+    "tool_kinds": {
+      "view": "read.file",
+      "bash": "execute.command"
+    },
+    "step_timing": {
+      "1": {
+        "generated_at": "2026-10-22T22:36:49.590Z",
+        "completed_at": "2026-10-22T22:36:49.636000Z"
+      },
+      "2": {
+        "generated_at": "2026-10-22T22:36:54.441Z",
+        "completed_at": "2026-10-22T22:37:00.164000Z"
+      },
+      "3": {
+        "generated_at": "2026-10-22T22:37:03.262Z",
+        "completed_at": "2026-10-22T22:37:03.439000Z"
+      },
+      "4": {
+        "generated_at": "2026-10-22T22:37:06.655Z",
+        "completed_at": "2026-10-22T22:37:06.762000Z"
+      },
+      "5": {
+        "generated_at": "2026-10-22T22:37:09.994Z",
+        "completed_at": "2026-10-22T22:37:09.994000Z"
+      }
+    },
+    "tool_timing": {
+      "call_fLssK8jNIKq2liVlP5WEeP5n": {
+        "started_at": "2026-10-22T22:36:49.595Z"
+      },
+      "call_gs4nJ19oLshEeXSDEVKBmqRT": {
+        "started_at": "2026-10-22T22:36:49.599Z"
+      },
+      "call_gxTfMquR0P8H8rNExa8BtXSs": {
+        "started_at": "2026-10-22T22:36:54.452Z"
+      },
+      "call_1USD6fywDi1OeZTIfuH8vVzA": {
+        "started_at": "2026-10-22T22:37:03.273Z"
+      },
+      "call_DQp9lwBml6c1Bmc8KWrIJKk9": {
+        "started_at": "2026-10-22T22:37:06.663Z"
+      }
+    },
+    "reasoning_tokens": {
+      "1": 64,
+      "2": 192,
+      "3": 64,
+      "4": 0,
+      "5": 320
+    },
+    "turn_token_usage": {
+      "0": {
+        "input_tokens": 86786,
+        "output_tokens": 1133
+      }
+    },
+    "total_reasoning_tokens": 640
+  }
+}

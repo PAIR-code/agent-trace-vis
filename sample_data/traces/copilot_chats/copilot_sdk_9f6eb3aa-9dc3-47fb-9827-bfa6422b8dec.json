@@ -1,0 +1,943 @@
+{
+  "schema_version": "0.9.0",
+  "trace_id": "9f6eb3aa-9dc3-47fb-9827-bfa6422b8dec",
+  "session_id": "9f6eb3aa-9dc3-47fb-9827-bfa6422b8dec",
+  "timestamp_start": "2026-10-23T00:26:31.593Z",
+  "timestamp_end": "2026-10-23T00:28:58.977Z",
+  "task": {
+    "description": "these titles are bad. if there's no good default (though I suspect there is, ..."
+  },
+  "agent": {
+    "name": "copilot-sdk",
+    "version": "1.0.95-0.unstable.r38345923974.g3754b70",
+    "model": "gpt-6-luna"
+  },
+  "steps": [
+    {
+      "step_index": 0,
+      "role": "user",
+      "content": "these titles are bad. if there's no good default (though I suspect there is, somewhere in the metadata), use the first user query\n[Attachment: Screenshot 2026-10-22 at 5.26.03 PM.png]\n[Attachment: Browser Pages]\n[Attachment: file:file-lane.ts]",
+      "timestamp": "2026-10-23T00:26:31.593Z"
+    },
+    {
+      "step_index": 1,
+      "role": "agent",
+      "model": "gpt-6-luna",
+      "reasoning_content": "**Implementing file inspection**\n\nI need to look into the file and relevant metadata functions to track down the issue. The user mentioned that the titles are bad, so if there’s no good default metadata available, I’ll use the first query. I'll also check the Copilot SDK session hash. My next steps include figuring out the title paths and checking the attached flagged file. It might be helpful to use the commentary tool for the first call, and I could consider searching the browser too.",
+      "content": "I’ll trace where session titles are derived and check which metadata fields are available before changing the fallback behavior.",
+      "tool_calls": [
+        {
+          "tool_call_id": "call_ed3k6JpkqILxlIGyiSnrlK4h",
+          "tool_name": "view",
+          "input": {
+            "path": "~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/src/app/agentic-traces/file-lane.ts"
+          },
+          "duration_ms": 55
+        },
+        {
+          "tool_call_id": "call_vvkVzcCRSkc73L9O1h1RPlwe",
+          "tool_name": "rg",
+          "input": {
+            "pattern": "Copilot SDK session|session title|title.*session|displayName|first.*query|user.*message|conversation title",
+            "paths": [
+              "~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/src/app/agentic-traces",
+              "~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/converters"
+            ],
+            "output_mode": "content",
+            "-n": true,
+            "-C": 2,
+            "head_limit": 200
+          },
+          "duration_ms": 87
+        },
+        {
+          "tool_call_id": "call_q60jNq7gMqEu10wptGeBo1qi",
+          "tool_name": "rg",
+          "input": {
+            "pattern": "session.*title|title.*session|displayName|Copilot SDK",
+            "paths": "~/Documents/github/reasoning_vis_oss_all/agent-trace-vis",
+            "glob": "**/*.{ts,html,py,json}",
+            "output_mode": "content",
+            "-n": true,
+            "-C": 2,
+            "head_limit": 200
+          },
+          "duration_ms": 71
+        }
+      ],
+      "observations": [
+        {
+          "source_call_id": "call_ed3k6JpkqILxlIGyiSnrlK4h",
+          "content": "/**\n * @license\n * Copyright 2026 Google LLC\n *\n * Licensed under the Apache License, Version 2.0 (the \"License\");\n * you may not use this file except in compliance with the License.\n * You may obtain a copy of the License at\n *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required by applicable law or agreed to in writing, software\n * distributed under the License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n * See the License for the specific language governing permissions and\n * limitations under the License.\n */\n\n/**\n * @fileoverview Layout of the files lane under each trace track: one row per\n * file, spanning from its first access to the end of the trace, with a dot per\n * view/search and a downward bar per edit (taller = more lines written).\n *\n * Markers take their x from the trace node's mark, so they line up with the\n * main track and share its hover / selection / search state.\n */\n\nimport { FileEvent, normalizeFilePath } from './file-events';\nimport { ReasoningStepType, type AxisMode } from './layout-types';\nimport type { Mark } from './marks';\n\n/** Height of one expanded file row. */\nexport const FILE_ROW_HEIGHT = 24;\n\n/** Width of an edit bar on the time / tokens axes. */\nexport const EDIT_WIDTH = 7;\n/** Edit bar height in sequence mode: every slot the same, matching the speech bars. */\nexport const SLOT_EDIT_HEIGHT = 18;\n\nexport interface FileViewMarker {\n  x: number;\n  label: string;\n  isSearch: boolean;\n  node: Mark;\n}\n\nexport interface FileEditSegment {\n  x: number;\n  width: number;\n  /** Downward from the row's line, by lines written (log scale). */\n  barHeight: number;\n  label: string;\n  node: Mark;\n}\n\nexport interface FileRow {\n  filePath: string;\n  basename: string;\n  isPlan: boolean;\n  startX: number;\n  endX: number;\n  views: FileViewMarker[];\n  edits: FileEditSegment[];\n  /** Ids of every node with a marker on this row. */\n  nodeIds: Set<string>;\n}\n\nexport interface FileLane {\n  rows: FileRow[];\n  /** Height of the expanded lane. */\n  totalHeight: number;\n}\n\n/**\n * Lays out one trace's file events against its marks. In sequence mode the\n * marks are slot-sized bars (see marks.ts): edits take that width and a\n * constant height, and view dots sit at the slot's center.\n */\nexport function buildFileLane(events: FileEvent[], marks: Mark[], contentWidth: number, mode: AxisMode = 'time'): FileLane {\n  const slots = mode === 'sequence';\n  const markById = new Map(marks.map(m => [m.id, m]));\n  const placed = events\n    .filter(ev => markById.has(ev.nodeId))\n    .map(ev => ({ ...ev, node: markById.get(ev.nodeId)!, x: markById.get(ev.nodeId)!.x }))\n    .sort((a, b) => a.x - b.x);\n\n  // Group by file. Different spellings of the same path (relative vs absolute,\n  // or same basename) are merged into the first-seen key.\n  const groups = new Map<string, typeof placed>();\n  for (const ev of placed) {\n    const norm = normalizeFilePath(ev.filePath);\n    const basename = norm.split('/').pop() ?? norm;\n    const key = [...groups.keys()].find(k =>\n      k === norm || k.endsWith('/' + norm) || norm.endsWith('/' + k) ||\n      (k.split('/').pop() === basename && basename.length > 3)) ?? norm;\n    if (!groups.has(key)) groups.set(key, []);\n    groups.get(key)!.push(ev);\n  }\n\n  // Rows run to the end of the trace.\n  const drawn = marks.filter(m => !m.hidden);\n  const endX = Math.max(\n    drawn.length > 0 ? Math.max(...drawn.map(m => m.x + m.width)) : contentWidth,\n    ...placed.map(e => e.x + (slots ? e.node.width : 0)));\n\n  const rows = [...groups.entries()].map(([key, evs]): FileRow & { key: string } => {\n    const first = evs[0];\n    const basename = normalizeFilePath(first.filePath).split('/').pop() ?? key;\n    const isPlan = evs.some(e => e.isPlan);\n    return {\n      key,\n      filePath: first.filePath,\n      basename,\n      isPlan,\n      startX: first.x,\n      endX,\n      views: evs.filter(e => e.kind !== 'edit').map(e => ({\n        x: slots ? e.x + e.node.width / 2 : e.x,\n        isSearch: e.kind === 'search',\n        label: e.kind === 'search' ? `${basename}: ${e.node.text || 'grep search'}` : `${basename}: viewed`,\n        node: e.node,\n      })),\n      edits: evs.filter(e => e.kind === 'edit').map(e => ({\n        x: e.x,\n        width: slots ? e.node.width : Math.max(EDIT_WIDTH, e.node.span ?? 0),\n        barHeight: slots ? SLOT_EDIT_HEIGHT : linesToBarHeight(e.linesCount),\n        label: e.node.stepType === ReasoningStepType.DELETE_FILE\n          ? `${basename}: deleted`\n          : e.linesCount > 0 ? `${basename}: ${e.linesCount} lines written` : `${basename}: written`,\n        node: e.node,\n      })),\n      nodeIds: new Set(evs.map(e => e.nodeId)),\n    };\n  });\n\n  // Edited files first, then view-only; each group by first access.\n  const edited = (r: FileRow) => r.edits.length > 0;\n  rows.sort((a, b) =>\n    Number(edited(b)) - Number(edited(a)) || a.startX - b.startX || a.key.localeCompare(b.key));\n\n  return {\n    rows: rows.map(({ key, ...row }) => row),\n    // Rows are FILE_ROW_HEIGHT apart; the last row's edit bars reach 40px below its top.\n    totalHeight: Math.max(FILE_ROW_HEIGHT, (rows.length - 1) * FILE_ROW_HEIGHT + 40),\n  };\n}\n\n/** Lines written → bar height: 1 line ≈ 8px, 100 lines ≈ 21px, capped at 26px. */\nexport function linesToBarHeight(linesCount: number): number {\n  if (linesCount <= 0) return 6;\n  return Math.min(26, Math.round(6 + Math.log1p(linesCount) * 3.2));\n}\n"
+        },
+        {
+          "source_call_id": "call_vvkVzcCRSkc73L9O1h1RPlwe",
+          "content": "[grep content: 36 matches across 5 file(s) under ~/Documents/github/reasoning_vis_oss_all/agent-trace-vis]\n\nsrc/app/agentic-traces/scrub-bar.ts (1 match(es)):\n  41-  *\n  42-  * Scrubbing passes every mark in order: the marks that start at the same x\n  43:  * (e.g. a user turn, the model's reply and a harness message) share the span\n  44-  * up to the next mark's start in equal slots, in trace order. It's a gap where\n  45-  * nothing drawn so far still reaches.\n\nconverters/README.md (1 match(es)):\n  25- \n  26- 1. `discover_sessions()` – find your agent's log files.\n  27: 2. `build_turns()` – parse them into a list of neutral *turn* dicts (user message, then the agent's messages with their reasoning and tool calls). This dict is the only contract between the layers and is documented at the top of the script.\n  28- 3. `to_opentraces()` – turns the dicts into the trace format based on OpenTraces. Add source tool-name mappings in `tool_kind_for_name()` so new traces include `metadata.tool_kinds`.\n  29- \n\nconverters/convert_copilot_chat.py (14 match(es)):\n  43-   extension in agent mode. A flat event list with the assistant's messages,\n  44-   reasoning text (when the model exposes it), and tool calls with *parsed\n  45:   arguments*. It omits the first user message (it precedes ``session.start``)\n  46-   and has no tool outputs, which is why both files are needed.\n  47- \n  62- * Sessions without an agent-mode transcript (ask mode, older versions) still\n  63-   convert from the chat log alone, with less tool detail.\n  64: * Copilot SDK sessions use a separate ``~/.copilot/session-state`` event log.\n  65-   The same command discovers and converts those when present.\n  66- \n  406-             model = meta[\"resolvedModel\"]\n  407-         turns.append({\n  408:             \"user\": (r.get(\"message\") or {}).get(\"text\", \"\"),\n  409-             \"timestamp\": iso(r.get(\"timestamp\")),\n  410-             \"model\": model,\n  452- \n  453- def _fill_from_transcript(turns: List[dict], events: List[dict]):\n  454:     \"\"\"Partition transcript events by ``user.message`` and attach each slice to\n  455:     the matching request. The slice before the first ``user.message`` belongs\n  456-     to the first request (whose user text the transcript never records).\"\"\"\n  457-     if not turns:\n  458-         return\n  459:     # Boundaries: index of each user.message event, matched to a request.\n  460-     bounds = [(0, 0)]  # (event index, turn index)\n  461-     unmatched = set(range(1, len(turns)))\n  462-     for i, ev in enumerate(events):\n  463:         if ev.get(\"type\") != \"user.message\":\n  464-             continue\n  465-         text = (ev.get(\"data\") or {}).get(\"content\", \"\")\n  486-         turn = turns[ti]\n  487-         calls_by_id: Dict[str, dict] = {}\n  488:         # When the model started its current generation: the user message,\n  489-         # or the moment the previous tool finished / previous message ended.\n  490-         gen_start = events[start - 1].get(\"timestamp\") if start > 0 else turn[\"timestamp\"]\n  770-         \"source_files\": [p for p in (s.chat_path, s.transcript_path) if p],\n  771-     }\n  772:     title = session_title(state, turns) or s.session_id\n  773-     record = to_opentraces(turns, trace_id=s.session_id, title=title, agent=agent, metadata=metadata)\n  774- \n  779- \n  780-     os.makedirs(output_dir, exist_ok=True)\n  781:     out = os.path.join(output_dir, f\"{sanitize_filename(title) or s.session_id}.json\")\n  782-     with open(out, \"w\", encoding=\"utf-8\") as f:\n  783-         f.write(text)\n  798-                     help=\"VS Code 'User' directory to scan (repeatable; default: auto-detect)\")\n  799-     ap.add_argument(\"--sdk-input-dir\", default=DEFAULT_SDK_INPUT,\n  800:                     help=f\"Copilot SDK session-state directory (default: {DEFAULT_SDK_INPUT})\")\n  801-     ap.add_argument(\"-o\", \"--output-dir\", default=DEFAULT_OUTPUT, help=f\"output folder (default: {DEFAULT_OUTPUT})\")\n  802-     ap.add_argument(\"--list\", action=\"store_true\", help=\"list sessions from both Copilot sources\")\n  811-         state = replay_chat_session(session.chat_path)\n  812-         if state.get(\"requests\"):\n  813:             title = session_title(state, build_turns(state, [])) or session.session_id\n  814-             candidates.append({\n  815-                 \"session_id\": session.session_id,\n  821-     for session in discover_sdk_sessions(args.sdk_input_dir):\n  822-         events = read_sdk_events(session.events_path)\n  823:         if any(event.get(\"type\") == \"user.message\" for event in events):\n  824-             start = next((event for event in events if event.get(\"type\") == \"session.start\"), {})\n  825-             data = start.get(\"data\") or {}\n  831-                 \"modified_at\": session.modified_at,\n  832-                 \"source\": \"Copilot SDK\",\n  833:                 \"title\": f\"Copilot SDK session {session.session_id[:8]}\",\n  834-                 \"session\": session,\n  835-                 \"events\": events,\n\nconverters/copilot_sdk_source.py (5 match(es)):\n  148-     current = None\n  149-     for event in events:\n  150:         if event.get(\"type\") == \"user.message\":\n  151-             if current is not None:\n  152-                 segments.append(current)\n  165-             user_text = result_text(user_text)\n  166-         attachments = [\n  167:             item.get(\"displayName\")\n  168-             for item in user_data.get(\"attachments\") or []\n  169:             if isinstance(item, dict) and item.get(\"displayName\")\n  170-         ]\n  171-         if attachments:\n  291-     tool_kind_for_name,\n  292- ) -> Optional[str]:\n  293:     if not any(event.get(\"type\") == \"user.message\" for event in events):\n  294-         return None\n  295- \n  328-                 tool_kinds[call[\"name\"]] = tool_kind_for_name(call[\"name\"])\n  329- \n  330:     title = f\"Copilot SDK session {trace_id[:8]}\"\n  331-     record = to_opentraces(\n  332-         turns,\n\nsrc/app/agentic-traces/README.md (15 match(es)):\n  12- | trace | `ReasoningTrace` | A parsed trace record: a list of steps. |\n  13- | trace entry | `TraceEntry` | One item in the trace picker: title, date, agents, and the parsed trace. |\n  14: | step | `ReasoningTraceStep` | One message in the record: a user turn, an agent turn, or a system message. |\n  15- | node | `ReasoningTraceNode` | One piece of a step: thinking, a tool call (with its result), a response… |\n  16- | mark | `Mark` | A node as drawn: its channel, position, size and look. Marks keep their node's id. |\n  17- | row / track | `TraceLayout` | Everything drawn for one selected trace: marks, backbone and files lane. |\n  18- | channel / lane | `CHANNELS` | A horizontal band in a row (user, agent, tools…). |\n  19: | thread message | `ThreadMessage` | A side-panel entry: a user or system message, or an agent turn with its marks (thinking, tools, response) nested. |\n  20- | search layer | `AnalysisLayer` | One search query with a color. Its matches glow on the timeline and in the panel. |\n  21- \n  26-       │  trace-loader.service: parseStep()      one step → one or more nodes\n  27-       ▼\n  28: ReasoningTraceStep     one message: user turn, agent turn, or system message\n  29-   └─ nodes: ReasoningTraceNode[]\n  30-       │  marks.ts: buildMarks()                 one node → exactly one mark (same id)"
+        },
+        {
+          "source_call_id": "call_q60jNq7gMqEu10wptGeBo1qi",
+          "content": "[grep content: 15 matches across 3 file(s) under ~/Documents/github/reasoning_vis_oss_all/agent-trace-vis]\n\nconverters/convert_copilot_chat.py (10 match(es)):\n  62- * Sessions without an agent-mode transcript (ask mode, older versions) still\n  63-   convert from the chat log alone, with less tool detail.\n  64: * Copilot SDK sessions use a separate ``~/.copilot/session-state`` event log.\n  65-   The same command discovers and converts those when present.\n  66- \n  741- \n  742- \n  743: def session_title(state: dict, turns: List[dict]) -> str:\n  744-     title = (state.get(\"customTitle\") or \"\").strip()\n  745-     if not title and turns:\n  770-         \"source_files\": [p for p in (s.chat_path, s.transcript_path) if p],\n  771-     }\n  772:     title = session_title(state, turns) or s.session_id\n  773:     record = to_opentraces(turns, trace_id=s.session_id, title=title, agent=agent, metadata=metadata)\n  774- \n  775-     text = json.dumps(record, indent=2, ensure_ascii=False)\n  779- \n  780-     os.makedirs(output_dir, exist_ok=True)\n  781:     out = os.path.join(output_dir, f\"{sanitize_filename(title) or s.session_id}.json\")\n  782-     with open(out, \"w\", encoding=\"utf-8\") as f:\n  783-         f.write(text)\n  798-                     help=\"VS Code 'User' directory to scan (repeatable; default: auto-detect)\")\n  799-     ap.add_argument(\"--sdk-input-dir\", default=DEFAULT_SDK_INPUT,\n  800:                     help=f\"Copilot SDK session-state directory (default: {DEFAULT_SDK_INPUT})\")\n  801-     ap.add_argument(\"-o\", \"--output-dir\", default=DEFAULT_OUTPUT, help=f\"output folder (default: {DEFAULT_OUTPUT})\")\n  802-     ap.add_argument(\"--list\", action=\"store_true\", help=\"list sessions from both Copilot sources\")\n  811-         state = replay_chat_session(session.chat_path)\n  812-         if state.get(\"requests\"):\n  813:             title = session_title(state, build_turns(state, [])) or session.session_id\n  814-             candidates.append({\n  815-                 \"session_id\": session.session_id,\n  830-                 \"session_id\": session_id,\n  831-                 \"modified_at\": session.modified_at,\n  832:                 \"source\": \"Copilot SDK\",\n  833:                 \"title\": f\"Copilot SDK session {session.session_id[:8]}\",\n  834-                 \"session\": session,\n  835-                 \"events\": events,\n  841- \n  842-     if args.list:\n  843:         print(f\"{'session':10} {'modified':17} {'source':14} {'agent':5} title\")\n  844-         for candidate in candidates:\n  845-             session = candidate[\"session\"]\n\nconverters/copilot_sdk_source.py (4 match(es)):\n  14- # limitations under the License.\n  15- \n  16: \"\"\"Reader for Copilot SDK event logs, used by convert_copilot_chat.py.\"\"\"\n  17- \n  18- import datetime as dt\n  165-             user_text = result_text(user_text)\n  166-         attachments = [\n  167:             item.get(\"displayName\")\n  168-             for item in user_data.get(\"attachments\") or []\n  169:             if isinstance(item, dict) and item.get(\"displayName\")\n  170-         ]\n  171-         if attachments:\n  328-                 tool_kinds[call[\"name\"]] = tool_kind_for_name(call[\"name\"])\n  329- \n  330:     title = f\"Copilot SDK session {trace_id[:8]}\"\n  331-     record = to_opentraces(\n  332-         turns,\n\nsrc/app/shared/search/search.service.ts (1 match(es)):\n  372-         const models = (data.models || []).map((m: any) => ({\n  373-           name: m.name,\n  374:           displayName: m.displayName,\n  375-           supportedGenerationMethods: m.supportedGenerationMethods,\n  376-         }));"
+        }
+      ],
+      "timestamp": "2026-10-23T00:26:31.632Z"
+    },
+    {
+      "step_index": 2,
+      "role": "agent",
+      "model": "gpt-6-luna",
+      "reasoning_content": "**Gathering metadata and code**\n\nI think I've found the list of converters, maybe with the titles and screenshots of generated files. Now, I need to get existing metadata and make my first query. I should look into the relevant code SDK source and how the title logic connects with the loader. It might help to derive data by reading chunks and checking a sample JSON. Using parallel calls could optimize this process too.",
+      "content": "",
+      "tool_calls": [
+        {
+          "tool_call_id": "call_dogwcemj25EPryktJktCNpAx",
+          "tool_name": "view",
+          "input": {
+            "path": "~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/converters/copilot_sdk_source.py",
+            "view_range": [
+              120,
+              190
+            ]
+          },
+          "duration_ms": 95
+        },
+        {
+          "tool_call_id": "call_qXX9UAttaRcptvrGvfpTzvnW",
+          "tool_name": "view",
+          "input": {
+            "path": "~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/converters/copilot_sdk_source.py",
+            "view_range": [
+              270,
+              355
+            ]
+          },
+          "duration_ms": 141
+        },
+        {
+          "tool_call_id": "call_j7XNPEEFt69n7x6xoCGte438",
+          "tool_name": "view",
+          "input": {
+            "path": "~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/converters/convert_copilot_chat.py",
+            "view_range": [
+              730,
+              850
+            ]
+          },
+          "duration_ms": 117
+        },
+        {
+          "tool_call_id": "call_sSwL2xm518rrF3sV1oTgxkeX",
+          "tool_name": "rg",
+          "input": {
+            "pattern": "title|displayName|sessionTitle|first_user|user.*text|metadata",
+            "paths": "~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/converters/copilot_sdk_source.py",
+            "output_mode": "content",
+            "-n": true,
+            "-C": 3,
+            "head_limit": 100
+          },
+          "duration_ms": 123
+        },
+        {
+          "tool_call_id": "call_LuIXyA6l6KDqVmUIcFZEcfVC",
+          "tool_name": "view",
+          "input": {
+            "path": "~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/sample_data/traces/copilot_chats/Add gender toggle and more people.json",
+            "view_range": [
+              1,
+              90
+            ]
+          },
+          "duration_ms": 98
+        }
+      ],
+      "observations": [
+        {
+          "source_call_id": "call_dogwcemj25EPryktJktCNpAx",
+          "content": "def _call_for_event(\n    calls_by_id: Dict[str, dict],\n    message: Optional[dict],\n    name: str,\n    call_id: Optional[str],\n    arguments,\n    timestamp: Optional[str],\n) -> dict:\n    call = calls_by_id.get(call_id) if call_id else None\n    if call is None:\n        call = _new_tool_call(name, call_id, arguments, timestamp)\n        if message is not None:\n            message[\"tool_calls\"].append(call)\n        if call_id:\n            calls_by_id[call_id] = call\n    return call\n\n\ndef _set_call_duration(call: dict, timestamp: Optional[str]) -> None:\n    start = timestamp_seconds(call.get(\"started_at\"))\n    end = timestamp_seconds(timestamp)\n    if start is not None and end is not None:\n        call[\"duration_ms\"] = max(0, int(round((end - start) * 1000)))\n\n\ndef build_turns(events: List[dict], default_model: Optional[str] = None) -> List[dict]:\n    \"\"\"Convert event-log records to the neutral turns accepted by to_opentraces().\"\"\"\n    segments = []\n    current = None\n    for event in events:\n        if event.get(\"type\") == \"user.message\":\n            if current is not None:\n                segments.append(current)\n            current = [event]\n        elif current is not None:\n            current.append(event)\n    if current is not None:\n        segments.append(current)\n\n    turns = []\n    for segment in segments:\n        user_event = segment[0]\n        user_data = user_event.get(\"data\") or {}\n        user_text = user_data.get(\"content\") or user_data.get(\"transformedContent\") or \"\"\n        if not isinstance(user_text, str):\n            user_text = result_text(user_text)\n        attachments = [\n            item.get(\"displayName\")\n            for item in user_data.get(\"attachments\") or []\n            if isinstance(item, dict) and item.get(\"displayName\")\n        ]\n        if attachments:\n            user_text = \"\\n\".join([user_text] + [f\"[Attachment: {name}]\" for name in attachments]).strip()\n\n        turn = {\n            \"user\": user_text,\n            \"timestamp\": event_timestamp(user_event),\n            \"model\": default_model,\n            \"token_usage\": None,\n            \"messages\": [],\n        }\n        calls_by_id: Dict[str, dict] = {}\n        generation_start = turn[\"timestamp\"]\n        last_message = None\n        usage_by_api_call: Dict[str, dict] = {}\n        token_totals = {\"input_tokens\": 0, \"output_tokens\": 0}\n        has_token_usage = False\n\n        for event in segment[1:]:\n            event_type = event.get(\"type\")\n            data = event.get(\"data\") or {}"
+        },
+        {
+          "source_call_id": "call_qXX9UAttaRcptvrGvfpTzvnW",
+          "content": "                    )\n                    if data.get(\"success\") is False:\n                        call[\"error\"] = result_text(data.get(\"error\")) or \"tool failed\"\n                    _set_call_duration(call, timestamp)\n                    if timestamp:\n                        generation_start = timestamp\n                continue\n\n        if has_token_usage:\n            turn[\"token_usage\"] = token_totals\n        turns.append(turn)\n    return turns\n\n\ndef convert_sdk_session(\n    session: SdkSession,\n    events: List[dict],\n    output_dir: str,\n    scrub_home: bool,\n    *,\n    to_opentraces,\n    tool_kind_for_name,\n) -> Optional[str]:\n    if not any(event.get(\"type\") == \"user.message\" for event in events):\n        return None\n\n    start_event = next((event for event in events if event.get(\"type\") == \"session.start\"), {})\n    start_data = start_event.get(\"data\") or {}\n    context = start_data.get(\"context\") or {}\n    trace_id = start_data.get(\"sessionId\") or session.session_id\n    model = start_data.get(\"selectedModel\")\n    if model == \"auto\":\n        model = None\n    turns = build_turns(events, model)\n    if not turns:\n        return None\n\n    agent = {\n        \"name\": \"copilot-sdk\",\n        \"version\": str(start_data.get(\"copilotVersion\") or start_data.get(\"version\") or \"unknown\"),\n    }\n    used_model = next((turn.get(\"model\") for turn in turns if turn.get(\"model\")), None)\n    if used_model:\n        agent[\"model\"] = used_model\n    workspace = context.get(\"cwd\") or context.get(\"gitRoot\")\n    metadata = {\n        \"source\": \"copilot-sdk\",\n        \"source_format\": \"events.jsonl\",\n        \"source_file\": session.events_path,\n        \"workspace_folder\": workspace,\n        \"repository\": context.get(\"repository\"),\n        \"producer\": start_data.get(\"producer\"),\n        \"tool_kinds\": {},\n    }\n    tool_kinds = metadata[\"tool_kinds\"]\n    for turn in turns:\n        for message in turn[\"messages\"]:\n            for call in message[\"tool_calls\"]:\n                tool_kinds[call[\"name\"]] = tool_kind_for_name(call[\"name\"])\n\n    title = f\"Copilot SDK session {trace_id[:8]}\"\n    record = to_opentraces(\n        turns,\n        trace_id=trace_id,\n        title=title,\n        agent=agent,\n        metadata=metadata,\n    )\n\n    output = json.dumps(record, indent=2, ensure_ascii=False)\n    if scrub_home:\n        home = os.path.expanduser(\"~\")\n        output = output.replace(home, \"~\").replace(json.dumps(home)[1:-1], \"~\")\n\n    os.makedirs(output_dir, exist_ok=True)\n    safe_id = re.sub(r\"[^A-Za-z0-9._-]+\", \"_\", trace_id)\n    output_path = os.path.join(output_dir, f\"copilot_sdk_{safe_id}.json\")\n    with open(output_path, \"w\", encoding=\"utf-8\") as destination:\n        destination.write(output)\n\n    tool_count = sum(len(step.get(\"tool_calls\") or []) for step in record[\"steps\"])\n    print(\n        f\"  ✓ {trace_id[:8]}  {len(turns)} turns, {len(record['steps'])} steps, \"\n        f\"{tool_count} tool calls -> {output_path}\"\n    )\n    return output_path"
+        },
+        {
+          "source_call_id": "call_j7XNPEEFt69n7x6xoCGte438",
+          "content": "# CLI\n# ===========================================================================\n\ndef display_path(p: str) -> str:\n    rel = os.path.relpath(p)\n    return rel if not rel.startswith(\"..\") else p.replace(os.path.expanduser(\"~\"), \"~\")\n\n\ndef sanitize_filename(name: str) -> str:\n    safe = re.sub(r'[\\\\/:*?\"<>|#%&+]', \" \", name)\n    return re.sub(r\"\\s+\", \" \", safe).strip()[:120]\n\n\ndef session_title(state: dict, turns: List[dict]) -> str:\n    title = (state.get(\"customTitle\") or \"\").strip()\n    if not title and turns:\n        title = turns[0][\"user\"].strip().split(\"\\n\")[0]\n    if len(title) > 80:\n        title = title[:77] + \"...\"\n    return title\n\n\ndef convert_session(s: Session, output_dir: str, scrub_home: bool) -> Optional[str]:\n    state = replay_chat_session(s.chat_path)\n    events = read_transcript(s.transcript_path)\n    turns = build_turns(state, events)\n    if not turns:\n        return None\n\n    start = next((e for e in events if e.get(\"type\") == \"session.start\"), {}).get(\"data\", {})\n    req0 = (state.get(\"requests\") or [{}])[0]\n    agent = {\"name\": \"github-copilot\",\n             \"version\": start.get(\"copilotVersion\") or (req0.get(\"agent\") or {}).get(\"extensionVersion\") or \"unknown\"}\n    model = next((t[\"model\"] for t in turns if t.get(\"model\")), None)\n    if model:\n        agent[\"model\"] = model\n    metadata = {\n        \"source\": \"vscode-copilot-chat\",\n        \"workspace_folder\": s.workspace_folder,\n        \"vscode_version\": start.get(\"vscodeVersion\"),\n        \"source_files\": [p for p in (s.chat_path, s.transcript_path) if p],\n    }\n    title = session_title(state, turns) or s.session_id\n    record = to_opentraces(turns, trace_id=s.session_id, title=title, agent=agent, metadata=metadata)\n\n    text = json.dumps(record, indent=2, ensure_ascii=False)\n    if scrub_home:\n        home = os.path.expanduser(\"~\")\n        text = text.replace(home, \"~\").replace(json.dumps(home)[1:-1], \"~\")\n\n    os.makedirs(output_dir, exist_ok=True)\n    out = os.path.join(output_dir, f\"{sanitize_filename(title) or s.session_id}.json\")\n    with open(out, \"w\", encoding=\"utf-8\") as f:\n        f.write(text)\n    n_tools = sum(len(st.get(\"tool_calls\") or []) for st in record[\"steps\"])\n    print(f\"  ✓ {s.session_id[:8]}  {len(turns)} turns, {len(record['steps'])} steps, {n_tools} tool calls\"\n          f\"{'' if s.transcript_path else '  (no agent transcript; results only)'} -> {display_path(out)}\")\n    return out\n\n\ndef main():\n    ap = argparse.ArgumentParser(description=__doc__.split(\"\\n\\n\")[0],\n                                 formatter_class=argparse.RawDescriptionHelpFormatter,\n                                 epilog=\"Full notes, including how to adapt this script to another agent's \"\n                                        \"logs, are in the module docstring at the top of the file.\")\n    ap.add_argument(\"session\", nargs=\"*\", help=\"session id(s) or id prefix(es) to convert\")\n    ap.add_argument(\"-n\", \"--limit\", type=int, help=\"convert only the N most recent sessions\")\n    ap.add_argument(\"-i\", \"--input-dir\", action=\"append\",\n                    help=\"VS Code 'User' directory to scan (repeatable; default: auto-detect)\")\n    ap.add_argument(\"--sdk-input-dir\", default=DEFAULT_SDK_INPUT,\n                    help=f\"Copilot SDK session-state directory (default: {DEFAULT_SDK_INPUT})\")\n    ap.add_argument(\"-o\", \"--output-dir\", default=DEFAULT_OUTPUT, help=f\"output folder (default: {DEFAULT_OUTPUT})\")\n    ap.add_argument(\"--list\", action=\"store_true\", help=\"list sessions from both Copilot sources\")\n    ap.add_argument(\"--no-scrub-home\", action=\"store_true\", help=\"keep your home directory in paths\")\n    args = ap.parse_args()\n\n    user_dirs = args.input_dir or vscode_user_dirs()\n    candidates = []\n    for session in discover_sessions(user_dirs):\n        if session.session_id in EXCLUDED_SESSION_IDS:\n            continue\n        state = replay_chat_session(session.chat_path)\n        if state.get(\"requests\"):\n            title = session_title(state, build_turns(state, [])) or session.session_id\n            candidates.append({\n                \"session_id\": session.session_id,\n                \"modified_at\": session.mtime,\n                \"source\": \"VS Code Chat\",\n                \"title\": title,\n                \"session\": session,\n            })\n    for session in discover_sdk_sessions(args.sdk_input_dir):\n        events = read_sdk_events(session.events_path)\n        if any(event.get(\"type\") == \"user.message\" for event in events):\n            start = next((event for event in events if event.get(\"type\") == \"session.start\"), {})\n            data = start.get(\"data\") or {}\n            session_id = data.get(\"sessionId\") or session.session_id\n            if session_id in EXCLUDED_SESSION_IDS:\n                continue\n            candidates.append({\n                \"session_id\": session_id,\n                \"modified_at\": session.modified_at,\n                \"source\": \"Copilot SDK\",\n                \"title\": f\"Copilot SDK session {session.session_id[:8]}\",\n                \"session\": session,\n                \"events\": events,\n            })\n    candidates.sort(key=lambda item: item[\"modified_at\"], reverse=True)\n    if not candidates:\n        print(\"No Copilot chats found. Check the VS Code User directories or --sdk-input-dir.\")\n        return 1\n\n    if args.list:\n        print(f\"{'session':10} {'modified':17} {'source':14} {'agent':5} title\")\n        for candidate in candidates:\n            session = candidate[\"session\"]\n            has_transcript = isinstance(session, Session) and bool(session.transcript_path)\n            print(f\"{candidate['session_id'][:10]:10} \"\n                  f\"{dt.datetime.fromtimestamp(candidate['modified_at']):%Y-%m-%d %H:%M}  \"\n                  f\"{candidate['source']:14} {'yes' if has_transcript else 'no ':5} \"\n                  f\"{candidate['title']}\")"
+        },
+        {
+          "source_call_id": "call_sSwL2xm518rrF3sV1oTgxkeX",
+          "content": "[grep content: 45 matches across 1 file(s) under ~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/converters]\n\ncopilot_sdk_source.py (45 match(es)):\n  160-     for segment in segments:\n  161-         user_event = segment[0]\n  162-         user_data = user_event.get(\"data\") or {}\n  163:         user_text = user_data.get(\"content\") or user_data.get(\"transformedContent\") or \"\"\n  164:         if not isinstance(user_text, str):\n  165:             user_text = result_text(user_text)\n  166-         attachments = [\n  167:             item.get(\"displayName\")\n  168-             for item in user_data.get(\"attachments\") or []\n  169:             if isinstance(item, dict) and item.get(\"displayName\")\n  170-         ]\n  171-         if attachments:\n  172:             user_text = \"\\n\".join([user_text] + [f\"[Attachment: {name}]\" for name in attachments]).strip()\n  173- \n  174-         turn = {\n  175:             \"user\": user_text,\n  176-             \"timestamp\": event_timestamp(user_event),\n  177-             \"model\": default_model,\n  178-             \"token_usage\": None,\n  312-     if used_model:\n  313-         agent[\"model\"] = used_model\n  314-     workspace = context.get(\"cwd\") or context.get(\"gitRoot\")\n  315:     metadata = {\n  316-         \"source\": \"copilot-sdk\",\n  317-         \"source_format\": \"events.jsonl\",\n  318-         \"source_file\": session.events_path,\n  321-         \"producer\": start_data.get(\"producer\"),\n  322-         \"tool_kinds\": {},\n  323-     }\n  324:     tool_kinds = metadata[\"tool_kinds\"]\n  325-     for turn in turns:\n  326-         for message in turn[\"messages\"]:\n  327-             for call in message[\"tool_calls\"]:\n  328-                 tool_kinds[call[\"name\"]] = tool_kind_for_name(call[\"name\"])\n  329- \n  330:     title = f\"Copilot SDK session {trace_id[:8]}\"\n  331-     record = to_opentraces(\n  332-         turns,\n  333-         trace_id=trace_id,\n  334:         title=title,\n  335-         agent=agent,\n  336:         metadata=metadata,\n  337-     )\n  338- \n  339-     output = json.dumps(record, indent=2, ensure_ascii=False)"
+        },
+        {
+          "source_call_id": "call_LuIXyA6l6KDqVmUIcFZEcfVC",
+          "content": "{\n  \"schema_version\": \"0.9.0\",\n  \"trace_id\": \"c18bb2c1-1a4a-4425-a27f-f783c16643bc\",\n  \"session_id\": \"c18bb2c1-1a4a-4425-a27f-f783c16643bc\",\n  \"timestamp_start\": \"2026-10-21T20:01:42.829000Z\",\n  \"timestamp_end\": \"2026-10-21T20:17:45.176Z\",\n  \"task\": {\n    \"description\": \"Add gender toggle and more people\"\n  },\n  \"agent\": {\n    \"name\": \"github-copilot\",\n    \"version\": \"0.70.0\",\n    \"model\": \"gpt-6-luna\"\n  },\n  \"steps\": [\n    {\n      \"step_index\": 0,\n      \"role\": \"user\",\n      \"content\": \"can you add some toggle for gender here? Also I want to add more people. Basically I want there to be like 15 women total, 10 scientists or academics.\",\n      \"timestamp\": \"2026-10-21T20:01:42.829000Z\"\n    },\n    {\n      \"step_index\": 1,\n      \"role\": \"agent\",\n      \"model\": \"gpt-6-luna\",\n      \"reasoning_content\": \"\",\n      \"content\": \"I’ll first check how people are categorized, filtered, and displayed so I can add a gender toggle that fits the existing timeline and expand the data to match your requested mix.\",\n      \"tool_calls\": [\n        {\n          \"tool_call_id\": \"call_nynCGsA35bSAZoTu6pxAeId3\",\n          \"tool_name\": \"memory\",\n          \"input\": {\n            \"command\": \"view\",\n            \"path\": \"/memories/\"\n          },\n          \"duration_ms\": 8\n        }\n      ],\n      \"observations\": [\n        {\n          \"source_call_id\": \"call_nynCGsA35bSAZoTu6pxAeId3\",\n          \"content\": \"Read memory\"\n        }\n      ],\n      \"timestamp\": \"2026-10-21T20:01:42.829000Z\"\n    },\n    {\n      \"step_index\": 2,\n      \"role\": \"agent\",\n      \"model\": \"gpt-6-luna\",\n      \"reasoning_content\": \"\",\n      \"content\": \"\",\n      \"tool_calls\": [\n        {\n          \"tool_call_id\": \"call_BgfSJxDrSEfKSXOFAq2WJN3S\",\n          \"tool_name\": \"explore_subagent\",\n          \"input\": {\n            \"query\": \"Find timeline app's people data model, filter controls, rendering, and current people dataset. Need know gender classification and scientist/academic labels to add a gender toggle and expand dataset to roughly 15 women and 10 scientists or academics. Identify relevant files and nearby tests/docs.\",\n            \"description\": \"Trace people and filters\",\n            \"details\": \"Inspect only relevant sources in the workspace: src/App.tsx, model.ts, Timeline.tsx, Legend.tsx, src/data/people.ts, and styles as needed. Report current filtering behavior, data schema, counts/classification, and a concrete minimal implementation path. Research only; do not edit.\"\n          },\n          \"duration_ms\": 14466\n        }\n      ],\n      \"observations\": [\n        {\n          \"source_call_id\": \"call_BgfSJxDrSEfKSXOFAq2WJN3S\",\n          \"content\": \"Search complete: Trace people and filters\\nFile: `~/Documents/github/life_timelines/src/data/people.ts`, lines 1-260:\\n```\\nimport type { EventType, LifeEvent, Person } from \\\"../model\\\";\\n\\n// Hand-written prototype dataset, from general knowledge. Dates should be\\n// roughly right but haven't been verified. This file gets replaced by the\\n// Wikidata pipeline later.\\n\\nconst wiki = (slug: string) => `https://en.wikipedia.org/wiki/${slug}`;\\n\\nconst e = (\\n  date: string,\\n  type: EventType,\\n  title: string,\\n  description?: string,\\n  endDate?: string,\\n): LifeEvent => ({ date, type, title, description, endDate });\\n\\nexport const PEOPLE: Person[] = [\\n  {\\n    id: \\\"mozart\\\",\\n    name: \\\"Wolfgang Amadeus Mozart\\\",\\n    firstName: \\\"Wolfgang\\\",\\n    shortName: \\\"Mozart\\\",\\n    birthDate: \\\"1756-01-27\\\",\\n    deathDate: \\\"1791-12-05\\\",\\n    deathCause: \\\"Dies after a sudden illness\\\",\\n    wikipediaUrl: wiki(\\\"Wolfgang_Amadeus_Mozart\\\"),\\n    events: [\\n      e(\\\"1762-01\\\", \\\"career\\\", \\\"Begins touring Europe as a child prodigy\\\", \\\"Performs for the Elector of Bavaria in Munich, the first of years of tours.\\\"),\\n      e(\\\"1764\\\", \\\"career\\\", \\\"Composes his first symphony\\\", \\\"Symphony No. 1 (K. 16), written in London aged 8.\\\"),\\n      e(\\\"1769\\\", \\\"career\\\", \\\"Konzertmeister at the Salzburg court\\\"),\\n      e(\\\"1782-08-04\\\", \\\"marriage\\\", \\\"Marries Constanze Weber\\\", undefined, \\\"1791-12-05\\\"),\\n      e(\\\"1783-06-17\\\", \\\"child\\\", \\\"Son Raimund Leopold born\\\", \\\"Died in infancy.\\\"),\\n      e(\\\"1784-09-21\\\", \\\"child\\\", \\\"Son Karl Thomas born\\\"),\\n      e(\\\"1786-05-01\\\", \\\"career\\\", \\\"The Marriage of Figaro premieres\\\"),\\n      e(\\\"1787-10-29\\\", \\\"career\\\", \\\"Don Giovanni premieres in Prague\\\"),\\n      e(\\\"1791-07-26\\\", \\\"child\\\", \\\"Son Franz Xaver born\\\"),\\n      e(\\\"1791-09-30\\\", \\\"career\\\", \\\"The Magic Flute premieres\\\"),\\n    ],\\n  },\\n  {\\n    id: \\\"beethoven\\\",\\n    name: \\\"Ludwig van Beethoven\\\",\\n    firstName: \\\"Ludwig van\\\",\\n    shortName: \\\"Beethoven\\\",\\n    birthDate: \\\"1770-12-16\\\",\\n    deathDate: \\\"1827-03-26\\\",\\n    deathCause: \\\"Dies, likely of liver disease\\\",\\n    wikipediaUrl: wiki(\\\"Ludwig_van_Beethoven\\\"),\\n    events: [\\n      e(\\\"1778-03-26\\\", \\\"career\\\", \\\"First public performance, in Cologne\\\"),\\n      e(\\\"1782\\\", \\\"career\\\", \\\"First published composition\\\"),\\n      e(\\\"1784\\\", \\\"career\\\", \\\"Appointed assistant court organist in Bonn\\\"),\\n      e(\\\"1798\\\", \\\"other\\\", \\\"First signs of hearing loss\\\"),\\n      e(\\\"1802-10-06\\\", \\\"other\\\", \\\"Writes the Heiligenstadt Testament\\\", \\\"Letter to his brothers describing despair over his deafness.\\\"),\\n      e(\\\"1805-04-07\\\", \\\"career\\\", \\\"Eroica Symphony premieres publicly\\\"),\\n      e(\\\"1808-12-22\\\", \\\"career\\\", \\\"Symphonies 5 and 6 premiere\\\"),\\n      e(\\\"1815-11\\\", \\\"other\\\", \\\"Becomes guardian of nephew Karl\\\"),\\n      e(\\\"1824-05-07\\\", \\\"career\\\", \\\"Ninth Symphony premieres\\\"),\\n    ],\\n  },\\n  {\\n    id: \\\"austen\\\",\\n    name: \\\"Jane Austen\\\",\\n    firstName: \\\"Jane\\\",\\n    shortName: \\\"Austen\\\",\\n    birthDate: \\\"1775-12-16\\\",\\n    deathDate: \\\"1817-07-18\\\",\\n    deathCause: \\\"Dies after a long illness\\\",\\n    wikipediaUrl: wiki(\\\"Jane_Austen\\\"),\\n    events: [\\n      e(\\\"1783\\\", \\\"education\\\", \\\"Sent to school with her sister Cassandra\\\"),\\n      e(\\\"1787\\\", \\\"career\\\", \\\"Begins writing her Juvenilia\\\"),\\n      e(\\\"1795\\\", \\\"career\\\", \\\"Drafts 'Elinor and Marianne'\\\", \\\"Early epistolary version of Sense and Sensibility.\\\"),\\n      e(\\\"1802-12-02\\\", \\\"other\\\", \\\"Accepts, then declines, a marriage proposal\\\", \\\"From Harris Bigg-Wither. She withdrew her acceptance the next day.\\\"),\\n      e(\\\"1811-10-30\\\", \\\"career\\\", \\\"Sense and Sensibility published\\\"),\\n      e(\\\"1813-01-28\\\", \\\"career\\\", \\\"Pride and Prejudice published\\\"),\\n      e(\\\"1814-05-09\\\", \\\"career\\\", \\\"Mansfield Park published\\\"),\\n      e(\\\"1815-12-23\\\", \\\"career\\\", \\\"Emma published\\\"),\\n    ],\\n  },\\n  {\\n    id: \\\"darwin\\\",\\n    name: \\\"Charles Darwin\\\",\\n    firstName: \\\"Charles\\\",\\n    shortName: \\\"Darwin\\\",\\n    birthDate: \\\"1809-02-12\\\",\\n    deathDate: \\\"1882-04-19\\\",\\n    deathCause: \\\"Dies of heart disease\\\",\\n    wikipediaUrl: wiki(\\\"Charles_Darwin\\\"),\\n    events: [\\n      e(\\\"1825-10\\\", \\\"education\\\", \\\"Studies medicine at Edinburgh\\\"),\\n      e(\\\"1828-01\\\", \\\"education\\\", \\\"Enters Christ's College, Cambridge\\\"),\\n      e(\\\"1831-12-27\\\", \\\"career\\\", \\\"Sets sail on HMS Beagle\\\", \\\"Five-year voyage as naturalist; returns 2 Oct 1836.\\\"),\\n      e(\\\"1839-01-29\\\", \\\"marriage\\\", \\\"Marries Emma Wedgwood\\\", undefined, \\\"1882-04-19\\\"),\\n      e(\\\"1839-12-27\\\", \\\"child\\\", \\\"Son William born\\\"),\\n      e(\\\"1841-03-02\\\", \\\"child\\\", \\\"Daughter Anne born\\\"),\\n      e(\\\"1842-09-23\\\", \\\"child\\\", \\\"Daughter Mary born\\\", \\\"Died within weeks.\\\"),\\n      e(\\\"1843-09-25\\\", \\\"child\\\", \\\"Daughter Henrietta born\\\"),\\n      e(\\\"1845-07-09\\\", \\\"child\\\", \\\"Son George born\\\"),\\n      e(\\\"1847-07-08\\\", \\\"child\\\", \\\"Daughter Elizabeth born\\\"),\\n      e(\\\"1848-08-16\\\", \\\"child\\\", \\\"Son Francis born\\\"),\\n      e(\\\"1850-01-15\\\", \\\"child\\\", \\\"Son Leonard born\\\"),\\n      e(\\\"1851-04-23\\\", \\\"other\\\", \\\"Daughter Annie dies, aged 10\\\"),\\n      e(\\\"1851-05-13\\\", \\\"child\\\", \\\"Son Horace born\\\"),\\n      e(\\\"1853-11\\\", \\\"career\\\", \\\"Royal Medal of the Royal Society\\\"),\\n      e(\\\"1856-12-06\\\", \\\"child\\\", \\\"Son Charles Waring born\\\", \\\"Died in 1858.\\\"),\\n      e(\\\"1858-07-01\\\", \\\"career\\\", \\\"Joint paper with Wallace read at the Linnean Society\\\"),\\n      e(\\\"1859-11-24\\\", \\\"career\\\", \\\"On the Origin of Species published\\\"),\\n      e(\\\"1864-11\n\n[Output truncated. Use view_range=[69, ...] to continue reading. In your next response, you may batch this with other view calls. File has at least 354 lines.]"
+        }
+      ],
+      "timestamp": "2026-10-23T00:26:36.345Z"
+    },
+    {
+      "step_index": 3,
+      "role": "agent",
+      "model": "gpt-6-luna",
+      "reasoning_content": "**Exploring SDK session titles**\n\nI'm digging into the metadata for potential titles in the dataset generated from the SDK sessions. The titles likely come from the first user query or session.start data. I should explore the actual SDK session sample data to see if it provides insights, like context.cwd or sessionId. It seems I may need to modify the converter source to ensure it generates appropriate titles. I also want to check specific tests related to title listing and source conversions.\n\n**Inspecting SDK event definitions**\n\nI need to take a closer look at the SDK events definitions in the documentation to understand their metadata better. This seems crucial for the task at hand. It might help me identify any important details or potential issues that I haven't considered yet. Testing will also be necessary to ensure everything works smoothly and aligns with our requirements. I’m curious about what insights I might uncover through this inspection!",
+      "content": "",
+      "tool_calls": [
+        {
+          "tool_call_id": "call_AIsGbLhopkLDA6aavXDAwHRX",
+          "tool_name": "rg",
+          "input": {
+            "pattern": "convert_sdk_session|build_turns\\(|Copilot SDK session|session.start|user.message",
+            "paths": "~/Documents/github/reasoning_vis_oss_all",
+            "glob": "**/*test*.*",
+            "output_mode": "content",
+            "-n": true,
+            "-C": 2,
+            "head_limit": 100
+          },
+          "duration_ms": 13361
+        },
+        {
+          "tool_call_id": "call_5TQQgiTGdD9aYCUXa7SeECpc",
+          "tool_name": "rg",
+          "input": {
+            "pattern": "\"source\": \"copilot-sdk\"|\"source_format\": \"events.jsonl\"|\"session.start\"|\"transformedContent\"",
+            "paths": "~/Documents/github/reasoning_vis_oss_all/agent-trace-vis",
+            "glob": "**/*.{json,jsonl,md,py}",
+            "output_mode": "content",
+            "-n": true,
+            "-C": 3,
+            "head_limit": 120
+          },
+          "duration_ms": 90
+        },
+        {
+          "tool_call_id": "call_5uun967sYDGOJZq2FIQisWD7",
+          "tool_name": "view",
+          "input": {
+            "path": "~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/converters/README.md",
+            "view_range": [
+              1,
+              110
+            ]
+          },
+          "duration_ms": 48
+        },
+        {
+          "tool_call_id": "call_pNFoAEnIK4kw0uCoXNl1CF2O",
+          "tool_name": "bash",
+          "input": {
+            "command": "git status --short && find converters -maxdepth 2 -type f -print",
+            "description": "Check worktree and converter files"
+          },
+          "duration_ms": 117
+        }
+      ],
+      "observations": [
+        {
+          "source_call_id": "call_AIsGbLhopkLDA6aavXDAwHRX",
+          "content": "No matches found."
+        },
+        {
+          "source_call_id": "call_5TQQgiTGdD9aYCUXa7SeECpc",
+          "content": "[grep content: 6 matches across 2 file(s) under ~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/converters]\n\nconvert_copilot_chat.py (2 match(es)):\n  756-     if not turns:\n  757-         return None\n  758- \n  759:     start = next((e for e in events if e.get(\"type\") == \"session.start\"), {}).get(\"data\", {})\n  760-     req0 = (state.get(\"requests\") or [{}])[0]\n  761-     agent = {\"name\": \"github-copilot\",\n  762-              \"version\": start.get(\"copilotVersion\") or (req0.get(\"agent\") or {}).get(\"extensionVersion\") or \"unknown\"}\n  821-     for session in discover_sdk_sessions(args.sdk_input_dir):\n  822-         events = read_sdk_events(session.events_path)\n  823-         if any(event.get(\"type\") == \"user.message\" for event in events):\n  824:             start = next((event for event in events if event.get(\"type\") == \"session.start\"), {})\n  825-             data = start.get(\"data\") or {}\n  826-             session_id = data.get(\"sessionId\") or session.session_id\n  827-             if session_id in EXCLUDED_SESSION_IDS:\n\ncopilot_sdk_source.py (4 match(es)):\n  160-     for segment in segments:\n  161-         user_event = segment[0]\n  162-         user_data = user_event.get(\"data\") or {}\n  163:         user_text = user_data.get(\"content\") or user_data.get(\"transformedContent\") or \"\"\n  164-         if not isinstance(user_text, str):\n  165-             user_text = result_text(user_text)\n  166-         attachments = [\n  293-     if not any(event.get(\"type\") == \"user.message\" for event in events):\n  294-         return None\n  295- \n  296:     start_event = next((event for event in events if event.get(\"type\") == \"session.start\"), {})\n  297-     start_data = start_event.get(\"data\") or {}\n  298-     context = start_data.get(\"context\") or {}\n  299-     trace_id = start_data.get(\"sessionId\") or session.session_id\n  313-         agent[\"model\"] = used_model\n  314-     workspace = context.get(\"cwd\") or context.get(\"gitRoot\")\n  315-     metadata = {\n  316:         \"source\": \"copilot-sdk\",\n  317:         \"source_format\": \"events.jsonl\",\n  318-         \"source_file\": session.events_path,\n  319-         \"workspace_folder\": workspace,\n  320-         \"repository\": context.get(\"repository\"),"
+        },
+        {
+          "source_call_id": "call_5uun967sYDGOJZq2FIQisWD7",
+          "content": "# Trace converters\n\nScripts that turn an agent's own logs into the trace format defined by [our library](../src/app/agentic-traces/trace.ts), based on OpenTraces. They use Python 3.8+ and the standard library, with shared helpers from this directory; no pip dependencies are required.\n\n| Script | Source |\n|---|---|\n| [`convert_copilot_chat.py`](convert_copilot_chat.py) | VS Code Copilot Chat logs and Copilot SDK event logs |\n\n## Convert your GitHub Copilot chats\n\n```bash\npython3 converters/convert_copilot_chat.py --list\npython3 converters/convert_copilot_chat.py\npython3 converters/convert_copilot_chat.py a1b2c3\nnpm start\n```\n\nThe command discovers both VS Code's chat logs (`~/Library/Application Support/Code/User` on macOS, `~/.config/Code/User` on Linux, `%APPDATA%\\Code\\User` on Windows) and SDK logs under `~/.copilot/session-state`. It converts every available session except the two previously removed traces; use `-n` to limit the newest sessions, `-i` to override VS Code's User directory, or `--sdk-input-dir` to override the SDK directory. Output goes to `../reasoning_vis_data/traces/copilot_chats/`. Your home directory is replaced with `~` in paths unless `--no-scrub-home` is given.\n\nThe underlying chat formats differ, so the command uses a small SDK event-log reader when needed. Both sources use the same trace emitter.\n\n## Write a converter for another agent\n\nCopy `convert_copilot_chat.py` and replace its first two layers, keeping the third:\n\n1. `discover_sessions()` – find your agent's log files.\n2. `build_turns()` – parse them into a list of neutral *turn* dicts (user message, then the agent's messages with their reasoning and tool calls). This dict is the only contract between the layers and is documented at the top of the script.\n3. `to_opentraces()` – turns the dicts into the trace format based on OpenTraces. Add source tool-name mappings in `tool_kind_for_name()` so new traces include `metadata.tool_kinds`.\n\n- **Tool kinds** go in `metadata.tool_kinds`, keyed by the original tool name. Use the `ToolKind` values defined in [`trace-extensions.ts`](../src/app/agentic-traces/trace-extensions.ts); keep source tool names and inputs intact. Missing kinds fall back to best-effort name inference.\n- **File paths** should sit under a recognised input key such as `filePath`, `file_path`, `path` or `TargetFile`. For a result that touched several files, put one `File Path: /abs/path` line per file in the observation.\n\nWrite schema fields into steps and tool calls ([`trace.ts`](../src/app/agentic-traces/trace.ts) mirrors the schema). Additional data such as kinds, timing, and token counts goes in `metadata`. See *Getting Started* in the [main README](../README.md) for the minimal trace structure.\n"
+        },
+        {
+          "source_call_id": "call_pNFoAEnIK4kw0uCoXNl1CF2O",
+          "content": "converters/copilot_sdk_source.py\nconverters/convert_copilot_chat.py\nconverters/README.md\n<shellId: 136 completed with exit code 0>"
+        }
+      ],
+      "timestamp": "2026-10-23T00:26:39.716Z"
+    },
+    {
+      "step_index": 4,
+      "role": "agent",
+      "model": "gpt-6-luna",
+      "reasoning_content": "",
+      "content": "",
+      "tool_calls": [
+        {
+          "tool_call_id": "call_53QrX5jWI1ee0KFZuZrL6k4E",
+          "tool_name": "view",
+          "input": {
+            "path": "~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/converters/copilot_sdk_source.py",
+            "view_range": [
+              1,
+              120
+            ]
+          },
+          "duration_ms": 51
+        },
+        {
+          "tool_call_id": "call_Px1WRcTEnh7370YUF1E2CHAz",
+          "tool_name": "view",
+          "input": {
+            "path": "~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/converters/convert_copilot_chat.py",
+            "view_range": [
+              1,
+              90
+            ]
+          },
+          "duration_ms": 70
+        },
+        {
+          "tool_call_id": "call_oeOCPlZytvqXYvVTOVtyErry",
+          "tool_name": "rg",
+          "input": {
+            "pattern": "interface.*Trace|title:|task\\??:|metadata\\??:",
+            "paths": "~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/src/app/agentic-traces",
+            "glob": "trace.ts",
+            "output_mode": "content",
+            "-n": true,
+            "-C": 3,
+            "head_limit": 100
+          },
+          "duration_ms": 56
+        },
+        {
+          "tool_call_id": "call_tWxxPm5XVRrDmV7O9ipcyZ98",
+          "tool_name": "rg",
+          "input": {
+            "pattern": "trace\\.title|metadata.*title|task\\.description|title \\|\\|",
+            "paths": "~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/src/app/agentic-traces",
+            "glob": "**/*.{ts,html}",
+            "output_mode": "content",
+            "-n": true,
+            "-C": 2,
+            "head_limit": 100
+          },
+          "duration_ms": 72
+        }
+      ],
+      "observations": [
+        {
+          "source_call_id": "call_53QrX5jWI1ee0KFZuZrL6k4E",
+          "content": "#!/usr/bin/env python3\n# Copyright 2026 Google LLC\n#\n# Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not use this file except in compliance with the License.\n# You may obtain a copy of the License at\n#\n#     https://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n\n\"\"\"Reader for Copilot SDK event logs, used by convert_copilot_chat.py.\"\"\"\n\nimport datetime as dt\nimport json\nimport os\nimport re\nfrom dataclasses import dataclass\nfrom typing import Dict, List, Optional\n\n\n@dataclass\nclass SdkSession:\n    session_id: str\n    events_path: str\n    modified_at: float\n\n\ndef discover_sdk_sessions(root: str) -> List[SdkSession]:\n    \"\"\"Find SDK event logs in a session-state directory or a single session folder.\"\"\"\n    if os.path.isfile(os.path.join(root, \"events.jsonl\")):\n        paths = [os.path.join(root, \"events.jsonl\")]\n    elif os.path.isdir(root):\n        paths = []\n        for name in os.listdir(root):\n            path = os.path.join(root, name, \"events.jsonl\")\n            if os.path.isfile(path):\n                paths.append(path)\n    else:\n        paths = []\n\n    sessions = [\n        SdkSession(\n            session_id=os.path.basename(os.path.dirname(path)),\n            events_path=path,\n            modified_at=os.path.getmtime(path),\n        )\n        for path in paths\n    ]\n    return sorted(sessions, key=lambda session: session.modified_at, reverse=True)\n\n\ndef read_sdk_events(path: str) -> List[dict]:\n    events = []\n    with open(path, encoding=\"utf-8\") as source:\n        for line_number, line in enumerate(source, 1):\n            if not line.strip():\n                continue\n            try:\n                event = json.loads(line)\n            except json.JSONDecodeError as error:\n                raise ValueError(f\"{path}:{line_number}: invalid JSON: {error}\") from error\n            if isinstance(event, dict):\n                events.append(event)\n    return events\n\n\ndef parse_arguments(value) -> dict:\n    if isinstance(value, dict):\n        return value\n    if isinstance(value, str):\n        try:\n            parsed = json.loads(value)\n            if isinstance(parsed, dict):\n                return parsed\n            return {\"arguments\": parsed}\n        except json.JSONDecodeError:\n            return {\"arguments\": value}\n    return {}\n\n\ndef result_text(value) -> str:\n    if value is None:\n        return \"\"\n    if isinstance(value, str):\n        return value\n    return json.dumps(value, ensure_ascii=False)\n\n\ndef event_timestamp(event: dict) -> Optional[str]:\n    timestamp = event.get(\"timestamp\")\n    return timestamp if isinstance(timestamp, str) else None\n\n\ndef timestamp_seconds(timestamp: Optional[str]) -> Optional[float]:\n    if not timestamp:\n        return None\n    try:\n        return dt.datetime.fromisoformat(timestamp.replace(\"Z\", \"+00:00\")).timestamp()\n    except ValueError:\n        return None\n\n\ndef _new_tool_call(name: str, call_id: Optional[str], arguments, timestamp: Optional[str]) -> dict:\n    return {\n        \"id\": call_id,\n        \"name\": name or \"tool\",\n        \"input\": parse_arguments(arguments),\n        \"result\": \"\",\n        \"error\": None,\n        \"started_at\": timestamp,\n        \"duration_ms\": None,\n    }\n\n\ndef _call_for_event("
+        },
+        {
+          "source_call_id": "call_Px1WRcTEnh7370YUF1E2CHAz",
+          "content": "#!/usr/bin/env python3\n# Copyright 2026 Google LLC\n#\n# Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not use this file except in compliance with the License.\n# You may obtain a copy of the License at\n#\n#     https://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n\n\"\"\"\nConvert GitHub Copilot Chat (VS Code agent mode) sessions to OpenTraces JSON\nfor the agent-trace-vis visualizer.\n\nQuick start\n-----------\n    python3 converters/convert_copilot_chat.py --list\n    python3 converters/convert_copilot_chat.py\n    python3 converters/convert_copilot_chat.py <session-id-or-prefix>\n    npm start\n\nNo dependencies beyond the Python 3.8+ standard library. Output goes to the\napp's data folder (``../reasoning_vis_data/traces/copilot_chats/`` next to this\nrepo, created if missing), which ``npm start`` picks up automatically.\n\nWhere Copilot keeps its chats\n-----------------------------\nVS Code stores one folder per workspace under ``User/workspaceStorage/<hash>/``\nin its user-data dir (macOS: ``~/Library/Application Support/Code``, Linux:\n``~/.config/Code``, Windows: ``%APPDATA%\\\\Code``). For each chat session\n``<sid>`` there are two complementary logs, and this script merges both:\n\n* ``chatSessions/<sid>.jsonl`` -- written by VS Code core for every chat\n  provider. An event-sourced patch log (see ``replay_chat_session``). After\n  replay it holds every request: user text, timestamps, model, token counts,\n  title, and per-tool-call *result summaries*.\n* ``GitHub.copilot-chat/transcripts/<sid>.jsonl`` -- written by the Copilot\n  extension in agent mode. A flat event list with the assistant's messages,\n  reasoning text (when the model exposes it), and tool calls with *parsed\n  arguments*. It omits the first user message (it precedes ``session.start``)\n  and has no tool outputs, which is why both files are needed.\n\nWhat the logs do and don't contain\n----------------------------------\n* Timing is real and per call: the transcript stamps when each model\n  generation finished and when each tool started and returned, so the\n  timeline separates thinking time from tool time (a 3-minute web fetch is a\n  3-minute tool bar, not thinking).\n* Tool results are summaries (\"Read file.ts, lines 1 to 260\", \"exit code 2\"),\n  not raw outputs; Copilot doesn't log those.\n* Token usage (input/output) is reported per turn, not per LLM call. It is\n  written to ``metadata.turn_token_usage``; steps carry no ``token_usage``.\n* For models whose reasoning Copilot doesn't expose (e.g. OpenAI models) the\n  thinking *text* is unavailable, but the per-call reasoning *token count* is\n  recorded (``metadata.reasoning_tokens``), so the thinking lane still shows\n  how much the model thought before each action.\n* Sessions without an agent-mode transcript (ask mode, older versions) still\n  convert from the chat log alone, with less tool detail.\n* Copilot SDK sessions use a separate ``~/.copilot/session-state`` event log.\n  The same command discovers and converts those when present.\n\nForking this for another agent's logs\n-------------------------------------\nThe script is three layers; to support a new source you replace the first\ntwo and keep the third:\n\n1. **Discover** -- ``discover_sessions()`` finds log files and returns\n   ``Session`` records. Point it at your agent's directory.\n2. **Parse** -- ``build_turns()`` reads the raw logs and produces a list of\n   neutral ``Turn`` dicts. This dict is the only contract between the layers:\n\n       {\"user\": str, \"timestamp\": iso8601, \"model\": str|None,\n        \"token_usage\": {\"input_tokens\": int, \"output_tokens\": int}|None,\n        \"messages\": [{\"content\": str, \"reasoning\": str,\n                      \"started_at\": iso8601,      # model began generating\n                      \"timestamp\": iso8601,       # model finished generating\n                      \"reasoning_tokens\": int|None,\n                      \"tool_calls\": [{\"id\": str, \"name\": str, \"input\": dict,\n                                      \"result\": str, \"error\": str|None,\n                                      \"started_at\": iso8601|None,\n                                      \"duration_ms\": int|None}]}]}\n\n   Timing matters for the timeline: ``started_at``→``timestamp`` is the time\n   the model spent thinking and writing; each tool's ``started_at`` +\n   ``duration_ms`` is the time spent waiting on it. Without these the"
+        },
+        {
+          "source_call_id": "call_oeOCPlZytvqXYvVTOVtyErry",
+          "content": "[grep content: 3 matches across 1 file(s) under ~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/src/app/agentic-traces]\n\ntrace.ts (3 match(es)):\n  40-  * optional here; `dict[str, Any]` is `Record<string, any>`.\n  41-  */\n  42- \n  43: export interface TraceRecord {\n  44-   schema_version: string; // e.g. \"0.9.0\"\n  45-   trace_id: string; // UUID for this trace\n  46-   session_id: string; // Agent's native session ID\n  47-   content_hash?: string;\n  48-   timestamp_start?: string;\n  49-   timestamp_end?: string;\n  50:   task?: Task;\n  51-   agent: Agent;\n  52-   environment?: Environment;\n  53-   system_prompts?: Record<string, string>;\n  59-   security?: SecurityMetadata;\n  60-   attribution?: Attribution;\n  61-   /** Free-form. The only place for data outside the schema; see trace-extensions.ts. */\n  62:   metadata?: Record<string, any>;\n  63-   execution_context?: 'devtime' | 'runtime' | null;\n  64-   lifecycle?: 'provisional' | 'final';\n  65-   git_links?: GitLink[];"
+        },
+        {
+          "source_call_id": "call_tWxxPm5XVRrDmV7O9ipcyZ98",
+          "content": "~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/src/app/agentic-traces/layout.ts-90-\n~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/src/app/agentic-traces/layout.ts-91-  return {\n~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/src/app/agentic-traces/layout.ts:92:    id: trace.id, title: trace.title, data, steps, agentName, model, agentColor, startTime, duration, maxStepTokens,\n~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/src/app/agentic-traces/layout.ts-93-    parentId: trace.parentId, parentToolCallId: trace.parentToolCallId, sourceId: data.sourceId,\n~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/src/app/agentic-traces/layout.ts-94-    fileEvents, artifactNodes: artifactNodes(fileEvents),\n--\n~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/src/app/agentic-traces/agentic-traces.ts-322-    const activeId = this.activeTraceId();\n~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/src/app/agentic-traces/agentic-traces.ts-323-    const trace = this.traces().find((t) => t.id === activeId);\n~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/src/app/agentic-traces/agentic-traces.ts:324:    return trace?.title || '';\n~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/src/app/agentic-traces/agentic-traces.ts-325-  });\n~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/src/app/agentic-traces/agentic-traces.ts-326-\n--\n~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/src/app/agentic-traces/agentic-traces.ts-428-      const trace = this.traces().find((t) => t.id === id);\n~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/src/app/agentic-traces/agentic-traces.ts-429-      if (trace) {\n~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/src/app/agentic-traces/agentic-traces.ts:430:        trace.title = newTitle.trim();\n~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/src/app/agentic-traces/agentic-traces.ts-431-        this.traces.set([...this.traces()]);\n~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/src/app/agentic-traces/agentic-traces.ts-432-      }"
+        }
+      ],
+      "timestamp": "2026-10-23T00:26:57.959Z"
+    },
+    {
+      "step_index": 5,
+      "role": "agent",
+      "model": "gpt-6-luna",
+      "reasoning_content": "",
+      "content": "I found the generic title is added by the Copilot SDK converter, while the event parser already extracts each user turn. I’m checking the session-start metadata shape so the converter can prefer any actual session title before falling back to that first query.",
+      "tool_calls": [
+        {
+          "tool_call_id": "call_4PRTgfKtmCae43Fp8YDCaIZx",
+          "tool_name": "bash",
+          "input": {
+            "command": "python3 - <<'PY'\nimport json\nimport os\nfrom pathlib import Path\n\nroot = Path.home() / '.copilot' / 'session-state'\nfor session_dir in root.iterdir() if root.is_dir() else []:\n    path = session_dir / 'events.jsonl'\n    if not path.is_file():\n        continue\n    events = []\n    with path.open(encoding='utf-8') as source:\n        for line in source:\n            try:\n                event = json.loads(line)\n            except json.JSONDecodeError:\n                continue\n            if isinstance(event, dict):\n                events.append(event)\n    if not any(str(session_dir.name).startswith(prefix) for prefix in ('1fb9fe66', 'b46f8858')):\n        continue\n    print(f'SESSION {session_dir.name}')\n    for event in events:\n        event_type = event.get('type')\n        data = event.get('data') or {}\n        if event_type in ('session.start', 'session.title', 'session.info'):\n            print(' ', event_type, 'data keys:', sorted(data.keys()))\n            print('  title-like values:', {key: value for key, value in data.items() if 'title' in key.lower() or 'name' in key.lower()})\n        if event_type == 'user.message':\n            print('  first user data keys:', sorted(data.keys()))\n            print('  first user content:', str(data.get('content') or data.get('transformedContent') or '')[:160])\n            break\nPY",
+            "description": "Inspect local Copilot SDK title metadata"
+          },
+          "duration_ms": 6018
+        }
+      ],
+      "observations": [
+        {
+          "source_call_id": "call_4PRTgfKtmCae43Fp8YDCaIZx",
+          "content": "SESSION b46f8858-9c5e-4a60-978d-c26ae783e7ac\n  session.start data keys: ['alreadyInUse', 'autoTier', 'context', 'contextTier', 'copilotVersion', 'githubMcpToolConfig', 'producer', 'remoteSteerable', 'selectedModel', 'sessionId', 'startTime', 'version']\n  title-like values: {}\n  first user data keys: ['attachments', 'content', 'delivery', 'interactionId', 'messageId', 'parentAgentTaskId', 'responsesReasoning', 'supportedNativeDocumentMimeTypes', 'transformedContent', 'turnId']\n  first user content: Im starting to think about how we can formalize tool types in the agent trce app. this is for a few reasons:\n- different agent formats (copilot, opentraces, ant\nSESSION 1fb9fe66-5f56-440c-94de-d5e7b29f2f69\n  session.start data keys: ['alreadyInUse', 'autoTier', 'context', 'contextTier', 'copilotVersion', 'githubMcpToolConfig', 'producer', 'remoteSteerable', 'selectedModel', 'sessionId', 'startTime', 'version']\n  title-like values: {}\n  first user data keys: ['content', 'delivery', 'interactionId', 'messageId', 'parentAgentTaskId', 'supportedNativeDocumentMimeTypes', 'transformedContent', 'turnId']\n  first user content: run the demo please\n<shellId: 137 completed with exit code 0>"
+        }
+      ],
+      "timestamp": "2026-10-23T00:27:03.847Z"
+    },
+    {
+      "step_index": 6,
+      "role": "agent",
+      "model": "gpt-6-luna",
+      "reasoning_content": "",
+      "content": "",
+      "tool_calls": [
+        {
+          "tool_call_id": "call_JLr9P2HnJrWjCBYAquYTTHdj",
+          "tool_name": "bash",
+          "input": {
+            "command": "python3 - <<'PY'\nimport json\nfrom pathlib import Path\n\nroot = Path.home() / '.copilot' / 'session-state'\nfor session_dir in root.iterdir() if root.is_dir() else []:\n    if not str(session_dir.name).startswith(('1fb9fe66', 'b46f8858')):\n        continue\n    events = []\n    with (session_dir / 'events.jsonl').open(encoding='utf-8') as source:\n        for line in source:\n            try:\n                event = json.loads(line)\n            except json.JSONDecodeError:\n                continue\n            if isinstance(event, dict):\n                events.append(event)\n    print(session_dir.name, 'event types:', sorted({event.get('type', '<missing>') for event in events}))\n    def title_fields(value, path=''):\n        found = []\n        if isinstance(value, dict):\n            for key, child in value.items():\n                child_path = f'{path}.{key}' if path else key\n                if 'title' in key.lower() or 'name' in key.lower():\n                    found.append((child_path, str(child)[:120]))\n                found.extend(title_fields(child, child_path))\n        elif isinstance(value, list):\n            for index, child in enumerate(value):\n                found.extend(title_fields(child, f'{path}[{index}]'))\n        return found\n    matches = [(event.get('type'), fields) for event in events if (fields := title_fields(event))]\n    print(' title/name fields:', matches[:12])\nPY",
+            "description": "Check SDK events for stored session titles"
+          },
+          "duration_ms": 281
+        }
+      ],
+      "observations": [
+        {
+          "source_call_id": "call_JLr9P2HnJrWjCBYAquYTTHdj",
+          "content": "b46f8858-9c5e-4a60-978d-c26ae783e7ac event types: ['abort', 'assistant.message', 'assistant.turn_end', 'assistant.turn_start', 'external_tool.completed', 'external_tool.requested', 'hook.end', 'hook.start', 'permission.completed', 'permission.requested', 'session.auto_mode_resolved', 'session.binary_asset', 'session.compaction_complete', 'session.compaction_start', 'session.resume', 'session.shutdown', 'session.start', 'session.usage_checkpoint', 'session.usage_record', 'subagent.deselected', 'system.message', 'system.notification', 'tool.execution_complete', 'tool.execution_start', 'user.message']\n title/name fields: [('user.message', [('data.attachments[0].displayName', 'Browser Pages')]), ('system.message', [('data.metadata.variables.gitCommitTrailer.clientName', 'vscode-agent-host')]), ('session.usage_record', [('data.usage.modelDisplayName', 'GPT-6 Luna')]), ('assistant.message', [('data.toolRequests[0].name', 'view'), ('data.toolRequests[0].toolTitle', 'Viewing file'), ('data.toolRequests[1].name', 'view'), ('data.toolRequests[1].toolTitle', 'Viewing file'), ('data.toolRequests[2].name', 'view'), ('data.toolRequests[2].toolTitle', 'Viewing file'), ('data.toolRequests[3].name', 'view'), ('data.toolRequests[3].toolTitle', 'Viewing file'), ('data.toolRequests[4].name', 'view'), ('data.toolRequests[4].toolTitle', 'Viewing file')]), ('tool.execution_start', [('data.toolName', 'view'), ('data.toolTitle', 'Viewing file')]), ('tool.execution_start', [('data.toolName', 'view'), ('data.toolTitle', 'Viewing file')]), ('tool.execution_start', [('data.toolName', 'view'), ('data.toolTitle', 'Viewing file')]), ('tool.execution_start', [('data.toolName', 'view'), ('data.toolTitle', 'Viewing file')]), ('tool.execution_start', [('data.toolName', 'view'), ('data.toolTitle', 'Viewing file')]), ('hook.start', [('data.input.toolCalls[0].name', 'view'), ('data.input.toolCalls[1].name', 'view'), ('data.input.toolCalls[2].name', 'view'), ('data.input.toolCalls[3].name', 'view'), ('data.input.toolCalls[4].name', 'view')]), ('hook.start', [('data.input.toolName', 'view')]), ('hook.start', [('data.input.toolName', 'view')])]\n1fb9fe66-5f56-440c-94de-d5e7b29f2f69 event types: ['assistant.message', 'assistant.turn_end', 'assistant.turn_start', 'hook.end', 'hook.start', 'permission.completed', 'permission.requested', 'session.auto_mode_resolved', 'session.start', 'session.usage_checkpoint', 'session.usage_record', 'system.message', 'tool.execution_complete', 'tool.execution_start', 'user.message']\n title/name fields: [('system.message', [('data.metadata.variables.gitCommitTrailer.clientName', 'vscode-agent-host')]), ('session.usage_record', [('data.usage.modelDisplayName', 'MAI-Code-1.1-Flash')]), ('assistant.message', [('data.toolRequests[0].name', 'view'), ('data.toolRequests[0].toolTitle', 'Viewing file'), ('data.toolRequests[1].name', 'view'), ('data.toolRequests[1].toolTitle', 'Viewing file')]), ('tool.execution_start', [('data.toolName', 'view'), ('data.toolTitle', 'Viewing file')]), ('tool.execution_start', [('data.toolName', 'view'), ('data.toolTitle', 'Viewing file')]), ('hook.start', [('data.input.toolCalls[0].name', 'view'), ('data.input.toolCalls[1].name', 'view')]), ('hook.start', [('data.input.toolName', 'view')]), ('hook.start', [('data.input.toolName', 'view')]), ('session.usage_record', [('data.usage.modelDisplayName', 'MAI-Code-1.1-Flash')]), ('assistant.message', [('data.toolRequests[0].name', 'bash'), ('data.toolRequests[0].toolTitle', 'Running command')]), ('tool.execution_start', [('data.toolName', 'bash'), ('data.toolTitle', 'Running command')]), ('hook.start', [('data.input.toolCalls[0].name', 'bash')])]\n<shellId: 138 completed with exit code 0>"
+        }
+      ],
+      "timestamp": "2026-10-23T00:27:17.395Z"
+    },
+    {
+      "step_index": 7,
+      "role": "agent",
+      "model": "gpt-6-luna",
+      "reasoning_content": "**Analyzing title generation**\n\nI'm considering how to create a good title if there's no solid default. The user suggested using the first query instead, which means I should choose strings from metadata, but I have to be careful to avoid generic titles. Valid titles need to be nonempty, and I could pull values from `start_data` or nested `metadata`. I might need to explore the event-level fields to find relevant properties. The fallback title would likely be the first user query, trimmed down to the first line for readability.\n\n**Refactoring title helper**\n\nI’m thinking about how to refactor the title helper in `copilot_sdk_source.py`. Maybe I could combine `session_title(events, turns)` and utilize both the convert SDK and CLI for generating titles. If there's a title key in the metadata, I can pull from the first turn in user strings, adding any attachments. The first query should be split at newlines and truncated to 80 characters. I want to ensure the title is consistent with the session's chat title, keeping it generic yet meaningful.",
+      "content": "",
+      "tool_calls": [],
+      "observations": [],
+      "timestamp": "2026-10-23T00:27:22.824Z"
+    },
+    {
+      "step_index": 8,
+      "role": "agent",
+      "model": "gpt-6-luna",
+      "reasoning_content": "\n\n**Considering user title formatting**\n\nThe user didn't specify a clip, so I should ensure the title is crafted well. It seems like the first line is getting truncated at 80 characters, which means I need to think about punctuation and collapsing unnecessary whitespace. I want to keep the first user query concise but not overwhelming. Also, perhaps I could use a title from the metadata for normalization, and I might need to consider adding tests for this utility.",
+      "content": "",
+      "tool_calls": [],
+      "observations": [],
+      "timestamp": "2026-10-23T00:27:35.531Z"
+    },
+    {
+      "step_index": 9,
+      "role": "agent",
+      "model": "gpt-6-luna",
+      "reasoning_content": "\n\n**Considering testing in Python**\n\nI’m wondering about the lack of a test harness or package for Python's unittest. I could really test using a compile and synthetic function script, maybe with an actual list. Should I add a test file? It feels like overkill, though. I think I need to inspect the package scripts to check line formatting. Plus, I’ll review the import section to understand what’s being imported in the converter.",
+      "content": "",
+      "tool_calls": [
+        {
+          "tool_call_id": "call_3nuFW5ESrjrvYu7gvOZia3U9",
+          "tool_name": "view",
+          "input": {
+            "path": "~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/converters/convert_copilot_chat.py",
+            "view_range": [
+              110,
+              180
+            ]
+          },
+          "duration_ms": 61
+        },
+        {
+          "tool_call_id": "call_cA9a0quHZpjBUMOQTXdFjYgW",
+          "tool_name": "view",
+          "input": {
+            "path": "~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/converters/convert_copilot_chat.py",
+            "view_range": [
+              840,
+              890
+            ]
+          },
+          "duration_ms": 75
+        },
+        {
+          "tool_call_id": "call_giktw9pQDGGAZq1iyucCBHjH",
+          "tool_name": "view",
+          "input": {
+            "path": "~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/package.json",
+            "view_range": [
+              1,
+              100
+            ]
+          },
+          "duration_ms": 77
+        },
+        {
+          "tool_call_id": "call_jV5aBfEB3FmsAu2O8vGsEbDe",
+          "tool_name": "view",
+          "input": {
+            "path": "~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/converters/README.md",
+            "view_range": [
+              10,
+              50
+            ]
+          },
+          "duration_ms": 84
+        }
+      ],
+      "observations": [
+        {
+          "source_call_id": "call_3nuFW5ESrjrvYu7gvOZia3U9",
+          "content": "  ``File Path: /abs/path`` line per file in ``result``.\n* ``reasoning`` fills the thinking lane, ``content`` the response lane,\n  ``model`` colours the step, ``token_usage`` feeds the token summary.\n\"\"\"\n\nimport argparse\nimport datetime as dt\nimport json\nimport os\nimport re\nimport sys\nfrom dataclasses import dataclass\nfrom typing import Dict, List, Optional\n\nfrom copilot_sdk_source import (\n    SdkSession,\n    convert_sdk_session,\n    discover_sdk_sessions,\n    read_sdk_events,\n)\n\nSCHEMA_VERSION = \"0.9.0\"\nSCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))\nREPO_DIR = os.path.dirname(SCRIPT_DIR)\nDEFAULT_OUTPUT = os.path.normpath(os.path.join(REPO_DIR, \"..\", \"reasoning_vis_data\", \"traces\", \"copilot_chats\"))\nDEFAULT_SDK_INPUT = os.path.join(os.path.expanduser(\"~\"), \".copilot\", \"session-state\")\nEXCLUDED_SESSION_IDS = {\n    \"a0c54049-6e7b-4455-9f83-085929e42f19\",\n    \"4e70052c-011a-482c-90ef-f86f40ed9d24\",\n}\n\n\n# ===========================================================================\n# 1. Discover\n# ===========================================================================\n\n@dataclass\nclass Session:\n    session_id: str\n    chat_path: str                      # chatSessions/<sid>.jsonl (always present)\n    transcript_path: Optional[str]      # GitHub.copilot-chat/transcripts/<sid>.jsonl (agent mode only)\n    workspace_folder: Optional[str]\n    mtime: float\n    title: str = \"\"\n\n\ndef vscode_user_dirs() -> List[str]:\n    \"\"\"Candidate VS Code ``User`` directories on this machine (stable + Insiders).\"\"\"\n    home = os.path.expanduser(\"~\")\n    if sys.platform == \"darwin\":\n        roots = [os.path.join(home, \"Library\", \"Application Support\")]\n    elif sys.platform.startswith(\"win\"):\n        roots = [os.environ.get(\"APPDATA\", os.path.join(home, \"AppData\", \"Roaming\"))]\n    else:\n        roots = [os.environ.get(\"XDG_CONFIG_HOME\", os.path.join(home, \".config\"))]\n    dirs = []\n    for root in roots:\n        for app in (\"Code\", \"Code - Insiders\", \"VSCodium\"):\n            d = os.path.join(root, app, \"User\")\n            if os.path.isdir(d):\n                dirs.append(d)\n    return dirs\n\n\ndef discover_sessions(user_dirs: List[str]) -> List[Session]:\n    \"\"\"Every chat session in every workspace (plus window-less chats), newest first.\"\"\"\n    sessions = []\n    for user_dir in user_dirs:\n        chat_dirs = [(os.path.join(user_dir, \"globalStorage\", \"emptyWindowChatSessions\"), None)]\n        ws_root = os.path.join(user_dir, \"workspaceStorage\")\n        if os.path.isdir(ws_root):"
+        },
+        {
+          "source_call_id": "call_cA9a0quHZpjBUMOQTXdFjYgW",
+          "content": "        return 1\n\n    if args.list:\n        print(f\"{'session':10} {'modified':17} {'source':14} {'agent':5} title\")\n        for candidate in candidates:\n            session = candidate[\"session\"]\n            has_transcript = isinstance(session, Session) and bool(session.transcript_path)\n            print(f\"{candidate['session_id'][:10]:10} \"\n                  f\"{dt.datetime.fromtimestamp(candidate['modified_at']):%Y-%m-%d %H:%M}  \"\n                  f\"{candidate['source']:14} {'yes' if has_transcript else 'no ':5} \"\n                  f\"{candidate['title']}\")\n        print(\"\\n'agent' indicates a VS Code Copilot Chat transcript with tool details.\")\n        return 0\n\n    if args.session:\n        chosen = []\n        for prefix in args.session:\n            matches = [item for item in candidates if item[\"session_id\"].startswith(prefix)]\n            if len(matches) != 1:\n                print(f\"  ✗ expected one session matching {prefix!r}, found {len(matches)}\")\n                return 1\n            chosen.extend(matches)\n    else:\n        chosen = candidates[:args.limit] if args.limit is not None else candidates\n\n    print(f\"Converting {len(chosen)} session(s) to {args.output_dir}\")\n    for candidate in chosen:\n        session = candidate[\"session\"]\n        if isinstance(session, Session):\n            convert_session(session, args.output_dir, scrub_home=not args.no_scrub_home)\n        else:\n            convert_sdk_session(\n                session,\n                candidate[\"events\"],\n                args.output_dir,\n                scrub_home=not args.no_scrub_home,\n                to_opentraces=to_opentraces,\n                tool_kind_for_name=tool_kind_for_name,\n            )\n    print(\"\\nDone. Run `npm start` in agent-trace-vis and open the Agentic Traces view.\")\n    return 0\n\n\nif __name__ == \"__main__\":\n    sys.exit(main())\n"
+        },
+        {
+          "source_call_id": "call_giktw9pQDGGAZq1iyucCBHjH",
+          "content": "{\n  \"name\": \"reasoning-trace-vis\",\n  \"version\": \"0.0.0\",\n  \"scripts\": {\n    \"ng\": \"ng\",\n    \"manifest\": \"node generate-manifest.js\",\n    \"prestart\": \"npm run manifest\",\n    \"start\": \"ng serve\",\n    \"prebuild\": \"npm run manifest\",\n    \"build\": \"ng build\",\n    \"build:public\": \"PUBLIC_ONLY=true npm run build\",\n    \"deploy:public\": \"npm run build:public && npx netlify deploy --dir=dist/reasoning-trace-vis/browser --prod --no-build\",\n    \"deploy\": \"npm run build:public && npx netlify deploy --dir=dist/reasoning-trace-vis/browser --prod --no-build\",\n    \"deploy:all\": \"npm run build && npx netlify deploy --dir=dist/reasoning-trace-vis/browser --prod --no-build\",\n    \"deploy:draft\": \"npm run build && npx netlify deploy --dir=dist/reasoning-trace-vis/browser --no-build\",\n    \"prewatch\": \"npm run manifest\",\n    \"watch\": \"ng build --watch --configuration development\",\n    \"typecheck\": \"tsc -p tsconfig.app.json --noEmit\",\n    \"lint\": \"eslint src\",\n    \"check\": \"npm run typecheck && npm run lint\",\n    \"prepare\": \"git rev-parse --git-dir >/dev/null 2>&1 && git config core.hooksPath .githooks || true\"\n  },\n  \"private\": true,\n  \"packageManager\": \"npm@10.9.0\",\n  \"dependencies\": {\n    \"@angular/common\": \"^21.2.0\",\n    \"@angular/compiler\": \"^21.2.0\",\n    \"@angular/core\": \"^21.2.0\",\n    \"@angular/forms\": \"^21.2.0\",\n    \"@angular/platform-browser\": \"^21.2.0\",\n    \"@angular/router\": \"^21.2.0\",\n    \"@huggingface/transformers\": \"^4.3.0\",\n    \"@types/d3\": \"^7.4.3\",\n    \"3d-force-graph\": \"^1.80.0\",\n    \"d3\": \"^7.9.0\",\n    \"katex\": \"^0.16.45\",\n    \"marked\": \"^18.0.3\",\n    \"rxjs\": \"~7.8.0\",\n    \"tslib\": \"^2.3.0\"\n  },\n  \"devDependencies\": {\n    \"@angular/build\": \"^21.2.1\",\n    \"@angular/cli\": \"^21.2.1\",\n    \"@angular/compiler-cli\": \"^21.2.0\",\n    \"@total-typescript/ts-reset\": \"^0.6.1\",\n    \"eslint\": \"^9.29.0\",\n    \"prettier\": \"^3.8.1\",\n    \"typescript\": \"~5.9.2\",\n    \"typescript-eslint\": \"^8.70.0\"\n  }\n}\n"
+        },
+        {
+          "source_call_id": "call_jV5aBfEB3FmsAu2O8vGsEbDe",
+          "content": "\n```bash\npython3 converters/convert_copilot_chat.py --list\npython3 converters/convert_copilot_chat.py\npython3 converters/convert_copilot_chat.py a1b2c3\nnpm start\n```\n\nThe command discovers both VS Code's chat logs (`~/Library/Application Support/Code/User` on macOS, `~/.config/Code/User` on Linux, `%APPDATA%\\Code\\User` on Windows) and SDK logs under `~/.copilot/session-state`. It converts every available session except the two previously removed traces; use `-n` to limit the newest sessions, `-i` to override VS Code's User directory, or `--sdk-input-dir` to override the SDK directory. Output goes to `../reasoning_vis_data/traces/copilot_chats/`. Your home directory is replaced with `~` in paths unless `--no-scrub-home` is given.\n\nThe underlying chat formats differ, so the command uses a small SDK event-log reader when needed. Both sources use the same trace emitter.\n\n## Write a converter for another agent\n\nCopy `convert_copilot_chat.py` and replace its first two layers, keeping the third:\n\n1. `discover_sessions()` – find your agent's log files.\n2. `build_turns()` – parse them into a list of neutral *turn* dicts (user message, then the agent's messages with their reasoning and tool calls). This dict is the only contract between the layers and is documented at the top of the script.\n3. `to_opentraces()` – turns the dicts into the trace format based on OpenTraces. Add source tool-name mappings in `tool_kind_for_name()` so new traces include `metadata.tool_kinds`.\n\n- **Tool kinds** go in `metadata.tool_kinds`, keyed by the original tool name. Use the `ToolKind` values defined in [`trace-extensions.ts`](../src/app/agentic-traces/trace-extensions.ts); keep source tool names and inputs intact. Missing kinds fall back to best-effort name inference.\n- **File paths** should sit under a recognised input key such as `filePath`, `file_path`, `path` or `TargetFile`. For a result that touched several files, put one `File Path: /abs/path` line per file in the observation.\n\nWrite schema fields into steps and tool calls ([`trace.ts`](../src/app/agentic-traces/trace.ts) mirrors the schema). Additional data such as kinds, timing, and token counts goes in `metadata`. See *Getting Started* in the [main README](../README.md) for the minimal trace structure.\n"
+        }
+      ],
+      "timestamp": "2026-10-23T00:27:35.541Z"
+    },
+    {
+      "step_index": 10,
+      "role": "agent",
+      "model": "gpt-6-luna",
+      "reasoning_content": "",
+      "content": "The two sessions shown have no title field in their start metadata, but they do record the initial `user.message`. I’ll prefer an explicit session-title field if one is present, otherwise use that first query, and keep the list preview consistent with converted trace titles.",
+      "tool_calls": [
+        {
+          "tool_call_id": "custom_call_yWQTbDE4Q5golqZbzLhdhh21",
+          "tool_name": "apply_patch",
+          "input": {
+            "arguments": "*** Begin Patch\n*** Update File: converters/copilot_sdk_source.py\n@@\n def build_turns(events: List[dict], default_model: Optional[str] = None) -> List[dict]:\n     \"\"\"Convert event-log records to the neutral turns accepted by to_opentraces().\"\"\"\n@@\n     return turns\n \n \n+def sdk_session_title(start_data: dict, turns: List[dict], trace_id: str) -> str:\n+    \"\"\"Use an explicit session title when available, otherwise the first query.\"\"\"\n+    title_keys = (\"title\", \"sessionTitle\", \"session_title\", \"sessionName\", \"session_name\")\n+    sources = (start_data, start_data.get(\"metadata\"), start_data.get(\"context\"))\n+    title = next(\n+        (\n+            value.strip()\n+            for source in sources\n+            if isinstance(source, dict)\n+            for key in title_keys\n+            if isinstance((value := source.get(key)), str) and value.strip()\n+        ),\n+        \"\",\n+    )\n+    if not title and turns:\n+        first_query = turns[0].get(\"user\")\n+        if isinstance(first_query, str):\n+            title = \" \".join(first_query.split())\n+    if not title:\n+        title = f\"Copilot SDK session {trace_id[:8]}\"\n+    return title if len(title) <= 80 else title[:77] + \"...\"\n+\n+\n def convert_sdk_session(\n     session: SdkSession,\n     events: List[dict],\n@@\n     for turn in turns:\n         for message in turn[\"messages\"]:\n             for call in message[\"tool_calls\"]:\n                 tool_kinds[call[\"name\"]] = tool_kind_for_name(call[\"name\"])\n \n-    title = f\"Copilot SDK session {trace_id[:8]}\"\n+    title = sdk_session_title(start_data, turns, trace_id)\n     record = to_opentraces(\n         turns,\n         trace_id=trace_id,\n*** Update File: converters/convert_copilot_chat.py\n@@\n from copilot_sdk_source import (\n     SdkSession,\n+    build_turns as build_sdk_turns,\n     convert_sdk_session,\n     discover_sdk_sessions,\n     read_sdk_events,\n+    sdk_session_title,\n )\n@@\n             session_id = data.get(\"sessionId\") or session.session_id\n             if session_id in EXCLUDED_SESSION_IDS:\n                 continue\n+            turns = build_sdk_turns(events, data.get(\"selectedModel\"))\n             candidates.append({\n                 \"session_id\": session_id,\n                 \"modified_at\": session.modified_at,\n                 \"source\": \"Copilot SDK\",\n-                \"title\": f\"Copilot SDK session {session.session_id[:8]}\",\n+                \"title\": sdk_session_title(data, turns, session_id),\n                 \"session\": session,\n                 \"events\": events,\n             })\n*** Update File: converters/README.md\n@@\n The underlying chat formats differ, so the command uses a small SDK event-log reader when needed. Both sources use the same trace emitter.\n+SDK trace titles use a title from session metadata when available, or the first user query otherwise.\n \n ## Write a converter for another agent\n*** End Patch\n"
+          },
+          "duration_ms": 67
+        }
+      ],
+      "observations": [
+        {
+          "source_call_id": "custom_call_yWQTbDE4Q5golqZbzLhdhh21",
+          "content": "Modified 3 file(s): ~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/converters/copilot_sdk_source.py, ~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/converters/convert_copilot_chat.py, ~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/converters/README.md"
+        }
+      ],
+      "timestamp": "2026-10-23T00:27:35.698Z"
+    },
+    {
+      "step_index": 11,
+      "role": "agent",
+      "model": "gpt-6-luna",
+      "reasoning_content": "**Validating command outputs**\n\nI'm considering testing the list command line interface (CLI) options. It seems like using the title might produce a large output. The direct helper should be useful as I validate the `--list` option to ensure it works logically with the same helper. I don't think there's a need for further complexity here. Running tests with a command plus a git diff could be a good way to check things while keeping parallel calls independent.",
+      "content": "",
+      "tool_calls": [
+        {
+          "tool_call_id": "call_gYaK0UQBoNA1c3VEIzpaqPff",
+          "tool_name": "bash",
+          "input": {
+            "command": "python3 -m py_compile converters/copilot_sdk_source.py converters/convert_copilot_chat.py && python3 - <<'PY'\nimport sys\nsys.path.insert(0, 'converters')\nfrom copilot_sdk_source import sdk_session_title\n\nassert sdk_session_title({'metadata': {'title': 'Metadata title'}}, [{'user': 'First query'}], '12345678') == 'Metadata title'\nassert sdk_session_title({}, [{'user': '  First query\\nsecond line  '}], '12345678') == 'First query second line'\nassert sdk_session_title({}, [{'user': 'x' * 81}], '12345678') == 'x' * 77 + '...'\nassert sdk_session_title({}, [{'user': ''}], '12345678') == 'Copilot SDK session 12345678'\nprint('Title selection checks passed.')\nPY",
+            "description": "Compile converters and test title selection"
+          },
+          "duration_ms": 267
+        },
+        {
+          "tool_call_id": "call_jm3KwaF76nWFm3rZt41APjJD",
+          "tool_name": "bash",
+          "input": {
+            "command": "python3 - <<'PY'\nimport sys\nfrom pathlib import Path\nsys.path.insert(0, 'converters')\nfrom copilot_sdk_source import build_turns, discover_sdk_sessions, read_sdk_events, sdk_session_title\n\nfor session in discover_sdk_sessions(str(Path.home() / '.copilot' / 'session-state')):\n    if session.session_id.startswith(('1fb9fe66', 'b46f8858')):\n        events = read_sdk_events(session.events_path)\n        start = next((event for event in events if event.get('type') == 'session.start'), {}).get('data') or {}\n        turns = build_turns(events, start.get('selectedModel'))\n        print(f'{session.session_id[:8]}: {sdk_session_title(start, turns, session.session_id)}')\nPY",
+            "description": "Verify titles for the two displayed sessions"
+          },
+          "duration_ms": 274
+        },
+        {
+          "tool_call_id": "call_sVziZOJCgxnzJ7X4Fw3FtWWQ",
+          "tool_name": "bash",
+          "input": {
+            "command": "git --no-pager diff --check && git --no-pager diff -- converters/copilot_sdk_source.py converters/convert_copilot_chat.py converters/README.md",
+            "description": "Review the title changes"
+          },
+          "duration_ms": 144
+        }
+      ],
+      "observations": [
+        {
+          "source_call_id": "call_gYaK0UQBoNA1c3VEIzpaqPff",
+          "content": "Title selection checks passed.\n<shellId: 139 completed with exit code 0>"
+        },
+        {
+          "source_call_id": "call_jm3KwaF76nWFm3rZt41APjJD",
+          "content": "b46f8858: Im starting to think about how we can formalize tool types in the agent trce ...\n1fb9fe66: run the demo please\n<shellId: 141 completed with exit code 0>"
+        },
+        {
+          "source_call_id": "call_sVziZOJCgxnzJ7X4Fw3FtWWQ",
+          "content": "diff --git a/converters/README.md b/converters/README.md\nindex e13edb3..ab8b382 100644\n--- a/converters/README.md\n+++ b/converters/README.md\n@@ -18,6 +18,7 @@ npm start\n The command discovers both VS Code's chat logs (`~/Library/Application Support/Code/User` on macOS, `~/.config/Code/User` on Linux, `%APPDATA%\\Code\\User` on Windows) and SDK logs under `~/.copilot/session-state`. It converts every available session except the two previously removed traces; use `-n` to limit the newest sessions, `-i` to override VS Code's User directory, or `--sdk-input-dir` to override the SDK directory. Output goes to `../reasoning_vis_data/traces/copilot_chats/`. Your home directory is replaced with `~` in paths unless `--no-scrub-home` is given.\n \n The underlying chat formats differ, so the command uses a small SDK event-log reader when needed. Both sources use the same trace emitter.\n+SDK trace titles use a title from session metadata when available, or the first user query otherwise.\n \n ## Write a converter for another agent\n \ndiff --git a/converters/convert_copilot_chat.py b/converters/convert_copilot_chat.py\nindex 177c42a..d365aaf 100644\n--- a/converters/convert_copilot_chat.py\n+++ b/converters/convert_copilot_chat.py\n@@ -123,9 +123,11 @@ from typing import Dict, List, Optional\n \n from copilot_sdk_source import (\n     SdkSession,\n+    build_turns as build_sdk_turns,\n     convert_sdk_session,\n     discover_sdk_sessions,\n     read_sdk_events,\n+    sdk_session_title,\n )\n \n SCHEMA_VERSION = \"0.9.0\"\n@@ -826,11 +828,12 @@ def main():\n             session_id = data.get(\"sessionId\") or session.session_id\n             if session_id in EXCLUDED_SESSION_IDS:\n                 continue\n+            turns = build_sdk_turns(events, data.get(\"selectedModel\"))\n             candidates.append({\n                 \"session_id\": session_id,\n                 \"modified_at\": session.modified_at,\n                 \"source\": \"Copilot SDK\",\n-                \"title\": f\"Copilot SDK session {session.session_id[:8]}\",\n+                \"title\": sdk_session_title(data, turns, session_id),\n                 \"session\": session,\n                 \"events\": events,\n             })\ndiff --git a/converters/copilot_sdk_source.py b/converters/copilot_sdk_source.py\nindex 02e3453..d05bab5 100644\n--- a/converters/copilot_sdk_source.py\n+++ b/converters/copilot_sdk_source.py\n@@ -281,6 +281,29 @@ def build_turns(events: List[dict], default_model: Optional[str] = None) -> List\n     return turns\n \n \n+def sdk_session_title(start_data: dict, turns: List[dict], trace_id: str) -> str:\n+    \"\"\"Use an explicit session title when available, otherwise the first query.\"\"\"\n+    title_keys = (\"title\", \"sessionTitle\", \"session_title\", \"sessionName\", \"session_name\")\n+    sources = (start_data, start_data.get(\"metadata\"), start_data.get(\"context\"))\n+    title = next(\n+        (\n+            value.strip()\n+            for source in sources\n+            if isinstance(source, dict)\n+            for key in title_keys\n+            if isinstance((value := source.get(key)), str) and value.strip()\n+        ),\n+        \"\",\n+    )\n+    if not title and turns:\n+        first_query = turns[0].get(\"user\")\n+        if isinstance(first_query, str):\n+            title = \" \".join(first_query.split())\n+    if not title:\n+        title = f\"Copilot SDK session {trace_id[:8]}\"\n+    return title if len(title) <= 80 else title[:77] + \"...\"\n+\n+\n def convert_sdk_session(\n     session: SdkSession,\n     events: List[dict],\n@@ -327,7 +350,7 @@ def convert_sdk_session(\n             for call in message[\"tool_calls\"]:\n                 tool_kinds[call[\"name\"]] = tool_kind_for_name(call[\"name\"])\n \n-    title = f\"Copilot SDK session {trace_id[:8]}\"\n+    title = sdk_session_title(start_data, turns, trace_id)\n     record = to_opentraces(\n         turns,\n         trace_id=trace_id,\n<shellId: 140 completed with exit code 0>"
+        }
+      ],
+      "timestamp": "2026-10-23T00:27:44.997Z"
+    },
+    {
+      "step_index": 12,
+      "role": "agent",
+      "model": "gpt-6-luna",
+      "reasoning_content": "",
+      "content": "",
+      "tool_calls": [
+        {
+          "tool_call_id": "call_O0eeQ7W2XgecGA1JG7upePmy",
+          "tool_name": "bash",
+          "input": {
+            "command": "python3 - <<'PY'\nimport json\nimport sys\nimport tempfile\nfrom pathlib import Path\nsys.path.insert(0, 'converters')\nfrom copilot_sdk_source import SdkSession, convert_sdk_session\n\nevents = [\n    {'type': 'session.start', 'data': {'sessionId': 'test-session'}},\n    {'type': 'user.message', 'data': {'content': 'Please summarize this session.'}},\n]\nwith tempfile.TemporaryDirectory() as output_dir:\n    path = convert_sdk_session(\n        SdkSession('test-session', 'events.jsonl', 0), events, output_dir, False,\n        to_opentraces=lambda turns, **kwargs: {'title': kwargs['title'], 'turns': turns},\n        tool_kind_for_name=lambda name: 'other',\n    )\n    with Path(path).open(encoding='utf-8') as source:\n        result = json.load(source)\n    assert result['title'] == 'Please summarize this session.'\nprint('SDK conversion title check passed.')\nPY",
+            "description": "Verify title is written into converted trace"
+          },
+          "duration_ms": 187
+        },
+        {
+          "tool_call_id": "call_neRQiWsEn9gD3OJjy79e9TJJ",
+          "tool_name": "bash",
+          "input": {
+            "command": "git status --short && git --no-pager diff --check",
+            "description": "Check changed files and whitespace"
+          },
+          "duration_ms": 100
+        }
+      ],
+      "observations": [
+        {
+          "source_call_id": "call_O0eeQ7W2XgecGA1JG7upePmy",
+          "content": "Traceback (most recent call last):\n  File \"<stdin>\", line 13, in <module>\n  File \"~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/converters/copilot_sdk_source.py\", line 373, in convert_sdk_session\n    tool_count = sum(len(step.get(\"tool_calls\") or []) for step in record[\"steps\"])\nKeyError: 'steps'\n<shellId: 143 completed with exit code 1>"
+        },
+        {
+          "source_call_id": "call_neRQiWsEn9gD3OJjy79e9TJJ",
+          "content": "M converters/README.md\n M converters/convert_copilot_chat.py\n M converters/copilot_sdk_source.py\n<shellId: 142 completed with exit code 0>"
+        }
+      ],
+      "timestamp": "2026-10-23T00:28:04.595Z"
+    },
+    {
+      "step_index": 13,
+      "role": "agent",
+      "model": "gpt-6-luna",
+      "reasoning_content": "**Identifying issues with the mock**\n\nIt seems there's a problem with our synthetic mock due to missing expected record steps. I need to iterate and add those steps correctly. The user’s mock is the only one available, so I'll need to re-run the validation.\n\nI’m considering using my own testing tool, but I realize there are no relevant tests available. Bash is fine, but the requirement suggests using a test runner when possible. I'll also fix the mock and note that it needs the record step property.",
+      "content": "",
+      "tool_calls": [
+        {
+          "tool_call_id": "call_LipF7NniaSdaqojIjVmzmchZ",
+          "tool_name": "bash",
+          "input": {
+            "command": "python3 - <<'PY'\nimport json\nimport sys\nimport tempfile\nfrom pathlib import Path\nsys.path.insert(0, 'converters')\nfrom copilot_sdk_source import SdkSession, convert_sdk_session\n\nevents = [\n    {'type': 'session.start', 'data': {'sessionId': 'test-session'}},\n    {'type': 'user.message', 'data': {'content': 'Please summarize this session.'}},\n]\nwith tempfile.TemporaryDirectory() as output_dir:\n    path = convert_sdk_session(\n        SdkSession('test-session', 'events.jsonl', 0), events, output_dir, False,\n        to_opentraces=lambda turns, **kwargs: {\n            'title': kwargs['title'], 'steps': [], 'turns': turns,\n        },\n        tool_kind_for_name=lambda name: 'other',\n    )\n    with Path(path).open(encoding='utf-8') as source:\n        result = json.load(source)\n    assert result['title'] == 'Please summarize this session.'\nprint('SDK conversion title check passed.')\nPY",
+            "description": "Verify title is written into converted trace"
+          },
+          "duration_ms": 121
+        }
+      ],
+      "observations": [
+        {
+          "source_call_id": "call_LipF7NniaSdaqojIjVmzmchZ",
+          "content": "✓ test-ses  1 turns, 0 steps, 0 tool calls -> /var/folders/l2/c5_wtxkx3q7300yj7zztn78w00c08p/T/tmpp18y6isi/copilot_sdk_test-session.json\nSDK conversion title check passed.\n<shellId: 144 completed with exit code 0>"
+        }
+      ],
+      "timestamp": "2026-10-23T00:28:04.826Z"
+    },
+    {
+      "step_index": 14,
+      "role": "agent",
+      "model": "gpt-6-luna",
+      "reasoning_content": "",
+      "content": "Updated Copilot SDK trace titles: an explicit session title in metadata takes precedence; otherwise, the first user query is used, shortened to fit. The sessions shown had no title metadata, so they’ll now be titled “run the demo please” and with the opening of the first query, respectively. The `--list` preview uses the same title logic.\n\nChanged [copilot_sdk_source.py](~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/converters/copilot_sdk_source.py), [convert_copilot_chat.py](~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/converters/convert_copilot_chat.py), and [converters/README.md](~/Documents/github/reasoning_vis_oss_all/agent-trace-vis/converters/README.md). Python compilation and title-selection checks passed.",
+      "tool_calls": [],
+      "observations": [],
+      "timestamp": "2026-10-23T00:28:08.246Z"
+    },
+    {
+      "step_index": 15,
+      "role": "user",
+      "content": "great. now regenerate please\n[Attachment: Browser Pages]\n[Attachment: file:file-lane.ts]",
+      "timestamp": "2026-10-23T00:28:50.196Z"
+    },
+    {
+      "step_index": 16,
+      "role": "agent",
+      "model": "gpt-6-luna",
+      "reasoning_content": "**Checking dataset modifications**\n\nI need to avoid any unexpected modifications in the traces. I'll run a converter to examine the current dataset. After that, I’ll use the `--list` command to check the SDK sessions and choose two to work with. It’s important to confirm the output path, which defaults to `reasoning_vis_data` in the sibling repo. I must also inspect the tracked and untracked git context using a bash list alongside the `--list` command.",
+      "content": "",
+      "tool_calls": [
+        {
+          "tool_call_id": "call_5jCb5bgzttFDgdSZ8dYEnExh",
+          "tool_name": "bash",
+          "input": {
+            "command": "python3 converters/convert_copilot_chat.py --list",
+            "description": "List available sessions and current titles"
+          },
+          "duration_ms": 321
+        },
+        {
+          "tool_call_id": "call_8WRxuaXt9IYSRusPcXkhHmB6",
+          "tool_name": "bash",
+          "input": {
+            "command": "ls -ld ../reasoning_vis_data ../reasoning_vis_data/traces ../reasoning_vis_data/traces/copilot_chats 2>/dev/null; git status --short",
+            "description": "Inspect trace output directory and worktree"
+          },
+          "duration_ms": 146
+        }
+      ],
+      "observations": [
+        {
+          "source_call_id": "call_5jCb5bgzttFDgdSZ8dYEnExh",
+          "content": "session    modified          source         agent title\n9f6eb3aa-9 2026-10-22 17:28  Copilot SDK    no    these titles are bad. if there's no good default (though I suspect there is, ...\nb46f8858-9 2026-10-22 17:18  Copilot SDK    no    Im starting to think about how we can formalize tool types in the agent trce ...\n1fb9fe66-5 2026-10-22 15:37  Copilot SDK    no    run the demo please\nc18bb2c1-1 2026-10-21 13:18  VS Code Chat   yes   Add gender toggle and more people\n\n'agent' indicates a VS Code Copilot Chat transcript with tool details.\n<shellId: 146 completed with exit code 0>"
+        },
+        {
+          "source_call_id": "call_8WRxuaXt9IYSRusPcXkhHmB6",
+          "content": "drwxr-xr-x  9 ereif  primarygroup  288 Aug 19 14:14 ../reasoning_vis_data\ndrwxr-xr-x  7 ereif  primarygroup  224 Oct 22 16:46 ../reasoning_vis_data/traces\ndrwxr-xr-x@ 5 ereif  primarygroup  160 Oct 22 17:17 ../reasoning_vis_data/traces/copilot_chats\n M converters/README.md\n M converters/convert_copilot_chat.py\n M converters/copilot_sdk_source.py\n<shellId: 145 completed with exit code 0>"
+        }
+      ],
+      "timestamp": "2026-10-23T00:28:50.214Z"
+    },
+    {
+      "step_index": 17,
+      "role": "agent",
+      "model": "gpt-6-luna",
+      "reasoning_content": "**Inspecting generated outputs**\n\nI see that the user's session request about \"these titles are bad...\" wasn't clear due to timing. When they say \"regenerate please,\" it likely means they want to regenerate the current trace dataset, possibly including all sessions. I need to determine if they indeed want to regenerate the files and review any updates. There are four candidates in the generated output folder, and I'll look at the filenames and timestamps to inspect them properly.",
+      "content": "",
+      "tool_calls": [
+        {
+          "tool_call_id": "call_FcLgywxXua4GV1fgzeBEQi3p",
+          "tool_name": "bash",
+          "input": {
+            "command": "find ../reasoning_vis_data/traces/copilot_chats -maxdepth 1 -type f -print",
+            "description": "Inspect generated Copilot trace files"
+          },
+          "duration_ms": 97
+        }
+      ],
+      "observations": [
+        {
+          "source_call_id": "call_FcLgywxXua4GV1fgzeBEQi3p",
+          "content": "../reasoning_vis_data/traces/copilot_chats/Add gender toggle and more people.json\n../reasoning_vis_data/traces/copilot_chats/copilot_sdk_b46f8858-9c5e-4a60-978d-c26ae783e7ac.json\n../reasoning_vis_data/traces/copilot_chats/copilot_sdk_1fb9fe66-5f56-440c-94de-d5e7b29f2f69.json\n<shellId: 147 completed with exit code 0>"
+        }
+      ],
+      "timestamp": "2026-10-23T00:28:56.245Z"
+    },
+    {
+      "step_index": 18,
+      "role": "agent",
+      "model": "gpt-6-luna",
+      "reasoning_content": "**Clarifying session output**\n\nI'm noticing that the latest conversation seems absent, likely due to the \"regenerate\" request which would run the generator again and create the newest data. By default, all sessions are treated that way, including the old VS chat. So, regenerating might overwrite the existing output files from the SDK while using the same file. I also need to include some commentary along with the tool call to keep things clear for users.",
+      "content": "The generated trace folder has the two SDK sessions from your screenshot plus an older VS Code chat; the latest session was not generated yet. I’ll rerun the converter for the full available set.",
+      "tool_calls": [
+        {
+          "tool_call_id": "call_teqQqOlLt9OymtQVWZstTduf",
+          "tool_name": "bash",
+          "input": {
+            "command": "python3 converters/convert_copilot_chat.py",
+            "description": "Regenerate all available Copilot traces",
+            "initial_wait": 120
+          }
+        }
+      ],
+      "observations": [
+        {
+          "source_call_id": "call_teqQqOlLt9OymtQVWZstTduf",
+          "content": ""
+        }
+      ],
+      "timestamp": "2026-10-23T00:28:58.977Z"
+    }
+  ],
+  "metrics": {
+    "total_steps": 19,
+    "total_input_tokens": 555293,
+    "total_output_tokens": 8909
+  },
+  "metadata": {
+    "source": "copilot-sdk",
+    "source_format": "events.jsonl",
+    "source_file": "~/.copilot/session-state/9f6eb3aa-9dc3-47fb-9827-bfa6422b8dec/events.jsonl",
+    "workspace_folder": "~/Documents/github/reasoning_vis_oss_all/agent-trace-vis",
+    "repository": "PAIR-code/agent-trace-vis",
+    "producer": "copilot-agent",
+    "tool_kinds": {
+      "view": "read.file",
+      "rg": "search.text",
+      "bash": "execute.command",
+      "apply_patch": "file.edit"
+    },
+    "step_timing": {
+      "1": {
+        "generated_at": "2026-10-23T00:26:36.210Z",
+        "completed_at": "2026-10-23T00:26:36.315000Z"
+      },
+      "2": {
+        "generated_at": "2026-10-23T00:26:39.535Z",
+        "completed_at": "2026-10-23T00:26:39.690000Z"
+      },
+      "3": {
+        "generated_at": "2026-10-23T00:26:44.553Z",
+        "completed_at": "2026-10-23T00:26:57.925000Z"
+      },
+      "4": {
+        "generated_at": "2026-10-23T00:27:03.668Z",
+        "completed_at": "2026-10-23T00:27:03.808000Z"
+      },
+      "5": {
+        "generated_at": "2026-10-23T00:27:11.336Z",
+        "completed_at": "2026-10-23T00:27:17.365000Z"
+      },
+      "6": {
+        "generated_at": "2026-10-23T00:27:22.494Z",
+        "completed_at": "2026-10-23T00:27:22.783000Z"
+      },
+      "7": {
+        "generated_at": "2026-10-23T00:27:35.531Z",
+        "completed_at": "2026-10-23T00:27:35.531000Z"
+      },
+      "8": {
+        "generated_at": "2026-10-23T00:27:35.541Z",
+        "completed_at": "2026-10-23T00:27:35.541000Z"
+      },
+      "9": {
+        "generated_at": "2026-10-23T00:27:35.549Z",
+        "completed_at": "2026-10-23T00:27:35.666000Z"
+      },
+      "10": {
+        "generated_at": "2026-10-23T00:27:44.884Z",
+        "completed_at": "2026-10-23T00:27:44.960000Z"
+      },
+      "11": {
+        "generated_at": "2026-10-23T00:27:54.478Z",
+        "completed_at": "2026-10-23T00:27:54.768000Z"
+      },
+      "12": {
+        "generated_at": "2026-10-23T00:28:04.601Z",
+        "completed_at": "2026-10-23T00:28:04.796000Z"
+      },
+      "13": {
+        "generated_at": "2026-10-23T00:28:08.083Z",
+        "completed_at": "2026-10-23T00:28:08.214000Z"
+      },
+      "14": {
+        "generated_at": "2026-10-23T00:28:11.669Z",
+        "completed_at": "2026-10-23T00:28:11.669000Z"
+      },
+      "16": {
+        "generated_at": "2026-10-23T00:28:55.848Z",
+        "completed_at": "2026-10-23T00:28:56.184000Z"
+      },
+      "17": {
+        "generated_at": "2026-10-23T00:28:58.835Z",
+        "completed_at": "2026-10-23T00:28:58.942000Z"
+      },
+      "18": {
+        "generated_at": "2026-10-23T00:29:02.103Z",
+        "completed_at": "2026-10-23T00:29:02.103000Z"
+      }
+    },
+    "tool_timing": {
+      "call_ed3k6JpkqILxlIGyiSnrlK4h": {
+        "started_at": "2026-10-23T00:26:36.223Z"
+      },
+      "call_vvkVzcCRSkc73L9O1h1RPlwe": {
+        "started_at": "2026-10-23T00:26:36.228Z"
+      },
+      "call_q60jNq7gMqEu10wptGeBo1qi": {
+        "started_at": "2026-10-23T00:26:36.232Z"
+      },
+      "call_dogwcemj25EPryktJktCNpAx": {
+        "started_at": "2026-10-23T00:26:39.546Z"
+      },
+      "call_qXX9UAttaRcptvrGvfpTzvnW": {
+        "started_at": "2026-10-23T00:26:39.549Z"
+      },
+      "call_j7XNPEEFt69n7x6xoCGte438": {
+        "started_at": "2026-10-23T00:26:39.554Z"
+      },
+      "call_sSwL2xm518rrF3sV1oTgxkeX": {
+        "started_at": "2026-10-23T00:26:39.558Z"
+      },
+      "call_LuIXyA6l6KDqVmUIcFZEcfVC": {
+        "started_at": "2026-10-23T00:26:39.562Z"
+      },
+      "call_AIsGbLhopkLDA6aavXDAwHRX": {
+        "started_at": "2026-10-23T00:26:44.564Z"
+      },
+      "call_5TQQgiTGdD9aYCUXa7SeECpc": {
+        "started_at": "2026-10-23T00:26:44.568Z"
+      },
+      "call_5uun967sYDGOJZq2FIQisWD7": {
+        "started_at": "2026-10-23T00:26:44.572Z"
+      },
+      "call_pNFoAEnIK4kw0uCoXNl1CF2O": {
+        "started_at": "2026-10-23T00:26:44.580Z"
+      },
+      "call_53QrX5jWI1ee0KFZuZrL6k4E": {
+        "started_at": "2026-10-23T00:27:03.724Z"
+      },
+      "call_Px1WRcTEnh7370YUF1E2CHAz": {
+        "started_at": "2026-10-23T00:27:03.728Z"
+      },
+      "call_oeOCPlZytvqXYvVTOVtyErry": {
+        "started_at": "2026-10-23T00:27:03.732Z"
+      },
+      "call_tWxxPm5XVRrDmV7O9ipcyZ98": {
+        "started_at": "2026-10-23T00:27:03.736Z"
+      },
+      "call_4PRTgfKtmCae43Fp8YDCaIZx": {
+        "started_at": "2026-10-23T00:27:11.347Z"
+      },
+      "call_JLr9P2HnJrWjCBYAquYTTHdj": {
+        "started_at": "2026-10-23T00:27:22.502Z"
+      },
+      "call_3nuFW5ESrjrvYu7gvOZia3U9": {
+        "started_at": "2026-10-23T00:27:35.562Z"
+      },
+      "call_cA9a0quHZpjBUMOQTXdFjYgW": {
+        "started_at": "2026-10-23T00:27:35.568Z"
+      },
+      "call_giktw9pQDGGAZq1iyucCBHjH": {
+        "started_at": "2026-10-23T00:27:35.577Z"
+      },
+      "call_jV5aBfEB3FmsAu2O8vGsEbDe": {
+        "started_at": "2026-10-23T00:27:35.582Z"
+      },
+      "custom_call_yWQTbDE4Q5golqZbzLhdhh21": {
+        "started_at": "2026-10-23T00:27:44.893Z"
+      },
+      "call_gYaK0UQBoNA1c3VEIzpaqPff": {
+        "started_at": "2026-10-23T00:27:54.490Z"
+      },
+      "call_jm3KwaF76nWFm3rZt41APjJD": {
+        "started_at": "2026-10-23T00:27:54.494Z"
+      },
+      "call_sVziZOJCgxnzJ7X4Fw3FtWWQ": {
+        "started_at": "2026-10-23T00:27:54.499Z"
+      },
+      "call_O0eeQ7W2XgecGA1JG7upePmy": {
+        "started_at": "2026-10-23T00:28:04.609Z"
+      },
+      "call_neRQiWsEn9gD3OJjy79e9TJJ": {
+        "started_at": "2026-10-23T00:28:04.613Z"
+      },
+      "call_LipF7NniaSdaqojIjVmzmchZ": {
+        "started_at": "2026-10-23T00:28:08.093Z"
+      },
+      "call_5jCb5bgzttFDgdSZ8dYEnExh": {
+        "started_at": "2026-10-23T00:28:55.863Z"
+      },
+      "call_8WRxuaXt9IYSRusPcXkhHmB6": {
+        "started_at": "2026-10-23T00:28:55.869Z"
+      },
+      "call_FcLgywxXua4GV1fgzeBEQi3p": {
+        "started_at": "2026-10-23T00:28:58.845Z"
+      },
+      "call_teqQqOlLt9OymtQVWZstTduf": {
+        "started_at": "2026-10-23T00:29:02.116Z"
+      }
+    },
+    "reasoning_tokens": {
+      "1": 86,
+      "2": 50,
+      "3": 197,
+      "4": 371,
+      "5": 280,
+      "6": 190,
+      "7": 1087,
+      "8": 1087,
+      "9": 1087,
+      "10": 454,
+      "11": 247,
+      "12": 864,
+      "13": 74,
+      "14": 143,
+      "16": 265,
+      "17": 90,
+      "18": 79
+    },
+    "turn_token_usage": {
+      "0": {
+        "input_tokens": 427041,
+        "output_tokens": 8220
+      },
+      "15": {
+        "input_tokens": 128252,
+        "output_tokens": 689
+      }
+    },
+    "total_reasoning_tokens": 6651
+  }
+}

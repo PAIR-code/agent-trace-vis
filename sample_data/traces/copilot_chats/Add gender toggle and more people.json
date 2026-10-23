@@ -1877,6 +1877,20 @@
         "output_tokens": 1264
       }
     },
-    "total_reasoning_tokens": 21242
+    "total_reasoning_tokens": 21242,
+    "tool_kinds": {
+      "memory": "other",
+      "explore_subagent": "delegate.agent",
+      "semantic_search": "search.code",
+      "file_search": "search.files",
+      "grep_search": "search.text",
+      "read_file": "read.file",
+      "apply_patch": "file.edit",
+      "run_in_terminal": "execute.command",
+      "fetch_webpage": "read.url",
+      "tool_search": "other",
+      "open_browser_page": "other",
+      "screenshot_page": "other"
+    }
   }
 }
