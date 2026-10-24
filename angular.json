@@ -71,9 +71,17 @@
                   "maximumError": "32kB"
                 }
               ],
-              "outputHashing": "all"
+              "outputHashing": "all",
+              "assets": [
+                { "glob": "**/*", "input": "public" },
+                { "glob": "**/*", "input": ".data-build/deploy", "output": "assets/data" }
+              ]
             },
             "development": {
+              "assets": [
+                { "glob": "**/*", "input": "public" },
+                { "glob": "**/*", "input": ".data-build/dev", "output": "assets/data" }
+              ],
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true

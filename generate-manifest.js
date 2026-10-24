@@ -15,213 +15,103 @@
  * limitations under the License.
  */
 
+/**
+ * Stages the data the app serves at `assets/data/` and writes the trace
+ * manifest. Sources are only read, never modified.
+ *
+ *   node generate-manifest.js            dev: every trace dataset -> .data-build/dev/
+ *   node generate-manifest.js --deploy   deploy: selected datasets -> .data-build/deploy/
+ *
+ * Trace datasets are the sub-folders of `data/sample/traces/` (committed) and
+ * `data/local/traces/` (gitignored); a folder in both is merged, local
+ * files winning. Deploys include only the datasets in `DATASETS`
+ * (comma-separated, or `all`), else PUBLIC_DATASETS. A dataset that's asked
+ * for but missing fails the build.
+ *
+ * Dev and deploy stage to separate folders (wired up per configuration in
+ * angular.json), so a deploy never changes what `npm start` shows.
+ */
+
 const fs = require('fs');
 const path = require('path');
 
-// Determine if we should only include specific datasets
-const datasetsEnv = process.env.DATASETS;
-let allowedDatasets = datasetsEnv ? datasetsEnv.split(',').map(s => s.trim()) : null;
+/** What `npm run deploy` ships when DATASETS isn't set. */
+const PUBLIC_DATASETS = ['copilot_chats', 'website_updates', 'rlvr_vs_base'];
 
-const publicOnly = process.argv.includes('--public-only') || process.env.PUBLIC_ONLY === 'true';
-if (publicOnly && !allowedDatasets) {
-  allowedDatasets = ['website_updates', 'copilot_chats', 'rlvr_vs_base'];
+const TRACE_ROOTS = [
+  path.join(__dirname, 'data/sample/traces'),
+  path.join(__dirname, 'data/local/traces'),
+];
+/** Unstructured reasoning data, still read from the sibling folder. */
+const RLVR_ID = 'rlvr_vs_base';
+const RLVR_SRC = path.join(__dirname, '../reasoning_vis_data', RLVR_ID);
+
+const deploy = process.argv.includes('--deploy');
+const outDir = path.join(__dirname, '.data-build', deploy ? 'deploy' : 'dev');
+
+function prettyName(id) {
+  return id.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+    .replace(/Opentraces/g, 'OpenTraces');
 }
 
-function isReadableDir(dir) {
+/** Dataset id -> the folders it's merged from, in overlay order. */
+function findTraceDatasets() {
+  const found = new Map();
+  for (const root of TRACE_ROOTS) {
+    if (!fs.existsSync(root)) continue;
+    for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      if (!found.has(entry.name)) found.set(entry.name, []);
+      found.get(entry.name).push(path.join(root, entry.name));
+    }
+  }
+  return found;
+}
+
+function selectedIds(available) {
+  const requested = process.env.DATASETS?.trim();
+  if (!deploy) return [...available, RLVR_ID];
+  if (requested === 'all') return [...available, RLVR_ID];
+  return requested ? requested.split(',').map(s => s.trim()).filter(Boolean) : PUBLIC_DATASETS;
+}
+
+function copyRlvr(dest) {
   try {
-    if (!fs.existsSync(dir)) return false;
-    fs.accessSync(dir, fs.constants.R_OK);
-    fs.readdirSync(dir);
+    fs.cpSync(RLVR_SRC, dest, { recursive: true });
     return true;
-  } catch {
+  } catch (err) {
+    fs.rmSync(dest, { recursive: true, force: true });
+    console.warn(`Skipping ${RLVR_ID}: can't read ${RLVR_SRC} (${err.code ?? err.message}).`);
     return false;
   }
 }
 
-// Data is merged from two roots, in order (later roots overlay earlier ones):
-//   1. sample_data/          - small datasets checked into this repo
-//   2. ../reasoning_vis_data - your own data, kept out of git (optional)
-const sampleDataDir = path.join(__dirname, 'sample_data');
-const srcDataDir = path.join(__dirname, '../reasoning_vis_data');
+const traceDatasets = findTraceDatasets();
+const ids = selectedIds(traceDatasets.keys());
 
-const sampleReadable = isReadableDir(sampleDataDir);
-const privateReadable = isReadableDir(srcDataDir);
-
-const srcDataDirs = [];
-if (sampleReadable) srcDataDirs.push(sampleDataDir);
-if (privateReadable) srcDataDirs.push(srcDataDir);
-
-const destDataDir = path.join(__dirname, 'public/assets/data');
-const destTracesDir = path.join(destDataDir, 'traces');
-const manifestPath = path.join(destTracesDir, 'manifest.json');
-
-// Helper to recursively copy directories safely
-function copyDirSync(src, dest, filterFn) {
-  try {
-    if (!fs.existsSync(src)) return;
-    const stat = fs.statSync(src);
-    if (stat.isDirectory()) {
-      if (!fs.existsSync(dest)) {
-        fs.mkdirSync(dest, { recursive: true });
-      }
-      const files = fs.readdirSync(src);
-      for (const file of files) {
-        const srcFile = path.join(src, file);
-        const destFile = path.join(dest, file);
-        if (!filterFn || filterFn(srcFile, file)) {
-          copyDirSync(srcFile, destFile, filterFn);
-        }
-      }
-    } else {
-      fs.copyFileSync(src, dest);
-    }
-  } catch (err) {
-    console.warn(`Warning: Could not copy from ${src} to ${dest}:`, err.message);
-  }
-}
-
-// Helper to clean directory safely
-function cleanDirSync(dir) {
-  try {
-    if (fs.existsSync(dir)) {
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
-  } catch (err) {
-    console.warn(`Warning: Could not clean ${dir}:`, err.message);
-  }
-}
-
-function getDatasetName(id) {
-  // E.g. 'opentraces-runtime' -> 'Opentraces Runtime'
-  const pretty = id.replace(/-/g, ' ').replace(/_/g, ' ')
-    .replace(/\b\w/g, c => c.toUpperCase());
-  return pretty.replace(/Opentraces/g, 'OpenTraces');
-}
-
-try {
-  if (fs.existsSync(srcDataDir) && !privateReadable) {
-    console.warn(`Private data folder exists at ${srcDataDir} but is not readable in this environment.`);
-  }
-
-  // Determine whether we should clean destDataDir:
-  // If private data is present or sample data is available and allowedDatasets is set,
-  // we clean to avoid stale files. BUT if private data exists on disk and is currently unreadable,
-  // do NOT wipe existing trace folders in destDataDir so we don't destroy previously copied data!
-  const preserveExistingTraces = fs.existsSync(srcDataDir) && !privateReadable && fs.existsSync(destTracesDir);
-
-  if (!preserveExistingTraces) {
-    if (allowedDatasets) {
-      cleanDirSync(destDataDir);
-      fs.mkdirSync(destDataDir, { recursive: true });
-    } else if (srcDataDirs.length > 0) {
-      cleanDirSync(destDataDir);
-      fs.mkdirSync(destDataDir, { recursive: true });
-    }
-  } else {
-    console.log(`Preserving existing datasets in ${destTracesDir} because private source directory is not readable.`);
-  }
-
-  // Copy data
-  if (allowedDatasets) {
-    console.log(`Preparing dataset build with specific folders: ${allowedDatasets.join(', ')}...`);
-    for (const dataset of allowedDatasets) {
-      let found = false;
-      for (const root of srcDataDirs) {
-        const srcTraceSub = path.join(root, 'traces', dataset);
-        if (fs.existsSync(srcTraceSub)) {
-          copyDirSync(srcTraceSub, path.join(destTracesDir, dataset));
-          console.log(`Copied dataset: traces/${dataset} (from ${path.basename(root)})`);
-          found = true;
-          continue;
-        }
-
-        const srcRootSub = path.join(root, dataset);
-        if (fs.existsSync(srcRootSub)) {
-          copyDirSync(srcRootSub, path.join(destDataDir, dataset));
-          console.log(`Copied dataset: ${dataset} (from ${path.basename(root)})`);
-          found = true;
-        }
-      }
-      if (!found && !preserveExistingTraces) {
-        console.warn(`Warning: Dataset folder "${dataset}" not found in source data.`);
-      }
-    }
-  } else {
-    console.log("Preparing ALL datasets build...");
-    for (const root of srcDataDirs) {
-      copyDirSync(root, destDataDir);
-      console.log(`Copied datasets from ${root}`);
-    }
-  }
-
-  // Scan the copied/existing traces and generate manifest.json
-  const datasets = [];
-
-  if (fs.existsSync(destTracesDir)) {
-    const items = fs.readdirSync(destTracesDir, { withFileTypes: true });
-    for (const item of items) {
-      if (item.isDirectory()) {
-        const dirName = item.name;
-        // If allowedDatasets is specified and we are not preserving existing traces, only include allowed datasets
-        if (allowedDatasets && !preserveExistingTraces && !allowedDatasets.includes(dirName)) {
-          continue;
-        }
-        const subDir = path.join(destTracesDir, dirName);
-        try {
-          const files = fs.readdirSync(subDir)
-            .filter(file => file.endsWith('.json'))
-            .map(file => `${dirName}/${file}`);
-
-          if (files.length > 0) {
-            files.sort();
-            datasets.push({
-              id: dirName,
-              name: getDatasetName(dirName),
-              files: files
-            });
-          }
-        } catch (err) {
-          console.warn(`Warning: Could not read directory ${subDir}:`, err.message);
-        }
-      }
-    }
-  }
-
-  datasets.sort((a, b) => a.id.localeCompare(b.id));
-
-  fs.mkdirSync(destTracesDir, { recursive: true });
-  fs.writeFileSync(manifestPath, JSON.stringify(datasets, null, 2), 'utf-8');
-  console.log(`Successfully generated manifest.json with ${datasets.length} datasets.`);
-} catch (error) {
-  console.error('Error generating data manifest:', error);
-  // Even on error, if destTracesDir has files, make a best-effort attempt to write manifest.json
-  try {
-    if (fs.existsSync(destTracesDir)) {
-      const items = fs.readdirSync(destTracesDir, { withFileTypes: true });
-      const recoveryDatasets = [];
-      for (const item of items) {
-        if (item.isDirectory()) {
-          const dirName = item.name;
-          const subDir = path.join(destTracesDir, dirName);
-          const files = fs.readdirSync(subDir)
-            .filter(file => file.endsWith('.json'))
-            .map(file => `${dirName}/${file}`);
-          if (files.length > 0) {
-            files.sort();
-            recoveryDatasets.push({
-              id: dirName,
-              name: getDatasetName(dirName),
-              files: files
-            });
-          }
-        }
-      }
-      recoveryDatasets.sort((a, b) => a.id.localeCompare(b.id));
-      fs.writeFileSync(manifestPath, JSON.stringify(recoveryDatasets, null, 2), 'utf-8');
-      console.log(`Recovery: generated fallback manifest.json with ${recoveryDatasets.length} datasets.`);
-    }
-  } catch (recoveryError) {
-    console.error('Failed to create fallback manifest:', recoveryError);
-  }
+const missing = ids.filter(id => id !== RLVR_ID && !traceDatasets.has(id));
+if (missing.length > 0) {
+  console.error(`Unknown dataset(s): ${missing.join(', ')}. Available: ${[...traceDatasets.keys(), RLVR_ID].join(', ')}`);
   process.exit(1);
 }
+
+fs.rmSync(outDir, { recursive: true, force: true });
+const tracesOut = path.join(outDir, 'traces');
+fs.mkdirSync(tracesOut, { recursive: true });
+
+const manifest = [];
+for (const id of ids) {
+  if (id === RLVR_ID) {
+    if (!copyRlvr(path.join(outDir, RLVR_ID)) && deploy) process.exit(1);
+    continue;
+  }
+  const dest = path.join(tracesOut, id);
+  for (const src of traceDatasets.get(id)) fs.cpSync(src, dest, { recursive: true });
+  const files = fs.readdirSync(dest).filter(f => f.endsWith('.json')).sort().map(f => `${id}/${f}`);
+  if (files.length > 0) manifest.push({ id, name: prettyName(id), files });
+}
+manifest.sort((a, b) => a.id.localeCompare(b.id));
+
+fs.writeFileSync(path.join(tracesOut, 'manifest.json'), JSON.stringify(manifest, null, 2));
+console.log(`Staged ${deploy ? 'deploy' : 'dev'} data in ${path.relative(__dirname, outDir)}/: ` +
+  (manifest.map(d => `${d.id} (${d.files.length})`).join(', ') || 'no trace datasets'));

@@ -24,7 +24,10 @@ logs
 # TypeScript
 /out-tsc/
 
-temp_data/*
 # Local Netlify folder
 .netlify
-/public/assets/data/
+
+# Your own traces and scripts (see README: "Your own data")
+/data/local/
+# Data staged for the app by generate-manifest.js
+/.data-build/

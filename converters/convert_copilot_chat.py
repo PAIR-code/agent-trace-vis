@@ -24,9 +24,9 @@ Quick start
     python3 converters/convert_copilot_chat.py <session-id-or-prefix>
     npm start
 
-No dependencies beyond the Python 3.8+ standard library. Output goes to the
-app's data folder (``../reasoning_vis_data/traces/copilot_chats/`` next to this
-repo, created if missing), which ``npm start`` picks up automatically.
+No dependencies beyond the Python 3.8+ standard library. Output goes to
+``data/local/traces/copilot_chats/`` in this repo (gitignored, created if
+missing), which ``npm start`` picks up automatically.
 
 Where Copilot keeps its chats
 -----------------------------
@@ -124,7 +124,7 @@ from typing import Dict, List, Optional
 SCHEMA_VERSION = "0.9.0"
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_DIR = os.path.dirname(SCRIPT_DIR)
-DEFAULT_OUTPUT = os.path.normpath(os.path.join(REPO_DIR, "..", "reasoning_vis_data", "traces", "copilot_chats"))
+DEFAULT_OUTPUT = os.path.join(REPO_DIR, "data", "local", "traces", "copilot_chats")
 DEFAULT_SDK_INPUT = os.path.join(os.path.expanduser("~"), ".copilot", "session-state")
 EXCLUDED_SESSION_IDS = {
     "a0c54049-6e7b-4455-9f83-085929e42f19",

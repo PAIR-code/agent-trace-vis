@@ -17,7 +17,7 @@ A timeline-based visualization for structured agent traces (e.g., from coding ag
 
 #### Bringing your own traces
 
-The repo ships with sample traces in [`sample_data/traces/`](sample_data/traces/) (GitHub Copilot agent-mode sessions), so `npm start` shows real data right away. To look at your own agent's traces you need them as OpenTraces JSON; the easiest path is to use (or adapt) one of the converters in [`converters/`](converters/). See [`converters/README.md`](converters/README.md) for how to convert your Copilot chats and how to write a converter for another agent.
+The repo ships with sample traces in [`data/sample/traces/`](data/sample/traces/) (GitHub Copilot agent-mode sessions), so `npm start` shows real data right away. To look at your own agent's traces you need them as OpenTraces JSON; the easiest path is to use (or adapt) one of the converters in [`converters/`](converters/). See [`converters/README.md`](converters/README.md) for how to convert your Copilot chats and how to write a converter for another agent.
 
 ### Unstructured Reasoning (Graph)
 A force-directed graph visualization for comparing multiple rollouts of unstructured chain-of-thought reasoning (e.g., RLVR-trained models solving math problems). Segments reasoning into chunks, embeds them, and visualizes structural patterns across traces.
@@ -46,44 +46,34 @@ A sentence-level visualization for analyzing how messages in multi-turn conversa
 npm install
 npm start
 ```
-The app will run at `http://localhost:4200`. Before each start/build, `generate-manifest.js` copies the bundled `sample_data/` plus (if present) your sibling data folder into `public/assets/data/` and writes a manifest of the datasets it found.
+The app will run at `http://localhost:4200`.
 
-### 2. Expected Directory Layout
+### 2. Where trace data lives
 ```
-parent/
-├── agent-trace-vis/        ← this app
-│   └── sample_data/        ← small datasets checked into the repo
-│       └── traces/
-└── reasoning_vis_data/     ← your own data (optional, not in git)
-    ├── traces/             ← agentic trace JSON folders, one per dataset
-    └── rlvr_vs_base/       ← unstructured reasoning datasets
+agent-trace-vis/
+└── data/
+    ├── sample/traces/      ← small sample datasets, committed
+    └── local/              ← your own traces and scripts (gitignored)
+        └── traces/         ← one folder per dataset
 ```
-Each sub-folder of `traces/` becomes one dataset in the UI; folders with the same name in both roots are merged.
+Each sub-folder of `traces/` becomes one dataset in the UI; a folder with the same name in both `sample/` and `local/` is merged. Converters write to `data/local/traces/` by default.
+
+Before each start/build, `generate-manifest.js` copies the datasets into `.data-build/` (gitignored; served at `assets/data/`) and writes the manifest. `npm start` gets every dataset. Builds and deploys get only the selected ones (below), in a separate folder, so deploying never changes what you see locally.
 
 ### 3. Building & Deploying (Netlify)
 
 Building compiles the app locally to `dist/reasoning-trace-vis/browser/`. Deploying uploads those files to Netlify at [agent-trace-vis.netlify.app](https://agent-trace-vis.netlify.app).
 
-To build and deploy a **Draft / Preview URL** with specific datasets:
+By default a build includes only the public datasets (`PUBLIC_DATASETS` in `generate-manifest.js`). Pass `DATASETS` (comma-separated, or `all`) to choose others; a name that doesn't exist fails the build.
+
 ```bash
-DATASETS=my_custom_dataset npm run deploy:draft
-```
-Or with a custom alias name:
-```bash
-DATASETS=my_custom_dataset npm run deploy:draft -- --alias my-custom-alias
+npm run deploy                                   # production, public datasets
+npm run deploy:draft                             # preview URL, public datasets
+DATASETS=ridge_eval npm run deploy:draft         # preview URL, chosen datasets
+DATASETS=ridge_eval npm run deploy:draft -- --alias ridge   # with a custom alias
 ```
 
-To build and deploy to **Production**:
-```bash
-# Deploy default public datasets:
-npm run deploy
-
-# Deploy all datasets (including private/internal ones):
-npm run deploy:all
-
-# With specific datasets:
-DATASETS=website_updates,rlvr_vs_base npm run deploy
-```
+### 4. Trace format
 
 Each trace file should follow this structure:
 
@@ -141,8 +131,6 @@ Each dataset file should be a JSON array of objects with at minimum:
   }
 ]
 ```
-
-
 
 ## License and Disclaimer
 
