@@ -17,7 +17,7 @@ A timeline-based visualization for structured agent traces (e.g., from coding ag
 
 #### Bringing your own traces
 
-The repo ships with sample traces in [`data/sample/traces/`](data/sample/traces/) (GitHub Copilot agent-mode sessions), so `npm start` shows real data right away. To look at your own agent's traces you need them as OpenTraces JSON; the easiest path is to use (or adapt) one of the converters in [`converters/`](converters/). See [`converters/README.md`](converters/README.md) for how to convert your Copilot chats and how to write a converter for another agent.
+The repo ships with sample traces in [`data/sample/traces/`](data/sample/traces/) (GitHub Copilot agent-mode sessions and a website-editing session), so `npm start` shows real data right away. To look at your own agent's traces you need them as OpenTraces JSON; the easiest path is to use (or adapt) one of the converters in [`converters/`](converters/). See [`converters/README.md`](converters/README.md) for how to convert your Copilot chats and how to write a converter for another agent.
 
 ### Unstructured Reasoning (Graph)
 A force-directed graph visualization for comparing multiple rollouts of unstructured chain-of-thought reasoning (e.g., RLVR-trained models solving math problems). Segments reasoning into chunks, embeds them, and visualizes structural patterns across traces.
