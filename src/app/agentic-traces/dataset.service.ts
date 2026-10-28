@@ -31,7 +31,7 @@ import { TraceEntry } from './layout-types';
 import { TraceRecord } from './trace';
 import { TraceLoaderService } from './trace-loader.service';
 import { hashString } from './layout-utils';
-import { linkSubagents } from './subagents';
+import { linkGroups } from './agent-groups';
 
 export interface DatasetItem {
   name: string;
@@ -98,7 +98,7 @@ export class DatasetService {
    */
   async loadTraces(ds: DatasetItem): Promise<TraceEntry[]> {
     const entries = await this.fetchTraces(ds);
-    linkSubagents(entries);
+    linkGroups(entries);
     return entries;
   }
 

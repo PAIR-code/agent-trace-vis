@@ -163,4 +163,14 @@ export function getAgentColor(agentName?: string | null, model?: string | null):
   return DISTINCT_PALETTE[idx];
 }
 
+/**
+ * Team members usually share one model, so model-based colors would make them
+ * all alike. Each member instead gets its own palette color, by its position
+ * in the team's member list.
+ */
+export function teamMemberColor(members: readonly string[], agent: string): string {
+  const i = Math.max(0, members.indexOf(agent));
+  return DISTINCT_PALETTE[i % DISTINCT_PALETTE.length];
+}
+
 

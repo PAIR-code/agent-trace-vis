@@ -5,6 +5,18 @@ Scripts that turn an agent's own logs into the trace format defined by [our libr
 | Script | Source |
 |---|---|
 | [`convert_copilot_chat.py`](convert_copilot_chat.py) | VS Code Copilot Chat logs and Copilot SDK event logs |
+| [`convert_swarm_team.py`](convert_swarm_team.py) | Multi-agent team rollouts (RLTracer file-monitor traces): peer agents messaging each other |
+
+## Convert multi-agent team rollouts
+
+```bash
+python3 converters/convert_swarm_team.py path/to/run.zip --step 1 -n 10   # streams the zip
+python3 converters/convert_swarm_team.py path/to/run.zip --step 5 --teams 8 9 16   # particular teams
+python3 converters/convert_swarm_team.py path/to/step_01.jsonl -n 10
+npm start
+```
+
+Each team becomes one trace per agent in `data/local/traces/swarm_teams/`, linked by `metadata.team`. The agents' messages are matched across traces (send → read) into `metadata.agent_messages`, so the timeline draws lines between teammates' rows in Time mode. The team's shared event log, about 97% of the source size, isn't needed and is dropped. See the script's docstring for the format details.
 
 ## Convert your GitHub Copilot sessions
 
@@ -30,5 +42,6 @@ Copy `convert_copilot_chat.py` and replace its first two layers, keeping the thi
 
 - **Tool kinds** go in `metadata.tool_kinds`, keyed by the original tool name. Use the `ToolKind` values defined in [`trace-extensions.ts`](../src/app/agentic-traces/trace-extensions.ts); keep source tool names and inputs intact. Missing kinds fall back to best-effort name inference.
 - **File paths** should sit under a recognised input key such as `filePath`, `file_path`, `path` or `TargetFile`. For a result that touched several files, put one `File Path: /abs/path` line per file in the observation.
+- **Multi-agent traces**: a subagent's trace records `metadata.parent_trace_id` (and `parent_tool_call_id`); team members share `metadata.team`. Messages between them go in each trace's `metadata.agent_messages`: the ids it sent and received, keyed by `tool_call_id` or `step:<index>`, with ids unique within the dataset (see `AgentMessages` in [`trace-extensions.ts`](../src/app/agentic-traces/trace-extensions.ts)).
 
 Write schema fields into steps and tool calls ([`trace.ts`](../src/app/agentic-traces/trace.ts) mirrors the schema). Additional data such as kinds, timing, and token counts goes in `metadata`. See *Getting Started* in the [main README](../README.md) for the minimal trace structure.

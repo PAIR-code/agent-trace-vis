@@ -202,6 +202,13 @@
 .vis-node.command.is-failed { background: var(--error); }
 /* A write to one of the agent's own plan / scratch files: a file edit bar, but white */
 .vis-node.artifact { background: #ffffff; border: 1px solid var(--tool-line); border-radius: 1.5px; }
+/*
+ * Peer messages (team traces), in the agent's color: a filled diamond when
+ * sent, an outlined circle when read / waited for. Lines between rows join them.
+ */
+.vis-node.message-send { background: var(--mark-fill); border: none; border-radius: 1.5px; transform: rotate(45deg) scale(0.85); opacity: 0.9; }
+.vis-node.message-receive { background: #ffffff; border: 2px solid var(--mark-fill); border-radius: 50%; box-sizing: border-box; opacity: 0.9; }
+.vis-node.message-receive.is-failed { border-color: var(--error); }
 .command-content {
   display: flex;
   justify-content: center;

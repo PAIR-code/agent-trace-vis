@@ -24,7 +24,7 @@ import { ReasoningTrace, ReasoningTraceStep, ReasoningTraceNode, TraceNodeType, 
 import { TraceRecord, Step, Agent } from './trace';
 import { traceExtensions } from './trace-extensions';
 import { classifyTool, inferToolKind } from './tools';
-import { getAgentColor } from './colors';
+import { getAgentColor, teamMemberColor } from './colors';
 import { hashString } from './layout-utils';
 
 /**
@@ -55,7 +55,7 @@ export class TraceLoaderService {
     const model = step.model || inheritedModel || defaultAgent?.model || undefined;
     const agentName = step.agent_role || defaultAgent?.name || 'Agent';
 
-    const color = getAgentColor(agentName, model);
+    const color = colorFor(agentName, model, ext);
 
     const addMs = (ts: string | undefined, ms: number | undefined) =>
       ts && ms !== undefined ? new Date(new Date(ts).getTime() + ms).toISOString() : undefined;
@@ -135,6 +135,16 @@ export class TraceLoaderService {
       }
     }
 
+    // Messages to and from other agents (see AgentMessages): a tool call's by
+    // its id; a whole step's are received at its first node and sent from its last.
+    const place = `step:${step.step_index ?? stepIndex}`;
+    nodes.forEach((n, i) => {
+      const callId: string | undefined = n.data?.toolCall?.tool_call_id;
+      const sent = [...(callId ? ext.messages.sent(callId) : []), ...(i === nodes.length - 1 ? ext.messages.sent(place) : [])];
+      const received = [...(i === 0 ? ext.messages.received(place) : []), ...(callId ? ext.messages.received(callId) : [])];
+      if (sent.length || received.length) n.messages = { sent, received };
+    });
+
     return {
       id: stepId,
       timestamp: step.timestamp,
@@ -184,7 +194,7 @@ export class TraceLoaderService {
     agentMap.set(defaultKey, {
       name: defaultAgentName,
       model: defaultAgentModel,
-      color: getAgentColor(defaultAgentName, defaultAgentModel)
+      color: colorFor(defaultAgentName, defaultAgentModel, ext)
     });
 
     parsedSteps.forEach((step) => {
@@ -194,7 +204,7 @@ export class TraceLoaderService {
           agentMap.set(stepKey, {
             name: step.agentName,
             model: step.model,
-            color: step.color || getAgentColor(step.agentName, step.model)
+            color: step.color || colorFor(step.agentName, step.model, ext)
           });
         }
       }
@@ -218,6 +228,12 @@ export class TraceLoaderService {
       parentSourceId: ext.parentTraceId,
       parentToolCallId: ext.parentToolCallId,
       artifactDirs: localPaths(ext.artifactDirs),
+      team: ext.team,
     };
   }
+}
+
+/** A team member's own color (members share a model); otherwise the agent / model color. */
+function colorFor(agentName: string, model: string | undefined, ext: ReturnType<typeof traceExtensions>): string {
+  return ext.team ? teamMemberColor(ext.team.members, agentName) : getAgentColor(agentName, model);
 }

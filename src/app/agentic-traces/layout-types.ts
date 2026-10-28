@@ -21,6 +21,7 @@
 
 import type { Mark } from './marks';
 import type { FileLane } from './file-lane';
+import type { TeamInfo } from './trace-extensions';
 
 export const BASE_OFFSET = 24;
 
@@ -53,6 +54,10 @@ export enum ReasoningStepType {
   SEARCH_WEB = 'SEARCH_WEB',
   CODE_SEARCH = 'CODE_SEARCH',
   INVOKE_SUBAGENT = 'INVOKE_SUBAGENT',
+  /** Sending a message to peer agents (a team member's `message.send` tool). */
+  SEND_MESSAGE = 'SEND_MESSAGE',
+  /** Reading, waiting for or checking peer messages (`message.receive`). */
+  RECEIVE_MESSAGE = 'RECEIVE_MESSAGE',
   GENERIC = 'GENERIC',
 }
 
@@ -76,6 +81,8 @@ export interface ReasoningTrace {
    * lane instead of the files lane (see `isArtifact` in file-events.ts).
    */
   artifactDirs?: string[];
+  /** For a member of a team of peer agents (from `metadata.team`). */
+  team?: TeamInfo;
 }
 
 import { TokenUsage } from './trace';
@@ -91,10 +98,12 @@ export interface TraceEntry {
   agents: { name: string; model?: string; color: string }[];
   /** Start date shown in the picker, e.g. "Sep 28". */
   date?: string;
-  /** Entry id of the trace that launched this one as a subagent, if it is in the dataset (see subagents.ts). */
+  /** Entry id of the trace that launched this one as a subagent, if it is in the dataset (see agent-groups.ts). */
   parentId?: string;
   /** Tool call in the parent that launched this subagent. */
   parentToolCallId?: string;
+  /** Team id shared with its peers, for a member of a team (see agent-groups.ts). */
+  teamId?: string;
 }
 
 export interface ReasoningTraceStep {
@@ -122,6 +131,13 @@ export interface ReasoningTraceNode {
   timestamp?: string;
   completedAt?: string;
   data: any;
+  /** Ids of messages to or from other agents sent or received here (from `metadata.agent_messages`). */
+  messages?: NodeMessages;
+}
+
+export interface NodeMessages {
+  sent: string[];
+  received: string[];
 }
 
 
@@ -147,6 +163,11 @@ export interface TraceLayout {
   depth: number;
   /** For a subagent row: the row it hangs under, and the x where it branches off. */
   parent?: { id: string; x: number };
+  /**
+   * Id of the first row of this row's group (a trace with its subagents, or
+   * a team), which shares one axis and moves as one when rows are reordered.
+   */
+  groupId: string;
 }
 
 export interface LayoutOutput {

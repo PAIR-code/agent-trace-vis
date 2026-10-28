@@ -25,7 +25,7 @@
 <div class="row-main-track" [class.collapsed]="!expanded()" [style.width.px]="width()" [style.height.px]="trackHeight()">
   @for (ch of channels; track ch.id) {
     @if (isShown(ch)) {
-      <span class="lane-label" [class.hidden]="!expanded()" [style.top.px]="laneCenter(ch.id)">{{ ch.label }}</span>
+      <span class="lane-label" [class.hidden]="!expanded()" [style.top.px]="laneCenter(ch.id)">{{ laneLabel(ch) }}</span>
     }
   }
 

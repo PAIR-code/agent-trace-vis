@@ -44,6 +44,8 @@ const TOOL_KIND_STEP_TYPE: Record<ToolKind, S> = {
   'notebook.edit': S.NOTEBOOK_EDIT,
   'execute.command': S.RUN_COMMAND,
   'delegate.agent': S.INVOKE_SUBAGENT,
+  'message.send': S.SEND_MESSAGE,
+  'message.receive': S.RECEIVE_MESSAGE,
   other: S.GENERIC,
 };
 
@@ -77,11 +79,19 @@ function kindLabel(kind: ToolKind, input: Record<string, any>, file: string | nu
     case 'notebook.edit':
       return `Notebook: ${file || 'notebook'}`;
     case 'execute.command':
-      return `Run: ${field(input, ['CommandLine', 'command', 'cmd'], 'command')}`;
+      return `Run: ${field(input, ['CommandLine', 'command', 'cmd'], name)}`;
     case 'delegate.agent': {
       const role = stripQuotes(String(field(input, ['Role', 'role'], '')));
       return role ? `Subagent: ${role}` : 'Subagent';
     }
+    case 'message.send': {
+      const to = input['to'] ?? input['recipient'] ?? input['user_id'];
+      const recipients = Array.isArray(to) ? to.join(', ') : (to ? String(to) : 'all');
+      const text = String(field(input, ['text', 'message', 'content'], ''));
+      return text ? `Message → ${recipients}: ${text}` : `Message → ${recipients}`;
+    }
+    case 'message.receive':
+      return name.replace(/_/g, ' ');
     case 'other':
       return file ? `${name}: ${file}` : name;
   }
@@ -123,6 +133,8 @@ export function inferToolKind(toolName: string): ToolKind {
   if (has('search_web', 'websearch', 'google')(name)) return 'search.web';
   if (has('code_search')(name)) return 'search.code';
   if (has('subagent', 'spawn_agent', 'invoke_agent', 'delegate')(name)) return 'delegate.agent';
+  if (has('send_message')(name)) return 'message.send';
+  if (has('read_message', 'check_notification')(name)) return 'message.receive';
   return 'other';
 }
 
@@ -146,6 +158,11 @@ const FILE_ACCESS: Partial<Record<S, FileAccess>> = {
 /** How a step touches files, or null. These are drawn in the files lane, not the main track. */
 export function fileAccess(stepType: S | undefined): FileAccess | null {
   return (stepType && FILE_ACCESS[stepType]) || null;
+}
+
+/** Whether a step sends or receives peer messages. These are drawn in the messages lane, not the tools lane. */
+export function isMessageTool(stepType: S | undefined): boolean {
+  return stepType === S.SEND_MESSAGE || stepType === S.RECEIVE_MESSAGE;
 }
 
 /** Glyph for a tool mark: a terminal for commands, a magnifier for web / code search. */

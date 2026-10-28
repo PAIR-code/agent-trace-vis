@@ -27,9 +27,9 @@
 import { getAgentColor } from './colors';
 import { ChannelId, channelCenter } from './channels';
 import { SLOT_EDIT_HEIGHT, linesToBarHeight } from './file-lane';
-import { AxisMode, BASE_OFFSET, ReasoningStepType, ReasoningTraceNode, ReasoningTraceStep, TraceNodeType } from './layout-types';
+import { AxisMode, BASE_OFFSET, NodeMessages, ReasoningStepType, ReasoningTraceNode, ReasoningTraceStep, TraceNodeType } from './layout-types';
 import { getStepTokens, stepAxisLength, stepTokenSegments, truncate, wordCount } from './layout-utils';
-import { fileAccess, toolIcon } from './tools';
+import { fileAccess, isMessageTool, toolIcon } from './tools';
 import { XAxis } from './x-scale';
 
 /** Styling hints for a mark; shape and base colors come from CSS keyed on `type`. */
@@ -37,9 +37,10 @@ export interface MarkLook {
   /**
    * Glyph drawn inside the mark (replaces the type's shape). `artifact`: a
    * write to one of the agent's own plan / scratch files, drawn on the tools
-   * line as a plain box.
+   * line as a plain box. `message-send` / `message-receive`: a message to
+   * other agents sent, or read / waited for, in the messages lane.
    */
-  icon?: 'command' | 'search' | 'artifact';
+  icon?: 'command' | 'search' | 'artifact' | 'message-send' | 'message-receive';
   /** Only set where the border follows the step's agent color (system marks). */
   borderColor?: string;
   /** A tool call whose observation reported an error. */
@@ -75,6 +76,8 @@ export interface Mark {
   stepRef: ReasoningTraceStep;
   timestamp?: string;
   stepType?: ReasoningStepType;
+  /** Messages to or from other agents sent or received here; lines join them across rows (links.ts). */
+  messages?: NodeMessages;
 }
 
 /** Vertical placement relative to the channel's center line. */
@@ -137,6 +140,13 @@ const EDIT_SPEC: MarkSpec = { channel: 'tools', anchor: 'hang', width: 'extent',
  */
 const ARTIFACT_SPEC: MarkSpec = { ...EDIT_SPEC, channel: 'artifacts' };
 
+/**
+ * A message sent to or read from other agents: an icon in the agent's color,
+ * in the artifacts channel, which the row then labels as its messages lane.
+ * Lines between rows join these marks (see links.ts).
+ */
+const MESSAGE_SPEC: MarkSpec = { channel: 'artifacts', anchor: 'center', width: ICON, height: ICON, agentFill: true };
+
 function anchorY(anchor: Anchor, center: number, height: number): number {
   switch (anchor) {
     case 'above': return center - height - 1;
@@ -184,7 +194,9 @@ function markLook(node: ReasoningTraceNode, stepColor: string): MarkLook {
       return { borderColor: stepColor };
   }
   return {
-    icon: toolIcon(node.stepType),
+    icon: node.stepType === ReasoningStepType.SEND_MESSAGE ? 'message-send'
+      : node.stepType === ReasoningStepType.RECEIVE_MESSAGE ? 'message-receive'
+      : toolIcon(node.stepType),
     failed: (node.type === TraceNodeType.TOOL_DATA && !!node.data?.observation?.error) || undefined,
   };
 }
@@ -298,7 +310,7 @@ export function buildMarks(trace: MarkTraceInput, axis: XAxis, mode: AxisMode,
     step.nodes.forEach((node, k) => {
       const base = {
         id: node.id, traceId: trace.id, label: truncate(node.text || '', 80), text: node.text,
-        data: node.data, stepRef: step, timestamp: node.timestamp, stepType: node.stepType,
+        data: node.data, stepRef: step, timestamp: node.timestamp, stepType: node.stepType, messages: node.messages,
       };
       if (isRateLimitNode(node)) {
         marks.push({ ...base, type: TraceNodeType.ERROR, channel: 'agent', x: 0, y: 0, width: 0, height: 0,
@@ -312,6 +324,7 @@ export function buildMarks(trace: MarkTraceInput, axis: XAxis, mode: AxisMode,
       const artifactLines = trace.artifactNodes?.get(node.id);
       const isArtifact = artifactLines !== undefined;
       const spec = isArtifact ? ARTIFACT_SPEC
+        : isTool && isMessageTool(node.stepType) ? MESSAGE_SPEC
         : fileAccess(node.stepType) === 'edit' ? EDIT_SPEC
         : isTool && node.stepType === ReasoningStepType.LIST_DIRECTORY ? LIST_DIR_SPEC
         : MARK_SPECS[node.type] ?? MARK_SPECS[TraceNodeType.TOOL_DATA];

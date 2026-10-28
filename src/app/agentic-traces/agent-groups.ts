@@ -16,22 +16,31 @@
  */
 
 /**
- * @fileoverview Subagent relationships between traces in a dataset.
+ * @fileoverview Groups of traces that belong together: a trace and the
+ * subagents it launched, or a team of peer agents.
  *
- * A trace launched by another trace's tool call (an `invoke_subagent`) records
- * its parent's trace id in its metadata. Here those references are resolved to
- * dataset entry ids, and selections are kept in "family order": every trace is
- * followed by its subagents, depth-first, so a parent and its subagents are
- * always adjacent rows.
+ * A group shares one axis and moves as one when rows are reordered. It comes
+ * in two shapes:
+ *  - a tree: a subagent's trace records its parent's trace id (and the tool
+ *    call that launched it) in its metadata; and
+ *  - flat: every member of a team (`metadata.team`) is a root, in the team's
+ *    member order.
+ * Messages between members (`metadata.agent_messages`) are drawn the same way
+ * for both (see links.ts).
+ *
+ * Selections are kept in "group order": each trace is followed by its
+ * subagents, depth-first, and a team's members stay together, so a group's
+ * rows are always adjacent.
  */
 
 import { TraceEntry } from './layout-types';
 
 /**
- * Resolves each entry's parent reference to the parent's entry id. Entries
- * whose parent isn't in the dataset (or that would form a cycle) stay roots.
+ * Resolves each entry's parent reference to the parent's entry id, and records
+ * each team member's team id. Entries whose parent isn't in the dataset (or
+ * that would form a cycle) stay roots.
  */
-export function linkSubagents(entries: TraceEntry[]): void {
+export function linkGroups(entries: TraceEntry[]): void {
   const bySource = new Map<string, TraceEntry>();
   for (const e of entries) {
     if (e.data?.sourceId) bySource.set(e.data.sourceId, e);
@@ -40,6 +49,9 @@ export function linkSubagents(entries: TraceEntry[]): void {
     const parent = e.data?.parentSourceId ? bySource.get(e.data.parentSourceId) : undefined;
     e.parentId = parent && parent !== e ? parent.id : undefined;
     e.parentToolCallId = e.data?.parentToolCallId;
+    // A team member is a peer, never a subagent.
+    e.teamId = e.data?.team?.id;
+    if (e.teamId) e.parentId = undefined;
   }
   // Break cycles (bad data): an ancestor chain that returns to itself is cut.
   const byId = new Map(entries.map(e => [e.id, e]));
@@ -61,10 +73,29 @@ export function childrenOf(entries: TraceEntry[], id: string): TraceEntry[] {
   return entries.filter(e => e.parentId === id);
 }
 
-/** `id` and all its descendants, depth-first. */
-export function familyOf(entries: TraceEntry[], id: string): string[] {
-  const out: string[] = [id];
-  for (const c of childrenOf(entries, id)) out.push(...familyOf(entries, c.id));
+/** Every member of `id`'s team (itself included) in member order, or just `id` if it isn't in a team. */
+export function teamOf(entries: TraceEntry[], id: string): string[] {
+  const teamId = entries.find(e => e.id === id)?.teamId;
+  if (!teamId) return [id];
+  const members = entries.filter(e => e.teamId === teamId);
+  const order = (e: TraceEntry) => {
+    const team = e.data?.team;
+    const i = team ? team.members.indexOf(team.agent) : -1;
+    return i < 0 ? Number.MAX_SAFE_INTEGER : i;
+  };
+  // Stable: members not in the member list keep dataset order, at the end.
+  return members.map((e, i) => ({ e, i }))
+    .sort((a, b) => order(a.e) - order(b.e) || a.i - b.i)
+    .map(({ e }) => e.id);
+}
+
+/** `id` and all its descendants, depth-first; for a team member, the whole team. */
+export function groupOf(entries: TraceEntry[], id: string): string[] {
+  const out: string[] = [];
+  for (const member of teamOf(entries, id)) {
+    out.push(member);
+    for (const c of childrenOf(entries, member)) out.push(...groupOf(entries, c.id));
+  }
   return out;
 }
 
@@ -77,12 +108,13 @@ export function depthOf(entries: TraceEntry[], id: string): number {
 }
 
 /**
- * Puts an ordered selection into family order: each selected trace is
+ * Puts an ordered selection into group order: each selected trace is
  * followed by its selected descendants (depth-first, in dataset order), and a
  * selected subagent whose parent is also selected moves under that parent.
- * The relative order of roots is kept.
+ * Selected team members are kept together, in member order, where the first
+ * of them was. The relative order of roots is kept.
  */
-export function familyOrder(entries: TraceEntry[], ordered: Iterable<string>): string[] {
+export function groupOrder(entries: TraceEntry[], ordered: Iterable<string>): string[] {
   const selected = new Set(ordered);
   const byId = new Map(entries.map(e => [e.id, e]));
   // A selected trace is a root of the selection if no selected ancestor exists.
@@ -93,6 +125,7 @@ export function familyOrder(entries: TraceEntry[], ordered: Iterable<string>): s
     return false;
   };
   const out: string[] = [];
+  const placed = new Set<string>();
   // Unselected traces in the middle of a chain are skipped over, not shown.
   const visitChildren = (id: string) => {
     for (const c of childrenOf(entries, id)) {
@@ -101,13 +134,19 @@ export function familyOrder(entries: TraceEntry[], ordered: Iterable<string>): s
     }
   };
   const visit = (id: string) => {
+    if (placed.has(id)) return;
+    placed.add(id);
     out.push(id);
     visitChildren(id);
   };
   for (const id of selected) {
-    if (byId.has(id) && !hasSelectedAncestor(id)) visit(id);
+    if (!byId.has(id) || hasSelectedAncestor(id) || placed.has(id)) continue;
+    // A team member brings its selected teammates along.
+    for (const member of teamOf(entries, id)) {
+      if (selected.has(member) && !hasSelectedAncestor(member)) visit(member);
+    }
   }
   // Anything not reached (unknown ids) keeps its place at the end.
-  for (const id of selected) if (!out.includes(id)) out.push(id);
+  for (const id of selected) if (!placed.has(id)) out.push(id);
   return out;
 }

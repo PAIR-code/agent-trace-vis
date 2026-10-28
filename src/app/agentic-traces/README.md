@@ -95,7 +95,7 @@ trace JSON ──trace-loader.service──▶ ReasoningTrace (steps → nodes)
   are derived from it.
 - **X axis** (`AxisMode` in `layout-types.ts`): `time` (elapsed ms), `tokens`
   (cumulative token usage, or word count where usage is missing) or `sequence`
-  (one slot per node, shown as "Steps" in the toolbar). All selected families
+  (one slot per node, shown as "Steps" in the toolbar). All selected groups
   share one scale, so the longest fills the width. Time needs timestamps:
   while no selected trace has any, the Time button is disabled and the layout
   uses `sequence` instead (`effectiveAxisMode` in `agentic-traces.ts`); the
@@ -149,28 +149,52 @@ trace JSON ──trace-loader.service──▶ ReasoningTrace (steps → nodes)
   gap, nothing is selected and the side panel scrolls the next mark to the top
   (`scrollTarget`). The side panel never smooth-scrolls; it jumps. Rows are
   reordered by the grip at their right end.
-- **Subagents** (`subagents.ts`): a trace launched by another trace's tool call
-  (an `invoke_subagent`) records its parent in `metadata.parent_trace_id` /
-  `parent_tool_call_id`; the parent's tool call lists its children in
-  `subagent_trajectory_refs` (both written by `convert_jetski_db.py`).
-  `linkSubagents()` resolves those to entry ids when a dataset loads.
-  - A parent and its subagents form a *family* and are laid out on **one shared
-    axis** (`buildFamilies()` in `layout.ts`). In time mode a subagent's row
-    therefore starts under the moment it was launched; in tokens mode it is
-    offset to the parent's token count at the launching step.
+- **Multi-agent traces** (`agent-groups.ts`, `links.ts`): traces that belong
+  together form a *group*, which shares one axis and moves as one. A group
+  comes in two shapes:
+  - **Subagents (a tree)**: a trace launched by another trace's tool call (an
+    `invoke_subagent`) records its parent in `metadata.parent_trace_id` /
+    `parent_tool_call_id`; the parent's tool call lists its children in
+    `subagent_refs` (both written by `convert_jetski_db.py`). Subagent rows
+    are titled `[subagent] …` (`TraceLayout.depth`). In time mode a
+    subagent's row starts under the moment it was launched; in tokens mode it
+    is offset to the parent's token count at the launching step.
+  - **Teams (flat)**: peer agents working on one task (e.g.
+    `converters/convert_swarm_team.py`). Each member's trace carries
+    `metadata.team` (team id, members, this agent). Every member is a root
+    (depth 0), in member order, with its own palette color
+    (`teamMemberColor` in `colors.ts`): members usually share a model, so
+    model colors would make them alike.
+  - `linkGroups()` resolves parents and teams when a dataset loads.
+    Selecting a trace selects its group, and the selection is kept in *group
+    order* (`groupOrder()`), so a group's rows are adjacent. Each row records
+    its group (`TraceLayout.groupId`); dragging a row moves its whole group,
+    and rows can only be dropped between groups.
   - Gaps represent periods waiting for user input. They are found over the
-    whole family, so a parent waiting on a subagent is not "waiting for user"
-    and gap compression doesn't squash the subagent's work. By default, user wait
-    gaps are hidden (compressed); toggling "Show user wait" expands them.
-    Fill-space stretches the family, not each row.
-  - Selecting a trace selects its subagents; the selection is kept in *family
-    order* (`familyOrder()`), so subagent rows always follow their parent.
-    Dragging a root row moves its whole family, and rows can only be dropped
-    between families.
-  - Subagent rows are titled `[subagent] …` (`TraceLayout.depth`) and joined to
-    the parent by a thin line from a dot on the parent's agent line (at the
-    launching tool call, whose mark is hidden) down to the subagent's agent
-    line (`subagentConnectors` in `agentic-traces.ts`, one SVG over all rows).
+    whole group (`buildGroups()` in `layout.ts`), so a parent waiting on a
+    subagent is not "waiting for user" and gap compression doesn't squash the
+    subagent's work. By default, user wait gaps are hidden (compressed);
+    toggling "Show user wait" expands them. Fill-space stretches the group,
+    not each row.
+  - **Messages** between agents, in either shape, come from
+    `metadata.agent_messages`: the ids each trace sent and received, by tool
+    call or by `step:<index>` (see `AgentMessages` in
+    `trace-extensions.ts`). The loader attaches them to marks
+    (`Mark.messages`). Message tools (`message.send` / `message.receive`
+    kinds) are drawn in the `artifacts` channel, which a row with messages
+    labels "messages" (`laneLabel` in `trace-track.ts`): a filled diamond for
+    a send, an outlined circle for a read or wait. A message received by a
+    harness notice (Antigravity's `[Message] …` system messages) ends on that
+    notice's mark.
+  - `buildLinks()` in `links.ts` draws every line between rows, in one SVG
+    over the row stack: a subagent's *launch* (a dot on the parent's agent
+    line at the launching tool call, whose mark is hidden, down to the
+    subagent's agent line); a *message* curve from each send to each receipt;
+    and an *unread* stub (fine dashes, hollow end) from a send to each shown
+    recipient that never received it. Hovering or selecting a message mark
+    highlights its lines. Only time mode is shared across rows; in tokens and
+    steps mode each row has its own axis, so a receipt can sit left of its
+    send: those lines are dashed and leave vertically (`curve()`).
 
 ## How to add a channel
 

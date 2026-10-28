@@ -63,6 +63,10 @@ export const TOOL_KINDS = [
   'notebook.edit',
   'execute.command',
   'delegate.agent',
+  /** Sends a message to other agents (drawn in the messages lane; see `agent_messages`). */
+  'message.send',
+  /** Reads, waits for or checks incoming messages (drawn in the messages lane). */
+  'message.receive',
   'other',
 ] as const;
 
@@ -70,6 +74,35 @@ export type ToolKind = (typeof TOOL_KINDS)[number];
 
 function isToolKind(value: unknown): value is ToolKind {
   return TOOL_KINDS.some(knownKind => knownKind === value);
+}
+
+/**
+ * Set on each member of a team of peer agents (e.g. agents that message each
+ * other while solving one task). Unlike subagents, nobody launched anybody:
+ * members are rows of equal depth, kept together on one shared axis.
+ */
+export interface TeamInfo {
+  /** Shared by every member's trace. */
+  id: string;
+  /** Agent names, in display order (e.g. leader first). */
+  members: string[];
+  /** This trace's agent: one of `members`. */
+  agent: string;
+  leader?: string;
+  success?: boolean;
+}
+
+/**
+ * Messages between agents (team peers, or a parent and its subagents): the
+ * ids of the messages this trace sent and received, by where it happened.
+ * A place is a `tool_call_id` (e.g. a `send_message` or `read_messages`
+ * call), or `step:<step_index>` for a step that isn't a tool call (e.g. a
+ * harness notice that delivered a message). Ids are unique within a dataset;
+ * the viewer draws a line from each send to each receipt of the same id.
+ */
+export interface AgentMessages {
+  sent?: Record<string, string[]>;
+  received?: Record<string, string[]>;
 }
 
 /** The `metadata` keys the visualizer understands. All optional. */
@@ -86,6 +119,12 @@ export interface TraceVisMetadata {
   subagent_role?: string;
   /** On the parent: trace ids launched by each tool call, by `tool_call_id`. */
   subagent_refs?: Record<string, string[]>;
+
+  // --- Teams of peer agents (set on every member) ---
+  team?: TeamInfo;
+
+  /** Messages to and from other agents' traces (teams and subagents alike). */
+  agent_messages?: AgentMessages;
 
   // --- Timing beyond the schema's single `timestamp` per step ---
   step_timing?: Record<string, StepTiming>;
@@ -145,5 +184,33 @@ export function traceExtensions(record: Pick<TraceRecord, 'metadata'>) {
       const refs = subagentRefs[toolCallId];
       return Array.isArray(refs) ? refs.filter((s): s is string => typeof s === 'string') : [];
     },
+    team: parseTeam(meta.team),
+    messages: parseMessages(meta.agent_messages),
   };
+}
+
+const strings = (v: unknown): string[] =>
+  Array.isArray(v) ? v.filter((s): s is string => typeof s === 'string') : [];
+
+/** A valid `team` entry, else undefined (it needs an id and this agent's name). */
+function parseTeam(v: unknown): TeamInfo | undefined {
+  if (!v || typeof v !== 'object') return undefined;
+  const t = v as Record<string, unknown>;
+  if (typeof t['id'] !== 'string' || typeof t['agent'] !== 'string') return undefined;
+  const members = strings(t['members']);
+  return {
+    id: t['id'],
+    agent: t['agent'],
+    members: members.includes(t['agent']) ? members : [...members, t['agent']],
+    leader: typeof t['leader'] === 'string' ? t['leader'] : undefined,
+    success: typeof t['success'] === 'boolean' ? t['success'] : undefined,
+  };
+}
+
+/** `agent_messages` as a lookup: the message ids sent and received at a place (see `AgentMessages`). */
+function parseMessages(v: unknown) {
+  const t = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
+  const at = (x: unknown) => (place: string): string[] =>
+    x && typeof x === 'object' && !Array.isArray(x) ? strings((x as Record<string, unknown>)[place]) : [];
+  return { sent: at(t['sent']), received: at(t['received']) };
 }

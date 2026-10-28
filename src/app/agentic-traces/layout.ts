@@ -51,6 +51,8 @@ interface TraceMeta extends MarkTraceInput {
   parentId?: string;
   parentToolCallId?: string;
   sourceId?: string;
+  /** Team id, for a member of a team of peer agents. */
+  teamId?: string;
   /** Every file the trace touched (file-events.ts); the files lane draws the non-artifact ones. */
   fileEvents: FileEvent[];
 }
@@ -91,18 +93,23 @@ function getTraceMetadata(trace: TraceEntry, mode: AxisMode, tokenTypes?: Set<st
   return {
     id: trace.id, title: trace.title, data, steps, agentName, model, agentColor, startTime, duration, maxStepTokens,
     parentId: trace.parentId, parentToolCallId: trace.parentToolCallId, sourceId: data.sourceId,
+    teamId: trace.teamId,
     fileEvents, artifactNodes: artifactNodes(fileEvents),
   };
 }
 
-// ─── Families ───────────────────────────────────────────────────────
+// ─── Groups ─────────────────────────────────────────────────────────
 //
 // A trace and the subagents it launched share one axis, so a subagent's row
 // lines up under the moment its parent launched it. In time mode that falls
 // out of sharing the origin (timestamps are absolute); in tokens mode each
 // subagent is offset to the parent's token count at the launching step.
+//
+// The selected members of a team of peer agents also form one group: every
+// member is a root (depth 0, no offset), and in time mode they share the
+// origin, so a message's send and read line up across their rows.
 
-interface FamilyMember {
+interface GroupMember {
   meta: TraceMeta;
   depth: number;
   parent?: TraceMeta;
@@ -110,8 +117,8 @@ interface FamilyMember {
   offset: number;
 }
 
-interface Family {
-  members: FamilyMember[];  // depth-first, root first
+interface Group {
+  members: GroupMember[];  // depth-first, root first
   /** Axis origin and length covering every member. */
   start: number;
   duration: number;
@@ -135,8 +142,8 @@ function launchOffset(parent: TraceMeta, child: TraceMeta, mode: AxisMode, token
   return 0;
 }
 
-/** Groups the selected traces into families, keeping the selection's order of roots. */
-function buildFamilies(metas: TraceMeta[], mode: AxisMode, tokenTypes?: Set<string>): Family[] {
+/** Splits the selected traces into groups, keeping the selection's order of roots. */
+function buildGroups(metas: TraceMeta[], mode: AxisMode, tokenTypes?: Set<string>): Group[] {
   const byId = new Map(metas.map(m => [m.id, m]));
   const children = new Map<string, TraceMeta[]>();
   const roots: TraceMeta[] = [];
@@ -146,16 +153,28 @@ function buildFamilies(metas: TraceMeta[], mode: AxisMode, tokenTypes?: Set<stri
     else roots.push(m);
   }
 
-  return roots.map(root => {
-    const members: FamilyMember[] = [];
+  // Each root starts a group, except that selected team members join the
+  // first of them (the selection keeps them adjacent; see groupOrder).
+  const rootSets: TraceMeta[][] = [];
+  const byTeam = new Map<string, TraceMeta[]>();
+  for (const root of roots) {
+    const existing = root.teamId ? byTeam.get(root.teamId) : undefined;
+    if (existing) { existing.push(root); continue; }
+    const set = [root];
+    rootSets.push(set);
+    if (root.teamId) byTeam.set(root.teamId, set);
+  }
+
+  return rootSets.map(set => {
+    const members: GroupMember[] = [];
     const visit = (meta: TraceMeta, depth: number, parent?: TraceMeta, parentOffset = 0) => {
       const offset = parent && mode !== 'time' ? parentOffset + launchOffset(parent, meta, mode, tokenTypes) : 0;
       members.push({ meta, depth, parent, offset });
       for (const c of children.get(meta.id) ?? []) visit(c, depth + 1, meta, offset);
     };
-    visit(root, 0);
+    for (const root of set) visit(root, 0);
 
-    // Time mode: the earliest timestamp in the family (ignoring traces with
+    // Time mode: the earliest timestamp in the group (ignoring traces with
     // none). Tokens / sequence mode: 0, with members offset into it.
     const timed = members.filter(m => m.meta.duration > 0 || m.meta.startTime > 0);
     const start = mode === 'time' && timed.length > 0 ? Math.min(...timed.map(m => m.meta.startTime)) : 0;
@@ -165,7 +184,7 @@ function buildFamilies(metas: TraceMeta[], mode: AxisMode, tokenTypes?: Set<stri
   });
 }
 
-/** The family's axis as seen by one member: shifted by its offset. */
+/** The group's axis as seen by one member: shifted by its offset. */
 function memberAxis(axis: XAxis, offset: number): XAxis {
   return offset === 0 ? axis : { ...axis, toX: (t: number) => axis.toX(t + offset) };
 }
@@ -183,39 +202,40 @@ export function layoutTraces(params: LayoutParams): LayoutOutput {
   // By default, user wait gaps in time mode are compressed/hidden; checking "Show user wait" shows them uncompressed.
   const compressGaps = !showUserWait && mode === 'time';
 
-  const families = buildFamilies(metas, mode, selectedTokenTypes);
+  const groups = buildGroups(metas, mode, selectedTokenTypes);
 
-  // All families share one scale (so durations are comparable) unless stretched.
-  const maxDuration = Math.max(1, ...families.map(f => f.duration));
+  // All groups share one scale (so durations are comparable) unless stretched.
+  const maxDuration = Math.max(1, ...groups.map(g => g.duration));
   const baseScale = targetSpan / maxDuration;
 
-  // 1. Lay out each family on a linear axis and find its user wait gaps. Gaps
+  // 1. Lay out each group on a linear axis and find its user wait gaps. Gaps
   //    are only periods spent waiting for the user to respond; tool calls,
   //    thinking, and subagent work do not create gaps.
-  const firstPass = families.map(family => {
-    const scale = stretch && family.duration > 0 ? targetSpan / family.duration : baseScale;
-    const linear = buildAxis(family.start, scale);
-    const members = family.members.map(m => ({
+  const firstPass = groups.map(group => {
+    const scale = stretch && group.duration > 0 ? targetSpan / group.duration : baseScale;
+    const linear = buildAxis(group.start, scale);
+    const members = group.members.map(m => ({
       ...m, ...buildMarks(m.meta, memberAxis(linear, m.offset), mode, selectedTokenTypes),
     }));
     const maxX = Math.max(...members.map(m => m.maxX));
     const gaps = mode === 'time'
-      ? findUserWaitGaps(members, family.start, scale, baseScale) : [];
+      ? findUserWaitGaps(members, group.start, scale, baseScale) : [];
     const fillMultiplier = compressGaps ? fillScaleMultiplier(gaps, scale, maxX, targetSpan) : 1;
-    return { family, scale, members, gaps, fillMultiplier };
+    return { group, scale, members, gaps, fillMultiplier };
   });
 
   // 2. Compressing gaps frees up space: grow the scale to fill it. Unstretched
-  //    families grow by the same (smallest) factor so they stay comparable.
+  //    groups grow by the same (smallest) factor so they stay comparable.
   const sharedMultiplier = firstPass.length > 0 ? Math.min(...firstPass.map(p => p.fillMultiplier)) : 1;
 
   const rows = firstPass.flatMap(p => {
     const multiplier = (stretch || firstPass.length === 1) ? p.fillMultiplier : sharedMultiplier;
-    const axis = buildAxis(p.family.start, p.scale * multiplier, p.gaps, compressGaps);
+    const axis = buildAxis(p.group.start, p.scale * multiplier, p.gaps, compressGaps);
     const laid = p.members.map(m => ({
       ...m, ...(compressGaps ? buildMarks(m.meta, memberAxis(axis, m.offset), mode, selectedTokenTypes) : m),
     }));
     const marksOf = new Map(laid.map(m => [m.meta.id, m.marks]));
+    const groupId = laid[0].meta.id;
     return laid.map(m => {
       // A subagent's row branches off where its parent launched it: the x of the
       // parent's launching tool-call mark (which the connector's dot replaces),
@@ -226,7 +246,8 @@ export function layoutTraces(params: LayoutParams): LayoutOutput {
       const startX = launch ? launch.x + launch.width / 2
         : m.parent ? (drawnX.length > 0 ? Math.min(...drawnX) : BASE_OFFSET) : BASE_OFFSET;
       const backbone = buildBackboneLines(m.meta.id, channelCenter('agent'), axis.gaps, m.maxX, m.meta.agentColor, m.marks, startX);
-      return { meta: m.meta, marks: m.marks, backbone, depth: m.depth, parent: m.parent ? { id: m.parent.id, x: startX } : undefined };
+      return { meta: m.meta, marks: m.marks, backbone, depth: m.depth, groupId,
+               parent: m.parent ? { id: m.parent.id, x: startX } : undefined };
     });
   });
 
@@ -250,7 +271,7 @@ export function layoutTraces(params: LayoutParams): LayoutOutput {
   const contentWidth = Math.max(avail, ...drawn.map(m => m.x + m.width + CONTENT_MARGIN));
   const contentHeight = Math.max(TRACK_HEIGHT, ...drawn.map(m => m.y + m.height)) + 100;
 
-  const layouts: TraceLayout[] = rows.map(({ meta, marks, backbone, depth, parent }) => ({
+  const layouts: TraceLayout[] = rows.map(({ meta, marks, backbone, depth, parent, groupId }) => ({
     id: meta.id,
     title: meta.title,
     agentColor: meta.agentColor,
@@ -259,6 +280,7 @@ export function layoutTraces(params: LayoutParams): LayoutOutput {
     files: buildFileLane(meta.fileEvents.filter(e => !e.isArtifact), marks, contentWidth, mode),
     depth,
     parent,
+    groupId,
   }));
 
   return { traces: layouts, contentWidth, contentHeight, timeTicks };

@@ -141,13 +141,15 @@
 
         <!-- Row Lanes -->
         <div class="row-lanes" [style.width.px]="contentWidth()" [style.padding-top.px]="60 + 18">
-          <!-- Subagent branches: from the parent's agent line down to the subagent's -->
-          <svg class="subagent-links" *ngIf="subagentConnectors().length > 0"
+          <!-- Lines between rows (links.ts): subagent launches, messages between agents, unread stubs -->
+          <svg class="links" *ngIf="links().length > 0"
                [class.layer-dimmed]="layersService.anyLayerEnabled()"
+               [class.has-active]="activeLinks().size > 0"
                [style.top.px]="60 + 18" [attr.width]="contentWidth()" [attr.height]="contentHeight()">
-            <g *ngFor="let c of subagentConnectors()">
-              <line [attr.x1]="c.x" [attr.y1]="c.y1" [attr.x2]="c.x" [attr.y2]="c.y2" [attr.stroke]="c.color" />
-              <circle [attr.cx]="c.x" [attr.cy]="c.y1" r="3.5" [attr.fill]="c.color" />
+            <g *ngFor="let l of links()" [class]="l.kind" [class.backwards]="l.backwards" [class.active]="activeLinks().has(l.id)">
+              <path [attr.d]="l.path" [attr.stroke]="l.color" />
+              <circle [attr.cx]="l.dot.x" [attr.cy]="l.dot.y" [attr.r]="l.kind === 'launch' ? 3.5 : l.kind === 'unread' ? 3 : 2.5"
+                      [attr.fill]="l.kind === 'unread' ? '#ffffff' : l.color" [attr.stroke]="l.color" />
             </g>
           </svg>
           <div class="drop-indicator-row"

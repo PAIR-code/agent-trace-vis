@@ -86,6 +86,26 @@ export class TraceTrackComponent {
     return this.shownChannels().has(ch.id);
   }
 
+  /**
+   * What the artifacts channel holds in this row: messages to and from other
+   * agents (see MESSAGE_SPEC in marks.ts), scratch-file writes, or both.
+   */
+  private artifactsContent = computed(() => {
+    let messages = false, files = false;
+    for (const m of this.trace().marks) {
+      if (m.hidden || m.channel !== 'artifacts') continue;
+      if (m.look.icon === 'message-send' || m.look.icon === 'message-receive') messages = true;
+      else files = true;
+    }
+    return { messages, files };
+  });
+
+  laneLabel(ch: Channel): string {
+    if (ch.id !== 'artifacts') return ch.label;
+    const { messages, files } = this.artifactsContent();
+    return messages && files ? 'messages / scratch files' : messages ? 'messages' : ch.label;
+  }
+
   /** Center y of a channel in this trace's track (expanded). */
   laneCenter(id: ChannelId): number {
     return this.geometry().centers.get(id) ?? channelCenter(id);
