@@ -387,7 +387,7 @@ ${searchInstruction}
   }
 
   private async callGemini(prompt: string, apiKey: string): Promise<string> {
-    const model = 'gemini-flash-latest';
+    const model = 'gemini-flash-lite-latest';
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const body = {

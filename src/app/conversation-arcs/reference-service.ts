@@ -50,7 +50,7 @@ export class ReferenceService {
     const turns: AnnotatedTurn[] = raw.conversation.map((turn, turnIndex) => {
       // Split turn content into sentences using the existing sentence tokenizer pattern
       const rawSentences = this.splitIntoSentences(turn.content);
-      
+
       const sentences: AnnotatedSentence[] = rawSentences.map((text, sentenceIndex) => {
         const sentence: AnnotatedSentence = {
           sentenceIndex,
@@ -87,7 +87,7 @@ export class ReferenceService {
     // Recombine the punctuation/whitespace with the sentence content
     const sentences: string[] = [];
     let currentSentence = '';
-    
+
     for (const part of parts) {
       if (!part) continue;
       if (/^\s+$/.test(part)) {
@@ -106,7 +106,7 @@ export class ReferenceService {
     if (currentSentence && currentSentence.trim()) {
       sentences.push(currentSentence);
     }
-    
+
     return sentences.map(s => s.trim()).filter(Boolean);
   }
 
@@ -160,7 +160,7 @@ export class ReferenceService {
    * Prompts Gemini API.
    */
   private async callGemini(prompt: string, apiKey: string): Promise<SentenceReference[]> {
-    const model = 'gemini-flash-latest';
+    const model = 'gemini-flash-lite-latest';
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const body = {
