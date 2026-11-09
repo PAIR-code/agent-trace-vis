@@ -48,6 +48,80 @@ interface GeminiResponse {
   }>;
 }
 
+// ─── Semantic search method (shared with the analysis config export) ──
+
+/** Gemini model used for semantic search. */
+export const SEMANTIC_MODEL = 'gemini-flash-lite-latest';
+
+/** Gemini generation config used for semantic search. */
+export const SEMANTIC_GENERATION_CONFIG = {
+  temperature: 0.1,
+  responseMimeType: 'application/json',
+};
+
+/** Turns with a score at or above this are matches (the prompt omits lower ones). */
+export const SEMANTIC_MATCH_THRESHOLD = 3;
+
+/** How each turn is rendered into `{conversation}`; turns are joined with '\n'. */
+export const SEMANTIC_TURN_FORMAT = '[ID={turnId}] {role}: {text}';
+
+/** Search instruction for a plain text query (no reference chips). */
+export const SEMANTIC_SEARCH_INSTRUCTION = 'Find conversation turns that match this description: "{query}"';
+
+/**
+ * Prompt template for semantic search. Placeholders: `{searchInstruction}`,
+ * `{conversation}`, `{exampleId1}`, `{exampleId2}` (IDs of the first two turns).
+ * Contains literal braces, so fill it with {@link fillTemplate}, which only
+ * replaces known placeholder names.
+ */
+export const SEMANTIC_PROMPT_TEMPLATE = `You are a strict relevance judge analyzing a conversation. For each turn, rate how well it matches the search query using a 1-5 integer scale. Focus on semantic meaning, not just exact word overlap.
+
+{searchInstruction}
+
+Here is the full conversation:
+{conversation}
+
+### IMPORTANT:
+
+Again, you are a strict relevance judge analyzing a conversation. For each turn, rate how well it matches the search query using a 1-5 integer scale. Focus on semantic meaning, not just exact word overlap.
+
+{searchInstruction}
+
+### Match Scoring Guidelines (5-Point Scale)
+
+5 - Strong Match: The turn clearly and directly matches the query. The concept is explicitly present or strongly implied. Little to no ambiguity.
+4 - Good Match: The turn matches the query, but less directly or with minor ambiguity. The concept is present but may be indirect, partial, or require light interpretation.
+3 - Partial / Weak Match: The turn is loosely related to the query but does not clearly express it. Some relevant signals, but unclear or incomplete.
+2 - Weak / Likely Not a Match: The turn has minimal or tangential relevance. Only a faint or indirect connection to the query.
+1 - Not a Match: The turn does not match the query at all. No meaningful semantic connection.
+
+### General Principles
+- Prioritize meaning over exact words. Match based on concepts, synonyms, and implications.
+- Use context when needed. Consider surrounding turns if necessary to interpret tone or meaning.
+- Handle abstract queries carefully. For subjective queries (e.g., "rude," "passive aggressive"), rely on reasonable human judgment.
+- When unsure, prefer the middle (3) for ambiguous or borderline cases rather than forcing a strong decision.
+- Be consistent. Apply the same standard across all examples.
+
+### Output Rules
+- Use the EXACT ID values from the conversation (e.g. "{exampleId1}", "{exampleId2}").
+- ONLY include turns that match the query (score >= 3). Do NOT include non-matching turns (score 1 or 2) in the JSON output, to keep output concise and avoid JSON truncation.
+- For each matching turn, provide the overall score AND an array of "spans" — the specific word(s) or phrase(s) from the turn text that support the match. Each span has a "text" (exact substring from the turn) and a "score" (1-5, how strongly that span supports the match).
+- Spans should be EXACT substrings of the turn text (copy-paste from the turn, preserving casing).
+- A span can be a single word, a phrase, or the entire turn text.
+- Return ONLY valid JSON in this exact format, with no other text:
+{"scores": {"{exampleId1}": {"score": 5, "spans": [{"text": "exact phrase from the turn", "score": 5}]}, "{exampleId2}": {"score": 3, "spans": [{"text": "a word", "score": 3}, {"text": "another phrase", "score": 2}]}}}`;
+
+/**
+ * Replaces `{name}` placeholders for the given keys in a single pass (so
+ * substituted text is never re-scanned). Unknown `{...}` sequences are kept.
+ */
+export function fillTemplate(template: string, values: Record<string, string | undefined>): string {
+  const keys = Object.keys(values).map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  if (keys.length === 0) return template;
+  const re = new RegExp(`\\{(${keys.join('|')})\\}`, 'g');
+  return template.replace(re, (_, key: string) => `${values[key]}`);
+}
+
 @Injectable({ providedIn: 'root' })
 export class SearchService {
 
@@ -301,7 +375,7 @@ export class SearchService {
     // Build the full conversation context with complete text (including thinking calls)
     const conversation = nodes.map(n => {
       const speaker = (n as any).speaker || n.role;
-      return `[ID=${n.id}] ${speaker}: ${n.text || ''}`;
+      return fillTemplate(SEMANTIC_TURN_FORMAT, { turnId: n.id, role: speaker, text: n.text || '' });
     }).join('\n');
 
     // Collect a few real IDs for the example
@@ -320,45 +394,15 @@ export class SearchService {
         searchInstruction = `Find conversation turns that are SIMILAR in intent, tone, content, or behavioral pattern to these example turns:\n${examples}`;
       }
     } else {
-      searchInstruction = `Find conversation turns that match this description: "${query}"`;
+      searchInstruction = fillTemplate(SEMANTIC_SEARCH_INSTRUCTION, { query });
     }
 
-    return `You are a strict relevance judge analyzing a conversation. For each turn, rate how well it matches the search query using a 1-5 integer scale. Focus on semantic meaning, not just exact word overlap.
-
-${searchInstruction}
-
-Here is the full conversation:
-${conversation}
-
-### IMPORTANT:
-
-Again, you are a strict relevance judge analyzing a conversation. For each turn, rate how well it matches the search query using a 1-5 integer scale. Focus on semantic meaning, not just exact word overlap.
-
-${searchInstruction}
-
-### Match Scoring Guidelines (5-Point Scale)
-
-5 - Strong Match: The turn clearly and directly matches the query. The concept is explicitly present or strongly implied. Little to no ambiguity.
-4 - Good Match: The turn matches the query, but less directly or with minor ambiguity. The concept is present but may be indirect, partial, or require light interpretation.
-3 - Partial / Weak Match: The turn is loosely related to the query but does not clearly express it. Some relevant signals, but unclear or incomplete.
-2 - Weak / Likely Not a Match: The turn has minimal or tangential relevance. Only a faint or indirect connection to the query.
-1 - Not a Match: The turn does not match the query at all. No meaningful semantic connection.
-
-### General Principles
-- Prioritize meaning over exact words. Match based on concepts, synonyms, and implications.
-- Use context when needed. Consider surrounding turns if necessary to interpret tone or meaning.
-- Handle abstract queries carefully. For subjective queries (e.g., "rude," "passive aggressive"), rely on reasonable human judgment.
-- When unsure, prefer the middle (3) for ambiguous or borderline cases rather than forcing a strong decision.
-- Be consistent. Apply the same standard across all examples.
-
-### Output Rules
-- Use the EXACT ID values from the conversation (e.g. "${exampleIds[0]}", "${exampleIds[1]}").
-- ONLY include turns that match the query (score >= 3). Do NOT include non-matching turns (score 1 or 2) in the JSON output, to keep output concise and avoid JSON truncation.
-- For each matching turn, provide the overall score AND an array of "spans" — the specific word(s) or phrase(s) from the turn text that support the match. Each span has a "text" (exact substring from the turn) and a "score" (1-5, how strongly that span supports the match).
-- Spans should be EXACT substrings of the turn text (copy-paste from the turn, preserving casing).
-- A span can be a single word, a phrase, or the entire turn text.
-- Return ONLY valid JSON in this exact format, with no other text:
-{"scores": {"${exampleIds[0]}": {"score": 5, "spans": [{"text": "exact phrase from the turn", "score": 5}]}, "${exampleIds[1]}": {"score": 3, "spans": [{"text": "a word", "score": 3}, {"text": "another phrase", "score": 2}]}}}`;
+    return fillTemplate(SEMANTIC_PROMPT_TEMPLATE, {
+      searchInstruction,
+      conversation,
+      exampleId1: exampleIds[0],
+      exampleId2: exampleIds[1],
+    });
   }
 
   /** List available Gemini models for this API key and log them to console. */
@@ -387,15 +431,12 @@ ${searchInstruction}
   }
 
   private async callGemini(prompt: string, apiKey: string): Promise<string> {
-    const model = 'gemini-flash-lite-latest';
+    const model = SEMANTIC_MODEL;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const body = {
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0.1,
-        responseMimeType: 'application/json',
-      },
+      generationConfig: SEMANTIC_GENERATION_CONFIG,
     };
 
     const response = await fetch(url, {

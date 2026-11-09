@@ -36,6 +36,20 @@
 
     <button class="scroll-btn right" *ngIf="showRightScroll" (click)="scrollChips(200)" title="Scroll right">&#10095;</button>
   </div>
+
+  <!-- Download all searches as a JSON config for external pipelines -->
+  <button class="download-config-btn"
+          (click)="layersService.downloadConfig()"
+          [disabled]="layersService.layers().length === 0"
+          title="Export autoraters"
+          aria-label="Export autoraters">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 3v12"></path>
+      <path d="M7 10l5 5 5-5"></path>
+      <path d="M5 21h14"></path>
+    </svg>
+  </button>
 </div>
 
 <!-- Popover backdrop -->

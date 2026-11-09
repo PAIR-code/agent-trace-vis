@@ -22,8 +22,27 @@
 
 import { Injectable, signal, computed } from '@angular/core';
 import { Subscription } from 'rxjs';
-import { SearchService, SearchResult } from '../shared/search/search.service';
-import { AnalysisLayer, AnalysisPreset, PRESET_COLORS, USER_AI_COLORS, USER_TEXT_COLORS, ANALYSIS_PRESETS } from './analysis-layers.types';
+import {
+  SearchService,
+  SearchResult,
+  SEMANTIC_MODEL,
+  SEMANTIC_GENERATION_CONFIG,
+  SEMANTIC_MATCH_THRESHOLD,
+  SEMANTIC_TURN_FORMAT,
+  SEMANTIC_SEARCH_INSTRUCTION,
+  SEMANTIC_PROMPT_TEMPLATE,
+  fillTemplate,
+} from '../shared/search/search.service';
+import {
+  AnalysisLayer,
+  AnalysisPreset,
+  AnalysisConfigV1,
+  AnalysisConfigSearch,
+  PRESET_COLORS,
+  USER_AI_COLORS,
+  USER_TEXT_COLORS,
+  ANALYSIS_PRESETS,
+} from './analysis-layers.types';
 import { Mark } from './marks';
 
 @Injectable()
@@ -213,6 +232,67 @@ export class AnalysisLayersService {
       }
     }
     return map;
+  }
+
+  // ─── Config export ────────────────────────────────────────────────
+
+  /**
+   * Builds a JSON-serializable config of all layers plus the method details
+   * (prompt, model, ...) needed to reproduce them in an external pipeline.
+   */
+  buildExportConfig(): AnalysisConfigV1 {
+    // Oldest first, so presets come first in their original order.
+    const layers = [...this.layers()].sort((a, b) => a.createdAt - b.createdAt);
+    const searches: AnalysisConfigSearch[] = layers.map(l => ({
+      name: l.name,
+      query: l.query,
+      method: l.mode,
+      source: l.isPreset ? 'preset' : 'user',
+    }));
+
+    const methods: AnalysisConfigV1['methods'] = {};
+    if (searches.some(s => s.method === 'semantic')) {
+      methods.semantic = {
+        model: SEMANTIC_MODEL,
+        generationConfig: { ...SEMANTIC_GENERATION_CONFIG },
+        scope: 'perTrace',
+        turnFormat: SEMANTIC_TURN_FORMAT,
+        // Inline the plain-query instruction so the only search-specific
+        // placeholder left is {query}.
+        promptTemplate: fillTemplate(SEMANTIC_PROMPT_TEMPLATE, {
+          searchInstruction: SEMANTIC_SEARCH_INSTRUCTION,
+        }),
+        matchThreshold: SEMANTIC_MATCH_THRESHOLD,
+      };
+    }
+    if (searches.some(s => s.method === 'fuzzy')) {
+      methods.fuzzy = { type: 'caseInsensitiveSubstring' };
+    }
+
+    return {
+      schema: 'agent-trace-vis/autoraters',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      methods,
+      searches,
+    };
+  }
+
+  /** Downloads {@link buildExportConfig} as `autoraters-YYYYMMDD-HHMM.json`. */
+  downloadConfig(): void {
+    const json = JSON.stringify(this.buildExportConfig(), null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const d = new Date();
+    const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `autoraters-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   }
 
   // ─── Private ──────────────────────────────────────────────────────

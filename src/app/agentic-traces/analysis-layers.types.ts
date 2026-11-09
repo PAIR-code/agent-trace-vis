@@ -148,3 +148,47 @@ export const ANALYSIS_PRESETS: AnalysisPreset[] = [
     description: 'Detects file access outside the expected context',
   },
 ];
+
+// ─── Exported analysis config (download as JSON) ────────────────────
+
+/** Semantic (LLM judge) search method, as written to an exported config. */
+export interface AnalysisConfigSemanticMethod {
+  model: string;
+  generationConfig: { temperature: number; responseMimeType: string };
+  /** One model call per trace; turns from different traces are never mixed. */
+  scope: 'perTrace';
+  /** Format of each turn in `{conversation}`; turns are joined with '\n'. */
+  turnFormat: string;
+  /** Full prompt; placeholders: `{query}`, `{conversation}`, `{exampleId1}`, `{exampleId2}`. */
+  promptTemplate: string;
+  /** Turns scoring at or above this (1-5) are matches. */
+  matchThreshold: number;
+}
+
+/** Fuzzy (text match) search method, as written to an exported config. */
+export interface AnalysisConfigFuzzyMethod {
+  type: 'caseInsensitiveSubstring';
+}
+
+/** A single search in an exported config. */
+export interface AnalysisConfigSearch {
+  /** Display label of the layer chip (not sent to the model). */
+  name: string;
+  /** The text that is searched. */
+  query: string;
+  /** Key into {@link AnalysisConfigV1.methods}. */
+  method: 'semantic' | 'fuzzy';
+  source: 'preset' | 'user';
+}
+
+/** Downloadable config describing all analysis searches and how to run them. */
+export interface AnalysisConfigV1 {
+  schema: 'agent-trace-vis/autoraters';
+  version: 1;
+  exportedAt: string;
+  methods: {
+    semantic?: AnalysisConfigSemanticMethod;
+    fuzzy?: AnalysisConfigFuzzyMethod;
+  };
+  searches: AnalysisConfigSearch[];
+}
