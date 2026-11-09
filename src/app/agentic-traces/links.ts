@@ -61,10 +61,11 @@ type Point = { x: number; y: number };
  * Where each row sits in the row stack. Each row is its track plus its files
  * lane (expanded rows only), with ROW_GAP between.
  */
-export function rowGeometry(rows: TraceLayout[], collapsed: Set<string>, filesExpanded: Set<string>): Map<string, RowGeometry> {
+export function rowGeometry(rows: TraceLayout[], collapsed: Set<string>, filesExpanded: Set<string>, topBarHeight = 0): Map<string, RowGeometry> {
   const out = new Map<string, RowGeometry>();
   let y = 0;
   for (const r of rows) {
+    y += topBarHeight;
     if (collapsed.has(r.id)) {
       out.set(r.id, { top: y, collapsed: true, centers: new Map() });
       y += COLLAPSED_TRACK.height + ROW_GAP;

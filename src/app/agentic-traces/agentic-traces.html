@@ -55,6 +55,17 @@
     </button>
   </div>
 
+  <!-- Chapters Toggle -->
+  <div class="selector-group">
+    <label class="selector-label">Chapters</label>
+    <div class="timeline-toggle">
+      <button class="timeline-btn" type="button" [class.active]="chaptersService.mode() !== 'off'" (click)="setAnnotationMode('chapters')"
+              title="Show auto-annotated chapters and events">On</button>
+      <button class="timeline-btn" type="button" [class.active]="chaptersService.mode() === 'off'" (click)="setAnnotationMode('off')"
+              title="Hide upper chapter bar">Off</button>
+    </div>
+  </div>
+
   <!-- Token Options Dropdown -->
   <div class="selector-group">
     <label class="selector-label">Tokens</label>
@@ -175,10 +186,15 @@
               [searchColors]="searchColors()"
               [filesExpanded]="expandedFileTraceIds().has(t.id)"
               [expanded]="isTraceExpanded(t.id)"
+              [annotations]="chaptersService.annotations().get(t.id)"
+              [annotationMode]="chaptersService.mode()"
+              [annotationsLoading]="chaptersService.loadingIds().has(t.id)"
+              [hasApiKey]="!!layersService.apiKey()"
               (markSelect)="selectMark($event)"
               (markHover)="hoveredMarkId.set($event)"
               (toggleFiles)="toggleTraceFiles(t.id)"
-              (toggleExpand)="toggleTraceExpand(t.id)">
+              (toggleExpand)="toggleTraceExpand(t.id)"
+              (requestApiKey)="promptForChaptersApiKey()">
             </app-trace-track>
             <app-scrub-bar #bar
               [visible]="activeTraceId() === t.id"

@@ -26,10 +26,26 @@
 
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { CHANNELS, COLLAPSED_TRACK, Channel, ChannelId, FILES_LANE, channelCenter, collapsedY, laneGeometry, usedChannels } from './channels';
+import { AnnotationMode, CHAPTERS_STRIP_HEIGHT, TraceAnnotations, annotationBarHeight } from './chapters.service';
 import { COLORS } from './colors';
 import { FILE_ROW_HEIGHT, FileRow } from './file-lane';
 import { TraceLayout } from './layout-types';
 import { Mark } from './marks';
+
+export interface PlacedChapter {
+  id: string;
+  label: string;
+  summary: string;
+  x: number;
+  /** Actual horizontal duration of the turn(s) covered by this chapter/event. */
+  durationWidth: number;
+  /** Maximum width available for the label before the next item begins. */
+  maxWidth: number;
+  startMark: Mark;
+  isActive: boolean;
+  isEven: boolean;
+  isSingleTurn: boolean;
+}
 
 @Component({
   selector: 'app-trace-track',
@@ -62,15 +78,123 @@ export class TraceTrackComponent {
    */
   expanded = input(true);
 
+  /** Auto-annotated chapters and key events for this trace. */
+  annotations = input<TraceAnnotations | undefined>(undefined);
+  annotationMode = input<AnnotationMode>('chapters');
+  annotationsLoading = input<boolean>(false);
+  hasApiKey = input<boolean>(true);
+
   markSelect = output<Mark>();
   markHover = output<string | null>();
   toggleFiles = output<void>();
   toggleExpand = output<void>();
+  requestApiKey = output<void>();
 
   readonly colors = COLORS;
   readonly channels = CHANNELS;
   readonly filesLane = FILES_LANE;
   readonly fileRowHeight = FILE_ROW_HEIGHT;
+  readonly chaptersStripHeight = CHAPTERS_STRIP_HEIGHT;
+
+  annotationHeight = computed(() => annotationBarHeight(this.annotationMode()));
+
+  /** Left offset where this trace's timeline starts (subagents start at their branch x). */
+  traceStartX = computed(() => {
+    const parentX = this.trace().parent?.x;
+    if (parentX !== undefined) return parentX;
+    const drawn = this.trace().marks.filter(m => m.width > 0);
+    return drawn.length > 0 ? Math.min(...drawn.map(m => m.x)) : 24;
+  });
+
+  /** Unified chapters & single-turn events mapped to the current X-axis coordinates. */
+  placedChapters = computed<PlacedChapter[]>(() => {
+    const raw = this.annotations()?.chapters ?? [];
+    if (raw.length === 0) return [];
+    const marks = this.trace().marks;
+    const idxById = new Map(marks.map((m, i) => [m.id, i]));
+
+    const resolved: Array<{
+      label: string;
+      summary: string;
+      x0: number;
+      x1: number;
+      startMark: Mark;
+      nodeIds: Set<string>;
+      isSingleTurn: boolean;
+    }> = [];
+
+    for (const ch of raw) {
+      const i0 = idxById.get(ch.startNodeId);
+      const i1 = idxById.get(ch.endNodeId);
+      if (i0 === undefined || i1 === undefined) continue;
+      let lo = Math.min(i0, i1);
+      let hi = Math.max(i0, i1);
+      const isSingleTurn = marks[lo].stepRef === marks[hi].stepRef;
+
+      // Expand `hi` to the end of its turn (`stepRef`) so a single-turn event
+      // or a chapter ending on a step's first node gets the full duration of that turn.
+      const endStep = marks[hi].stepRef;
+      while (hi + 1 < marks.length && marks[hi + 1].stepRef === endStep) {
+        hi++;
+      }
+      if (isSingleTurn) {
+        const startStep = marks[lo].stepRef;
+        while (lo > 0 && marks[lo - 1].stepRef === startStep) {
+          lo--;
+        }
+      }
+
+      const slice = marks.slice(lo, hi + 1).filter(m => m.width > 0);
+      if (slice.length === 0) continue;
+      const x0 = Math.min(...slice.map(m => m.x));
+      const x1 = Math.max(...slice.map(m => m.x + (m.span ?? m.width)));
+      resolved.push({
+        label: ch.label,
+        summary: ch.summary,
+        x0,
+        x1,
+        startMark: slice[0],
+        nodeIds: new Set(slice.map(m => m.id)),
+        isSingleTurn,
+      });
+    }
+
+    resolved.sort((a, b) => a.x0 - b.x0);
+
+    const sel = this.selectedId();
+    const hov = this.hoveredId();
+    const maxRight = Math.max(200, this.width() - 68);
+    const MIN_CHAPTER_GAP_PX = 75;
+
+    // Filter out labels that start too close to the previously placed label so they never overlap.
+    const visible: typeof resolved = [];
+    for (const item of resolved) {
+      if (visible.length === 0 || item.x0 - visible[visible.length - 1].x0 >= MIN_CHAPTER_GAP_PX) {
+        visible.push(item);
+      }
+    }
+
+    return visible.map((item, k) => {
+      const left = item.x0;
+      const nextLeft = k + 1 < visible.length ? visible[k + 1].x0 : maxRight;
+      const maxWidth = Math.max(24, nextLeft - left - 6);
+      const rawDuration = Math.max(6, item.x1 - left);
+      const durationWidth = Math.min(maxWidth, rawDuration);
+
+      return {
+        id: `${item.startMark.id}_ch_${k}`,
+        label: item.label,
+        summary: item.summary,
+        x: left,
+        durationWidth,
+        maxWidth,
+        startMark: item.startMark,
+        isActive: (!!sel && item.nodeIds.has(sel)) || (!!hov && item.nodeIds.has(hov)),
+        isEven: k % 2 === 0,
+        isSingleTurn: item.isSingleTurn,
+      };
+    });
+  });
 
   /**
    * Only the channels this trace uses are drawn (see `usedChannels`). Marks are
@@ -186,5 +310,11 @@ export class TraceTrackComponent {
     event.stopPropagation();
     event.preventDefault();
     this.toggleExpand.emit();
+  }
+
+  onRequestApiKey(event: Event) {
+    event.stopPropagation();
+    event.preventDefault();
+    this.requestApiKey.emit();
   }
 }

@@ -16,6 +16,31 @@
   </button>
 </div>
 
+<!-- Upper annotation bar: unified chapters and single-turn events. Stays visible when collapsed (Option D). -->
+@if (annotationHeight() > 0) {
+  <div class="annotation-bar" [style.width.px]="width()" [style.height.px]="annotationHeight()" [class.layer-dimmed]="searching()">
+    <div class="chapters-strip" [style.height.px]="chaptersStripHeight">
+      <span class="annotation-lane-label">chapters</span>
+      @if (annotationsLoading() && placedChapters().length === 0) {
+        <div class="annotation-status" [style.left.px]="traceStartX()">annotating...</div>
+      } @else if (!hasApiKey() && placedChapters().length === 0) {
+        <button type="button" class="chapter-key-btn" [style.left.px]="traceStartX()" (click)="onRequestApiKey($event)">
+          Set Gemini API key to auto-annotate chapters
+        </button>
+      }
+      @for (ch of placedChapters(); track ch.id) {
+        <div class="chapter-segment"
+             [style.left.px]="ch.x"
+             [style.max-width.px]="ch.maxWidth"
+             [attr.title]="ch.summary ? ch.label + ' — ' + ch.summary : ch.label">
+          <span class="chapter-tick"></span>
+          <span class="chapter-label">{{ ch.label }}</span>
+        </div>
+      }
+    </div>
+  </div>
+}
+
 <!--
   Channel lanes, backbone and marks. Only the channels this trace uses are
   drawn. Collapsed: one lane, every mark on its center line. Everything stays

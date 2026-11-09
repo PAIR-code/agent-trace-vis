@@ -49,6 +49,7 @@ import { TraceTrackComponent } from "./trace-track";
 import { ScrubBarComponent, ScrubEvent } from "./scrub-bar";
 import { depthOf, groupOf, groupOrder } from "./agent-groups";
 import { buildLinks, rowGeometry } from "./links";
+import { AnnotationMode, ChaptersService, annotationBarHeight } from "./chapters.service";
 
 /** Dev helpers exposed on `window` (a convention shared with the other pages). */
 type DevWindow = Window & { clearCache?: () => void; clearcache?: () => void };
@@ -200,7 +201,12 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   /** Lines between rows: subagent launches and messages between agents (links.ts). */
   links = computed(() => buildLinks(
     this.traceLayouts(),
-    rowGeometry(this.traceLayouts(), this.collapsedTraceIds(), this.expandedFileTraceIds()),
+    rowGeometry(
+      this.traceLayouts(),
+      this.collapsedTraceIds(),
+      this.expandedFileTraceIds(),
+      annotationBarHeight(this.chaptersService.mode()),
+    ),
     new Map(this.traces().map(t => [t.id, t]))));
 
   /** Lines touching the hovered or selected mark; while any is, the other message lines fade. */
@@ -293,6 +299,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
 
   constructor(
     public layersService: AnalysisLayersService,
+    public chaptersService: ChaptersService,
     private datasetService: DatasetService,
     private route: ActivatedRoute,
     private urlParamService: UrlParamService,
@@ -317,8 +324,10 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   }
 
   private clearCacheFn = () => {
-    const count = this.layersService.clearSearchCache();
-    console.log(`[Agent Trace] Cleared ${count} cached search results.`);
+    const searchCount = this.layersService.clearSearchCache();
+    const chapterCount = this.chaptersService.clearCache();
+    console.log(`[Agent Trace] Cleared ${searchCount} search caches and ${chapterCount} chapter caches.`);
+    this.chaptersService.annotateTraces(this.traceLayouts(), this.layersService.apiKey());
   };
 
   ngOnInit() {
@@ -403,7 +412,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
 
   isInteractiveElement(target: EventTarget | null): boolean {
     if (!target || !(target instanceof Element)) return false;
-    return !!target.closest('.vis-node, .file-marker, .file-label, .files-header, .scrub-bar, .row-drag-handle, .row-trace-title, button, input, select, a');
+    return !!target.closest('.vis-node, .file-marker, .file-label, .files-header, .scrub-bar, .row-drag-handle, .row-trace-title, .chapter-segment, .event-marker, .chapter-key-btn, button, input, select, a');
   }
 
   onTrackDragStart(event: DragEvent, index: number) {
@@ -542,6 +551,21 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     this.processTraces();
   }
 
+  /** Sets which upper annotation strips are shown (both, chapters, events, or off). */
+  setAnnotationMode(mode: AnnotationMode) {
+    this.chaptersService.mode.set(mode);
+    if (mode !== 'off') {
+      this.chaptersService.annotateTraces(this.traceLayouts(), this.layersService.apiKey());
+    }
+  }
+
+  /** Prompts for the Gemini API key when the user clicks the inline prompt button in the chapter bar. */
+  promptForChaptersApiKey() {
+    if (this.layersService.ensureApiKey()) {
+      this.chaptersService.annotateTraces(this.traceLayouts(), this.layersService.apiKey());
+    }
+  }
+
   onTokenMetricSelectionChange(newSelection: Set<string>) {
     this.selectedTokenTypes.set(newSelection);
     this.processTraces();
@@ -650,6 +674,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
 
     this.traceLayouts.set(layout.traces);
     this.layersService.reRunAllEnabledLayers(this.marks());
+    this.chaptersService.annotateTraces(layout.traces, this.layersService.apiKey());
     this.contentWidth.set(layout.contentWidth);
     this.contentHeight.set(layout.contentHeight);
     this.timeTicks.set(layout.timeTicks);
