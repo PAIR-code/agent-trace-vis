@@ -3,7 +3,6 @@
     <label class="selector-label">Dataset</label>
     <select class="selector-dropdown" [ngModel]="selectedDatasetFile()" (ngModelChange)="onDatasetChange($event)">
       <option *ngFor="let ds of datasets()" [value]="ds.file">{{ ds.name }}</option>
-      <option value="__import_hf_dataset__">➕ Import OpenTraces HF Dataset...</option>
     </select>
   </div>
 
@@ -265,5 +264,3 @@
   </div>
 </ng-template>
 
-<!-- Hugging Face Import Modal -->
-<app-hugging-face-import *ngIf="showImportModal()" (close)="closeImportModal()" (import)="onImportDataset($event)"></app-hugging-face-import>

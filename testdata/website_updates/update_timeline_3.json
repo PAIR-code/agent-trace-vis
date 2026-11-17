@@ -7,8 +7,7 @@
   },
   "agent": {
     "name": "jetski",
-    "version": "1.0",
-    "model": "MODEL_PLACEHOLDER_M35"
+    "version": "1.0"
   },
   "steps": [
     {
@@ -1519,10 +1518,5 @@
         "cache_read_tokens": 140754
       }
     }
-  ],
-  "metadata": {
-    "artifact_dirs": [
-      "file:///Users/ereif/.gemini/jetski/brain/f566d642-c5ae-4f61-904a-33d192f2b4ac"
-    ]
-  }
+  ]
 }

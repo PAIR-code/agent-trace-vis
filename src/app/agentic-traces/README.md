@@ -59,7 +59,7 @@ Mark                   the node as drawn: channel, x, y, width, height, look
 ## How it works
 
 ```
-dataset.service: dataset list (manifest.json, Hugging Face, imports) → TraceEntry[]
+dataset.service: dataset list (manifest.json) → TraceEntry[]
 trace JSON ──trace-loader.service──▶ ReasoningTrace (steps → nodes)
                   tool_kinds → normalized kind → stepType + label
                                             │

@@ -42,7 +42,6 @@ import { ConversationViewerComponent } from "../shared/conversation-viewer.compo
 import { AxisMode, hasTimestamps, layoutTraces, TraceEntry, TraceLayout, TraceNodeType } from "./layout";
 import { Mark } from "./marks";
 import { groupThreadMessages } from "./thread-helper";
-import { HuggingFaceImportComponent } from "./hugging-face-import.component";
 import { PanelMessage, getRoleLabel, speakerStyle, getHighlightedTextForViewer } from "./viewer-helpers";
 import { measureDrop } from "./drag-drop-helper";
 import { TraceTrackComponent } from "./trace-track";
@@ -73,7 +72,6 @@ interface LegendEntry {
     MultiSelectDropdownComponent,
     AnalysisToolbarComponent,
     ConversationViewerComponent,
-    HuggingFaceImportComponent,
     TraceTrackComponent,
     ScrubBarComponent,
   ],
@@ -86,8 +84,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   selectedDatasetFile = signal<string>("");
   isLoading = signal<boolean>(false);
 
-  // HF Import Modal State
-  showImportModal = signal<boolean>(false);
   traces = signal<TraceEntry[]>([]);
   selectedMark = signal<Mark | null>(null);
   hoveredMarkId = signal<string | null>(null);
@@ -134,7 +130,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     }))
   );
 
-  private lastSelectedDataset = '';
   /** Bumped on each dataset load, so a slow load can't overwrite a newer one. */
   private datasetRequest = 0;
 
@@ -625,14 +620,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
 
   /** Handles dataset selection changes. */
   async onDatasetChange(file: string, targetIndices?: number[] | null) {
-    if (file === '__import_hf_dataset__') {
-      this.openImportModal();
-      setTimeout(() => {
-        this.selectedDatasetFile.set(this.lastSelectedDataset);
-      });
-      return;
-    }
-    this.lastSelectedDataset = file;
     this.selectedDatasetFile.set(file);
 
     const ds = this.datasets().find((d) => d.file === file);
@@ -765,22 +752,5 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     this.manualActiveTraceId.set(traceId);  // keep this row active when nothing is selected
     this.selectedMark.set(mark);
     if (!mark && next) this.panelScrollTarget.set({ id: next.id });
-  }
-
-  openImportModal() {
-    this.showImportModal.set(true);
-  }
-
-  closeImportModal() {
-    this.showImportModal.set(false);
-  }
-
-  onImportDataset(newDataset: DatasetItem) {
-    this.datasetService.saveImported(newDataset);
-
-    // Reload all datasets and switch to the new one asynchronously
-    void this.loadDatasets(newDataset.file);
-
-    this.closeImportModal();
   }
 }

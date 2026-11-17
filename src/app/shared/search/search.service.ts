@@ -138,20 +138,20 @@ export class SearchService {
     return 't' + Math.abs(hash).toString(36);
   }
 
-  /** Clear all cached search results from memory and localStorage. Returns number of keys removed. */
+  /** Clear all cached search results from memory and window.localStorage. Returns number of keys removed. */
   clearCache(): number {
     this.memoryCache.clear();
     let count = 0;
     try {
       const keysToRemove: string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const key = window.localStorage.key(i);
         if (key && key.startsWith('agentic_traces_search_cache_')) {
           keysToRemove.push(key);
         }
       }
       for (const key of keysToRemove) {
-        localStorage.removeItem(key);
+        window.localStorage.removeItem(key);
         count++;
       }
       console.log(`[Agent Trace] Cleared ${count} cached search results.`);
@@ -165,10 +165,10 @@ export class SearchService {
   private pruneCache(limit: number = 100): void {
     try {
       const cacheEntries: Array<{ key: string; timestamp: number }> = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const key = window.localStorage.key(i);
         if (key && key.startsWith('agentic_traces_search_cache_')) {
-          const val = localStorage.getItem(key);
+          const val = window.localStorage.getItem(key);
           if (val) {
             try {
               const parsed = JSON.parse(val) as any;
@@ -186,7 +186,7 @@ export class SearchService {
         cacheEntries.sort((a, b) => a.timestamp - b.timestamp);
         const toRemoveCount = cacheEntries.length - limit + 1;
         for (let i = 0; i < toRemoveCount; i++) {
-          localStorage.removeItem(cacheEntries[i].key);
+          window.localStorage.removeItem(cacheEntries[i].key);
         }
         console.log(`[Search] Pruned ${toRemoveCount} oldest entries from localStorage cache.`);
       }
@@ -308,7 +308,7 @@ export class SearchService {
 
     // 2. Check localStorage cache
     try {
-      const cachedData = localStorage.getItem(cacheKey);
+      const cachedData = window.localStorage.getItem(cacheKey);
       if (cachedData) {
         console.log('[Search] Cache hit (localStorage) for query:', query);
         const parsed = JSON.parse(cachedData) as any;
@@ -322,7 +322,7 @@ export class SearchService {
             timestamp: Date.now(),
             results: resultsObj
           };
-          localStorage.setItem(cacheKey, JSON.stringify(cacheEntry));
+          window.localStorage.setItem(cacheKey, JSON.stringify(cacheEntry));
         } catch { }
 
         this.memoryCache.set(promptHash, resultsMap);
@@ -357,7 +357,7 @@ export class SearchService {
             timestamp: Date.now(),
             results: resultsObj
           };
-          localStorage.setItem(cacheKey, JSON.stringify(cacheEntry));
+          window.localStorage.setItem(cacheKey, JSON.stringify(cacheEntry));
         } catch (e) {
           console.warn('[Search] Failed to write to localStorage cache:', e);
         }

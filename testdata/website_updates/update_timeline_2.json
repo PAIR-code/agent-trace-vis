@@ -7,8 +7,7 @@
   },
   "agent": {
     "name": "jetski",
-    "version": "1.0",
-    "model": "MODEL_PLACEHOLDER_M84"
+    "version": "1.0"
   },
   "steps": [
     {
@@ -1067,7 +1066,7 @@
     {
       "step_index": 40,
       "role": "agent",
-      "model": "MODEL_PLACEHOLDER_M84",
+      "model": null,
       "reasoning_content": "Ah! The artifact path MUST be in `/Users/ereif/.gemini/jetski/brain/1855ead8-3100-411a-a1b1-652c118ea5f1/`!\nLet's write the artifact to `/Users/ereif/.gemini/jetski/brain/1855ead8-3100-411a-a1b1-652c118ea5f1/timeline_redesign_plan.md` instead.",
       "content": "",
       "tool_calls": [
@@ -2819,10 +2818,5 @@
         "cache_read_tokens": 163642
       }
     }
-  ],
-  "metadata": {
-    "artifact_dirs": [
-      "file:///Users/ereif/.gemini/jetski/brain/1855ead8-3100-411a-a1b1-652c118ea5f1"
-    ]
-  }
+  ]
 }

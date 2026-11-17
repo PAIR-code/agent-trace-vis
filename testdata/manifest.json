@@ -1,0 +1,11 @@
+[
+  {
+    "id": "website_updates",
+    "name": "Website Updates",
+    "files": [
+      "website_updates/update_timeline_1.json",
+      "website_updates/update_timeline_2.json",
+      "website_updates/update_timeline_3.json"
+    ]
+  }
+]

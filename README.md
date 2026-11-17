@@ -1,66 +1,38 @@
-# Reasoning Trace Visualization
+# Agent Trace Vis
 
 [Live Demo](https://agent-trace-vis.netlify.app)
 
-Visual tools for understanding AI agent reasoning traces. Built for researchers, engineers, and anyone trying to make sense of complex agentic behaviors.
+A timeline visualization for understanding AI agent traces. Built for researchers, engineers, and anyone trying to make sense of complex agentic behaviors.
 
-As AI systems increasingly rely on multi-step reasoning and tool use, understanding what they actually do, and why, becomes critical. But most of this behavior is hidden: the implementation steps, tool calls, backtracking, and decision points that shape the final output. This project explores visual approaches to making these patterns legible, from structured agentic traces (where agents coordinate tools, sub-agents, and user interactions) to unstructured chain-of-thought reasoning (where we want to compare strategies across multiple rollouts of the same task). Our goal is to bridge the gap between deep-reading a single trace and aggregate metrics across thousands, supporting the mesoscale analysis needed to form and test hypotheses about how these systems behave.
+As AI systems increasingly rely on multi-step reasoning and tool use, understanding what they actually do, and why, becomes critical. But most of this behavior is hidden: the implementation steps, tool calls, backtracking, and decision points that shape the final output. Agent Trace Vis makes these patterns legible. Each trace is one row with horizontal lanes: the user/agent conversation, the agent's internal processes (thinking), tool calls, and a files lane showing which files were read, searched, and edited. It supports comparing traces side by side, subagents and multi-agent teams, search, model highlighting, and gap compression for long traces.
 
-## Visualizations
-
-### Agentic Traces
-A timeline-based visualization for structured agent traces (e.g., from coding agents, tool-using LLMs). Each trace is one row with horizontal lanes: the user/agent conversation, the agent's internal processes (thinking), tool calls, and a files lane showing which files were read, searched, and edited. Supports search, model highlighting, and gap compression for long traces.
-
-- **Demo**: [Demo](https://agent-trace-vis.netlify.app/#/agentic-traces)
-- **Route**: `/#/agentic-traces`
-- **Data format**: JSON files following the [OpenTraces](https://www.opentraces.ai) schema
-
-#### Bringing your own traces
-
-The repo ships with sample traces in [`data/sample/traces/`](data/sample/traces/) (GitHub Copilot agent-mode sessions and a website-editing session), so `npm start` shows real data right away. To look at your own agent's traces you need them as OpenTraces JSON; the easiest path is to use (or adapt) one of the converters in [`converters/`](converters/). See [`converters/README.md`](converters/README.md) for how to convert your Copilot chats and how to write a converter for another agent.
-
-### Unstructured Reasoning (Graph)
-A force-directed graph visualization for comparing multiple rollouts of unstructured chain-of-thought reasoning (e.g., RLVR-trained models solving math problems). Segments reasoning into chunks, embeds them, and visualizes structural patterns across traces.
-
-- **Demo**: [Demo](https://agent-trace-vis.netlify.app/#/unstructured-reasoning-graph)
-- **Route**: `/#/unstructured-reasoning-graph`
-- **Data format**: JSON arrays of reasoning samples with `reasoning_content` and `score` fields
-
-### Unstructured Reasoning (Linear)
-A linear token-level visualization for comparing reasoning traces across datasets. Highlights token frequency and overlap across rollouts with multiple coloring schemes (chromogram, dataset, score-based).
-
-- **Demo**: [Demo](https://agent-trace-vis.netlify.app/#/unstructured-reasoning-linear)
-- **Route**: `/#/unstructured-reasoning-linear`
-- **Data format**: Same as the graph view
-
-### Conversational Arcs
-A sentence-level visualization for analyzing how messages in multi-turn conversations reference and build upon previous turns.
-
-- **Demo**: [Demo](https://agent-trace-vis.netlify.app/#/conversation-arcs)
-- **Route**: `/#/conversation-arcs`
+Traces are JSON files following the [OpenTraces](https://www.opentraces.ai) schema.
 
 ## Getting Started
 
-### 1. Setup & Run Locally
+### 1. Run locally
 ```bash
 npm install
 npm start
 ```
-The app will run at `http://localhost:4200`.
+The app runs at `http://localhost:4200` and opens with the bundled sample traces.
 
-### 2. Where trace data lives
+### 2. Bring your own traces
+
+The app reads OpenTraces JSON. To look at your own agent's traces, convert them with (or adapt) one of the converters in [`converters/`](converters/); see [`converters/README.md`](converters/README.md) for converting GitHub Copilot sessions and multi-agent team rollouts, and for how to write a converter for another agent.
+
 ```
 agent-trace-vis/
+├── testdata/            ← sample datasets, committed
 └── data/
-    ├── sample/traces/      ← small sample datasets, committed
-    └── local/              ← your own traces and scripts (gitignored)
-        └── traces/         ← one folder per dataset
+    └── local/           ← your own traces (gitignored)
+        └── traces/      ← one folder per dataset
 ```
-Each sub-folder of `traces/` becomes one dataset in the UI; a folder with the same name in both `sample/` and `local/` is merged. Converters write to `data/local/traces/` by default.
+Each sub-folder becomes one dataset in the UI; a folder with the same name in both `testdata/` and `data/local/traces/` is merged. Converters write to `data/local/traces/` by default.
 
-Before each start/build, `generate-manifest.js` copies the datasets into `.data-build/` (gitignored; served at `assets/data/`) and writes the manifest. `npm start` gets every dataset. Builds and deploys get only the selected ones (below), in a separate folder, so deploying never changes what you see locally.
+Before each start/build, `generate-manifest.js` copies the datasets into `.data-build/` (gitignored; served at `testdata/`) and writes the manifest. `npm start` gets every dataset. Builds and deploys get only the selected ones (below), in a separate folder, so deploying never changes what you see locally.
 
-### 3. Building & Deploying (Netlify)
+### 3. Build and deploy (Netlify)
 
 Building compiles the app locally to `dist/reasoning-trace-vis/browser/`. Deploying uploads those files to Netlify at [agent-trace-vis.netlify.app](https://agent-trace-vis.netlify.app).
 
@@ -69,11 +41,10 @@ By default a build includes only the public datasets (`PUBLIC_DATASETS` in `gene
 ```bash
 npm run deploy                                   # production, public datasets
 npm run deploy:draft                             # preview URL, public datasets
-DATASETS=ridge_eval npm run deploy:draft         # preview URL, chosen datasets
-DATASETS=ridge_eval npm run deploy:draft -- --alias ridge   # with a custom alias
+DATASETS=my_traces npm run deploy:draft          # preview URL, chosen datasets
 ```
 
-### 4. Trace format
+## Trace format
 
 Each trace file should follow this structure:
 
@@ -113,23 +84,6 @@ Each trace file should follow this structure:
     }
   ]
 }
-```
-
-### Unstructured Reasoning Data
-
-1. Place your JSON dataset files in the sibling `reasoning_vis_data/rlvr_vs_base/` directory.
-2. Update the `datasets` array in `src/app/unstructured-traces/unstructured-reasoning-graph/unstructured-reasoning-graph.ts`
-
-Each dataset file should be a JSON array of objects with at minimum:
-
-```json
-[
-  {
-    "reasoning_content": "Let me think about this step by step...",
-    "score": 1,
-    "problem": "What is 2+2?"
-  }
-]
 ```
 
 ## License and Disclaimer

@@ -22,6 +22,7 @@
 
 import { Injectable, signal, computed } from '@angular/core';
 import { Subscription } from 'rxjs';
+import { objectUrlFromSafeSource, setAnchorHref } from 'safevalues/dom';
 import {
   SearchService,
   SearchResult,
@@ -66,7 +67,7 @@ export class AnalysisLayersService {
   private subscriptions = new Map<string, Subscription>();
 
   constructor(private searchService: SearchService) {
-    const savedKey = localStorage.getItem('reasoning_vis_api_key') || '';
+    const savedKey = window.localStorage.getItem('reasoning_vis_api_key') || '';
     if (savedKey) this.apiKey.set(savedKey);
     this.initializePresets();
   }
@@ -99,7 +100,7 @@ export class AnalysisLayersService {
     const key = prompt('Enter your Gemini API key for AI search:');
     if (!key) return false;
     this.apiKey.set(key);
-    localStorage.setItem('reasoning_vis_api_key', key);
+    window.localStorage.setItem('reasoning_vis_api_key', key);
     return true;
   }
 
@@ -210,7 +211,7 @@ export class AnalysisLayersService {
     this.currentMode.set(mode);
   }
 
-  /** Clear all cached search results from memory and localStorage. */
+  /** Clear all cached search results from memory and window.localStorage. */
   clearSearchCache(): number {
     return this.searchService.clearCache();
   }
@@ -281,13 +282,15 @@ export class AnalysisLayersService {
   /** Downloads {@link buildExportConfig} as `autoraters-YYYYMMDD-HHMM.json`. */
   downloadConfig(): void {
     const json = JSON.stringify(this.buildExportConfig(), null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
+    // application/octet-stream is the safevalues-approved MIME type for
+    // blobs that are meant to be downloaded.
+    const blob = new Blob([json], { type: 'application/octet-stream' });
+    const url = objectUrlFromSafeSource(blob);
     const pad = (n: number) => String(n).padStart(2, '0');
     const d = new Date();
     const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
     const a = document.createElement('a');
-    a.href = url;
+    setAnchorHref(a, url);
     a.download = `autoraters-${stamp}.json`;
     document.body.appendChild(a);
     a.click();

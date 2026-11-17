@@ -74,13 +74,13 @@
               "outputHashing": "all",
               "assets": [
                 { "glob": "**/*", "input": "public" },
-                { "glob": "**/*", "input": ".data-build/deploy", "output": "assets/data" }
+                { "glob": "**/*", "input": ".data-build/deploy", "output": "testdata" }
               ]
             },
             "development": {
               "assets": [
                 { "glob": "**/*", "input": "public" },
-                { "glob": "**/*", "input": ".data-build/dev", "output": "assets/data" }
+                { "glob": "**/*", "input": ".data-build/dev", "output": "testdata" }
               ],
               "optimization": false,
               "extractLicenses": false,

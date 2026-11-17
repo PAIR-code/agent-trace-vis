@@ -91,7 +91,7 @@ import { TokenUsage } from './trace';
 export interface TraceEntry {
   id: string;
   title: string;
-  /** Source URL for local traces; '' for Hugging Face ones. */
+  /** Source URL of the trace file. */
   file: string;
   /** Null if the trace failed to load. */
   data: ReasoningTrace | null;

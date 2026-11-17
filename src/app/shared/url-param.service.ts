@@ -26,7 +26,6 @@ import { ActivatedRoute, Router } from '@angular/router';
 export interface DatasetItemLike {
   name: string;
   file: string;
-  repoId?: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -48,7 +47,7 @@ export class UrlParamService {
       }
 
       if (key) {
-        localStorage.setItem('reasoning_vis_api_key', key);
+        window.localStorage.setItem('reasoning_vis_api_key', key);
 
         // Clean up key parameters from main search params
         url.searchParams.delete('key');
@@ -145,8 +144,7 @@ export class UrlParamService {
           d.file === rawDatasetParam ||
           d.file.toLowerCase() === normalizedParam ||
           d.name === rawDatasetParam ||
-          d.name.toLowerCase() === normalizedParam ||
-          (d.repoId && (d.repoId === rawDatasetParam || d.repoId.toLowerCase() === normalizedParam))
+          d.name.toLowerCase() === normalizedParam
       );
 
       if (dsMatch) {

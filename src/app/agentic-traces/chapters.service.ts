@@ -95,7 +95,7 @@ export class ChaptersService {
     }
   }
 
-  /** Clear cached chapter annotations from memory and localStorage. */
+  /** Clear cached chapter annotations from memory and window.localStorage. */
   clearCache(): number {
     for (const sub of this.subscriptions.values()) {
       sub.unsubscribe();
@@ -108,14 +108,14 @@ export class ChaptersService {
     let count = 0;
     try {
       const keysToRemove: string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const key = window.localStorage.key(i);
         if (key && key.startsWith(LEGACY_CACHE_PREFIX)) {
           keysToRemove.push(key);
         }
       }
       for (const key of keysToRemove) {
-        localStorage.removeItem(key);
+        window.localStorage.removeItem(key);
         count++;
       }
     } catch {
@@ -138,7 +138,7 @@ export class ChaptersService {
 
     // 2. Check localStorage cache (works even if apiKey isn't provided yet)
     try {
-      const raw = localStorage.getItem(cacheKey);
+      const raw = window.localStorage.getItem(cacheKey);
       if (raw) {
         const parsed = JSON.parse(raw) as { timestamp?: number; data?: TraceAnnotations };
         const data = parsed?.data ?? (parsed as unknown as TraceAnnotations);
@@ -369,7 +369,7 @@ Return ONLY valid JSON in this exact structure:
   private saveToCache(cacheKey: string, data: TraceAnnotations): void {
     this.pruneCache(100);
     try {
-      localStorage.setItem(cacheKey, JSON.stringify({ timestamp: Date.now(), data }));
+      window.localStorage.setItem(cacheKey, JSON.stringify({ timestamp: Date.now(), data }));
     } catch {
       // Ignore quota errors
     }
@@ -378,10 +378,10 @@ Return ONLY valid JSON in this exact structure:
   private pruneCache(limit = 100): void {
     try {
       const entries: Array<{ key: string; timestamp: number }> = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const key = window.localStorage.key(i);
         if (key && key.startsWith(CACHE_PREFIX)) {
-          const val = localStorage.getItem(key);
+          const val = window.localStorage.getItem(key);
           if (val) {
             try {
               const parsed = JSON.parse(val) as { timestamp?: number };
@@ -396,7 +396,7 @@ Return ONLY valid JSON in this exact structure:
         entries.sort((a, b) => a.timestamp - b.timestamp);
         const toRemove = entries.length - limit + 1;
         for (let i = 0; i < toRemove; i++) {
-          localStorage.removeItem(entries[i].key);
+          window.localStorage.removeItem(entries[i].key);
         }
       }
     } catch {

@@ -42,18 +42,7 @@ import { RouterLink } from '@angular/router';
           <h3>Agentic traces</h3>
           <p>Explore a step-by-step reasoning trace (can include tools).</p>
         </div>
-        <div class="vis-card" routerLink="/unstructured-reasoning-graph">
-          <h3>Unstructured Reasoning (Graph)</h3>
-          <p>View multiple rollouts of unstructured reasoning.</p>
-        </div>
-        <div class="vis-card" routerLink="/unstructured-reasoning-linear">
-          <h3>Unstructured Reasoning (Linear)</h3>
-          <p>View multiple rollouts of unstructured reasoning.</p>
-        </div>
-        <div class="vis-card" routerLink="/conversation-arcs">
-          <h3>Conversational Arcs</h3>
-          <p>Analyze how sentences in a conversation reference previous turns.</p>
-        </div>
+
       </div>
     </div>
   `,
