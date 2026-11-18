@@ -122,7 +122,22 @@ export function findUserWaitGaps(
     }
   }
 
-  return gaps;
+  return mergeRanges(gaps);
+}
+
+/**
+ * Sorts ranges and merges any that overlap. User inputs at the same moment (in
+ * different rows of a group, say) find the same gap; compressing it twice
+ * would remove its time twice and push later marks left of the origin.
+ */
+export function mergeRanges(ranges: TimeRange[]): TimeRange[] {
+  const merged: TimeRange[] = [];
+  for (const r of [...ranges].sort((a, b) => a.start - b.start)) {
+    const last = merged[merged.length - 1];
+    if (last && r.start <= last.end) last.end = Math.max(last.end, r.end);
+    else merged.push({ ...r });
+  }
+  return merged;
 }
 
 /**

@@ -23,10 +23,16 @@ import { ApplicationConfig } from '@angular/core';
 import { provideRouter, withHashLocation } from '@angular/router';
 import { provideHttpClient, withFetch } from '@angular/common/http';
 import { routes } from './app.routes';
+import { BundledSource } from './data/bundled-source';
+import { LocalFilesSource } from './data/local-files-source';
+import { TRACE_SOURCES } from './data/trace-source';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideRouter(routes, withHashLocation()),
-    provideHttpClient(withFetch())
+    provideHttpClient(withFetch()),
+    // Where datasets come from (see data/trace-source.ts).
+    { provide: TRACE_SOURCES, useExisting: BundledSource, multi: true },
+    { provide: TRACE_SOURCES, useExisting: LocalFilesSource, multi: true },
   ]
 };

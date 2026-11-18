@@ -27,6 +27,9 @@ import {
   ElementRef,
   signal,
   computed,
+  effect,
+  inject,
+  untracked,
   HostListener,
 } from "@angular/core";
 import { CommonModule } from "@angular/common";
@@ -34,7 +37,10 @@ import { FormsModule } from "@angular/forms";
 import { ActivatedRoute } from "@angular/router";
 import { UrlParamService } from "../shared/url-param.service";
 import { AnalysisLayersService } from "./analysis-layers.service";
-import { DatasetItem, DatasetService } from "./dataset.service";
+import { ExamplesSidebarComponent } from "../data/examples-sidebar.component";
+import { INITIAL_DATASET_REFS } from "../data/initial-refs";
+import { DatasetRef, parseDatasetRef, parseIndices } from "../data/dataset-refs";
+import { WorkspaceService } from "../data/workspace.service";
 import { COLORS } from "./colors";
 import { MultiSelectDropdownComponent, DropdownItem } from "../shared/multi-select-dropdown.component";
 import { AnalysisToolbarComponent } from "./analysis-toolbar.component";
@@ -46,7 +52,7 @@ import { PanelMessage, getRoleLabel, speakerStyle, getHighlightedTextForViewer }
 import { measureDrop } from "./drag-drop-helper";
 import { TraceTrackComponent } from "./trace-track";
 import { ScrubBarComponent, ScrubEvent } from "./scrub-bar";
-import { depthOf, groupOf, groupOrder } from "./agent-groups";
+import { groupOrder } from "./agent-groups";
 import { buildLinks, rowGeometry } from "./links";
 import { AnnotationMode, ChaptersService, annotationBarHeight } from "./chapters.service";
 
@@ -74,15 +80,18 @@ interface LegendEntry {
     ConversationViewerComponent,
     TraceTrackComponent,
     ScrubBarComponent,
+    ExamplesSidebarComponent,
   ],
   providers: [AnalysisLayersService],
   templateUrl: './agentic-traces.html',
   styleUrls: ['./agentic-traces.css'],
 })
 export class AgenticTracesComponent implements OnInit, OnDestroy {
-  datasets = signal<DatasetItem[]>([]);
-  selectedDatasetFile = signal<string>("");
-  isLoading = signal<boolean>(false);
+  readonly workspace = inject(WorkspaceService);
+  private readonly initialRefs = inject(INITIAL_DATASET_REFS, { optional: true });
+  /** True until the workspace has restored the URL and loaded the defaults. */
+  private readonly initializing = signal(true);
+  isLoading = computed(() => this.initializing() || (this.workspace.isFetching() && this.traces().length === 0));
 
   traces = signal<TraceEntry[]>([]);
   selectedMark = signal<Mark | null>(null);
@@ -129,9 +138,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
       title: opt.label
     }))
   );
-
-  /** Bumped on each dataset load, so a slow load can't overwrite a newer one. */
-  private datasetRequest = 0;
 
   /** One laid-out row per selected trace. */
   traceLayouts = signal<TraceLayout[]>([]);
@@ -182,15 +188,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     return [...ids]
       .map((id) => this.traces().find((t) => t.id === id))
       .filter(Boolean);
-  });
-
-  /** Picker items: every trace, with subagents nested (indented) under the trace that launched them. */
-  traceItems = computed<DropdownItem[]>(() => {
-    const traces = this.traces();
-    return groupOrder(traces, traces.map(t => t.id)).map(id => {
-      const t = traces.find(e => e.id === id)!;
-      return { id: t.id, title: t.title, date: t.date, agents: t.agents, depth: depthOf(traces, id) };
-    });
   });
 
   /** Lines between rows: subagent launches and messages between agents (links.ts). */
@@ -295,10 +292,34 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   constructor(
     public layersService: AnalysisLayersService,
     public chaptersService: ChaptersService,
-    private datasetService: DatasetService,
     private route: ActivatedRoute,
     private urlParamService: UrlParamService,
-  ) { }
+  ) {
+    // Show the workspace's selected traces, keeping any row order the user dragged.
+    effect(() => {
+      const entries = this.workspace.selectedEntries();
+      untracked(() => {
+        const ids = new Set(entries.map(e => e.id));
+        const kept = [...this.selectedTraceIds()].filter(id => ids.has(id));
+        const added = entries.map(e => e.id).filter(id => !kept.includes(id));
+        this.traces.set(entries);
+        this.selectedTraceIds.set(new Set(groupOrder(entries, [...kept, ...added])));
+        this.processTraces();
+      });
+    });
+    // The example just picked in the sidebar becomes the active row.
+    effect(() => {
+      const focus = this.workspace.focusEntryId();
+      if (focus) untracked(() => this.manualActiveTraceId.set(focus));
+    });
+    // Keep the URL in sync with the workspace, for sharing.
+    effect(() => {
+      const refs = this.workspace.urlRefs();
+      if (untracked(() => this.initializing())) return;
+      untracked(() => this.urlParamService.updateQueryParams(
+        { ds: refs, dataset: null, indices: null }, this.route));
+    });
+  }
 
   @HostListener('window:keydown.escape')
   handleEscape() {
@@ -329,7 +350,30 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     const w = window as DevWindow;
     w.clearCache = w.clearcache = this.clearCacheFn;
 
-    void this.loadDatasets();
+    void this.initWorkspace();
+  }
+
+  /** Restores the workspace from the URL (including older link formats), then loads the defaults. */
+  private async initWorkspace() {
+    const params = this.route.snapshot.queryParamMap;
+    const refs: DatasetRef[] = params.getAll('ds')
+      .map(parseDatasetRef)
+      .filter((r): r is DatasetRef => r !== null);
+    const extraRefs = this.initialRefs?.() ?? [];
+    // Older links: ?dataset=<sample id>&indices=0,2 (unless a deployment translated them).
+    const legacyDataset = params.get('dataset') || params.get('datasetId');
+    if (legacyDataset && extraRefs.length === 0) {
+      const legacyIndices = params.get('indices') ?? params.get('index') ?? '';
+      refs.push({ sourceId: 'bundled', datasetId: legacyDataset, indices: parseIndices(legacyIndices) ?? [] });
+    }
+    refs.push(...extraRefs);
+    try {
+      await this.workspace.init(refs);
+    } finally {
+      this.initializing.set(false);
+      this.urlParamService.updateQueryParams(
+        { ds: this.workspace.urlRefs(), dataset: null, indices: null }, this.route);
+    }
   }
 
   onSidebarResizeStart(event: MouseEvent) {
@@ -389,15 +433,9 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** Renames a trace by its ID. */
+  /** Renames a trace by its ID (kept in the browser for that dataset and example). */
   finishRenameTrace(id: string, newTitle: string) {
-    if (newTitle && newTitle.trim()) {
-      const trace = this.traces().find((t) => t.id === id);
-      if (trace) {
-        trace.title = newTitle.trim();
-        this.traces.set([...this.traces()]);
-      }
-    }
+    this.workspace.rename(id, newTitle);
   }
 
   // Drag and drop track reordering (started from a row's drag handle)
@@ -474,30 +512,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
 
     this.selectedTraceIds.set(new Set(groupOrder(this.traces(), ids)));
     this.processTraces();
-    this.updateUrlParams();
-  }
-
-  /** Handles changes in the selected traces. Selecting a trace selects its group (subagents, or team) too; deselecting it drops them. */
-  onTraceSelectionChange(newSelection: Set<string>) {
-    const traces = this.traces();
-    const previous = this.selectedTraceIds();
-    const next = new Set(newSelection);
-    for (const id of newSelection) {
-      if (!previous.has(id)) for (const d of groupOf(traces, id)) next.add(d);
-    }
-    for (const id of previous) {
-      if (!newSelection.has(id)) for (const d of groupOf(traces, id)) next.delete(d);
-    }
-
-    // Keep currently selected IDs that are still selected (preserving custom order), then append the new ones.
-    const updatedIds = [...previous].filter(id => next.has(id));
-    for (const id of next) {
-      if (!updatedIds.includes(id)) updatedIds.push(id);
-    }
-
-    this.selectedTraceIds.set(new Set(groupOrder(traces, updatedIds)));
-    this.processTraces();
-    this.updateUrlParams();
   }
 
   // Callbacks for the side panel (the shared viewer asks for each color separately).
@@ -567,84 +581,16 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   }
 
 
-  private updateUrlParams() {
-    const currentDataset = this.selectedDatasetFile();
-    const currentTraces = this.traces();
-    const selectedIds = Array.from(this.selectedTraceIds());
-
-    const indices: number[] = selectedIds
-      .map(id => currentTraces.findIndex(t => t.id === id))
-      .filter(idx => idx !== -1);
-
-    this.urlParamService.updateQueryParams(
-      {
-        dataset: currentDataset || null,
-        indices: indices.length > 0 ? indices.join(',') : null,
-      },
-      this.route
-    );
-  }
-
-
-
-  private applyTraceSelection(tracesList: TraceEntry[], targetIndices?: number[] | null) {
-    if (tracesList.length === 0) {
-      this.selectedTraceIds.set(new Set());
-      this.updateUrlParams();
-      return;
-    }
-
-    const selectedIds = this.urlParamService.validateAndSelectTraceIds(tracesList, targetIndices);
-    const withGroups = selectedIds.flatMap(id => groupOf(tracesList, id));
-    this.selectedTraceIds.set(new Set(groupOrder(tracesList, withGroups)));
-    this.processTraces();
-    this.updateUrlParams();
-  }
-
-  /** Loads the list of datasets, then the dataset named in the URL (or `selectDatasetId`, or the first). */
-  async loadDatasets(selectDatasetId?: string) {
-    this.isLoading.set(true);
-    const datasets = await this.datasetService.listDatasets();
-    this.datasets.set(datasets);
-    this.isLoading.set(false);
-
-    const { targetId, pendingIndices } = this.urlParamService.resolveInitialDatasetAndIndices(
-      datasets,
-      selectDatasetId,
-      this.route
-    );
-    if (targetId) {
-      void this.onDatasetChange(targetId, pendingIndices);
-    }
-  }
-
-  /** Handles dataset selection changes. */
-  async onDatasetChange(file: string, targetIndices?: number[] | null) {
-    this.selectedDatasetFile.set(file);
-
-    const ds = this.datasets().find((d) => d.file === file);
-    if (!ds) return;
-
-    const request = ++this.datasetRequest;
-    this.isLoading.set(true);
-    this.traces.set([]);
-    try {
-      const traces = await this.datasetService.loadTraces(ds);
-      if (request !== this.datasetRequest) return;
-      this.traces.set(traces);
-      this.applyTraceSelection(traces, targetIndices);
-    } catch (err) {
-      console.error(`Failed to load dataset ${ds.name}`, err);
-    } finally {
-      if (request === this.datasetRequest) this.isLoading.set(false);
-    }
-  }
-
   /** Processes the active traces to generate nodes and lines for visualization. */
   processTraces() {
     const selectedIds = this.selectedTraceIds();
     const idsArray = [...selectedIds];
 
+    // The clicked row may have been deselected or removed with its dataset.
+    const manual = this.manualActiveTraceId();
+    if (manual && !selectedIds.has(manual)) {
+      this.manualActiveTraceId.set(idsArray[0] ?? null);
+    }
     if (idsArray.length === 1) {
       this.manualActiveTraceId.set(idsArray[0]);
     }

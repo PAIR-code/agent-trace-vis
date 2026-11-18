@@ -78,6 +78,10 @@ app-analysis-toolbar {
   overflow: hidden;
 }
 
+.main-layout > .loading-container {
+  flex: 1;
+}
+
 .vis-container {
   flex: 1;
   display: flex;

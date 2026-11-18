@@ -1,22 +1,4 @@
 <div class="selector-bar">
-  <div class="selector-group">
-    <label class="selector-label">Dataset</label>
-    <select class="selector-dropdown" [ngModel]="selectedDatasetFile()" (ngModelChange)="onDatasetChange($event)">
-      <option *ngFor="let ds of datasets()" [value]="ds.file">{{ ds.name }}</option>
-    </select>
-  </div>
-
-  <div class="conv-selector-group" *ngIf="traces().length > 0">
-    <label class="selector-label">Trace</label>
-    <app-multi-select-dropdown
-      [items]="traceItems()"
-      [selectedIds]="selectedTraceIds()"
-      [itemTypeName]="'trace'"
-      (selectionChange)="onTraceSelectionChange($event)"
-      (renameItem)="finishRenameTrace($event.id, $event.title)">
-    </app-multi-select-dropdown>
-  </div>
-
   <!-- X Axis Toggle. Time is disabled when no selected trace has timestamps; the choice is remembered. -->
   <div class="selector-group">
     <label class="selector-label">X Axis</label>
@@ -85,8 +67,12 @@
 <!-- Analysis Toolbar (separate row below header) -->
 <app-analysis-toolbar [marks]="marks()"></app-analysis-toolbar>
 
-<div class="vis-page-container" *ngIf="!isLoading() && activeTrace(); else loading" (click)="onBackgroundClick($event)">
+<div class="vis-page-container" (click)="onBackgroundClick($event)">
   <div class="main-layout">
+    <!-- Left: datasets and examples to pick traces from -->
+    <app-examples-sidebar></app-examples-sidebar>
+
+    <ng-container *ngIf="!isLoading() && activeTrace(); else loading">
     <div class="vis-container">
       <!-- No results banner -->
       <div class="no-results-banner" *ngIf="layersService.noResultsLayers().length > 0">
@@ -249,6 +235,7 @@
         (overlayClick)="null">
       </app-conversation-viewer>
     </div>
+    </ng-container>
   </div>
 </div>
 
@@ -257,9 +244,9 @@
 <ng-template #loading>
   <div class="loading-container">
     <div class="loading-spinner" *ngIf="isLoading()"></div>
-    <div class="loading-text" *ngIf="isLoading(); else noData">Loading dataset and traces...</div>
+    <div class="loading-text" *ngIf="isLoading(); else noData">Loading datasets and traces...</div>
     <ng-template #noData>
-      <div class="loading-text">No active trace selected or trace list is empty.</div>
+      <div class="loading-text">Select examples on the left to see their traces.</div>
     </ng-template>
   </div>
 </ng-template>

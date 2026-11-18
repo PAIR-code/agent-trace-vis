@@ -27,7 +27,9 @@ app-search-bar {
   display: flex;
   align-items: center;
   gap: 6px;
-  overflow-x: hidden;
+  /* Scrolls sideways (wheel, trackpad, or the arrow buttons) instead of wrapping. */
+  overflow-x: auto;
+  scrollbar-width: none;
   scroll-behavior: smooth;
   flex: 1;
   padding: 0 32px; /* Buffer padding so chips don't start hidden under gradients */

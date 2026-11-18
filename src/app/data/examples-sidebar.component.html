@@ -1,0 +1,125 @@
+<div class="collapsed-strip" *ngIf="collapsed(); else open">
+  <button type="button" class="icon-btn" title="Show examples" (click)="collapsed.set(false)">»</button>
+</div>
+
+<ng-template #open>
+  <aside class="sidebar"
+         [style.width.px]="width()"
+         [class.drag-over]="dragOver()"
+         (dragover)="onDragOver($event)"
+         (dragleave)="onDragLeave($event)"
+         (drop)="onDrop($event)">
+    <div class="header">
+      <div class="title-row">
+        <span class="title">Examples</span>
+        <span class="selected-count">{{ workspace.totalSelected() }} selected</span>
+        <button type="button" class="mini-btn" [disabled]="workspace.totalSelected() === 0"
+                title="Unselect every example" (click)="workspace.clearSelection()">Unselect all</button>
+        <button type="button" class="icon-btn" title="Hide examples" (click)="collapsed.set(true)">«</button>
+      </div>
+
+      <div class="add-row">
+        <button type="button" class="add-btn" (click)="toggleMenu()">+ Add dataset</button>
+        <div class="menu" *ngIf="menuOpen()">
+          <div class="menu-empty" *ngIf="menuLoading()">Loading datasets…</div>
+          <ng-container *ngFor="let group of menuGroups()">
+            <div class="menu-group-label">{{ group.source.label }}</div>
+            <button type="button" class="menu-item" *ngFor="let ds of group.datasets"
+                    [disabled]="ds.loaded" (click)="addFromMenu(group.source, ds)">
+              {{ ds.name }}<span class="menu-note" *ngIf="ds.loaded"> (loaded)</span>
+            </button>
+          </ng-container>
+          <div class="menu-divider" *ngIf="actions().length > 0 && menuGroups().length > 0"></div>
+          <button type="button" class="menu-item action" *ngFor="let a of actions()"
+                  (click)="runAction(a.source, a.action)">{{ a.action.label }}</button>
+        </div>
+      </div>
+
+      <input type="text" class="filter" placeholder="Filter by #index, title, id, or dataset…"
+             [ngModel]="filter()" (ngModelChange)="filter.set($event)" />
+    </div>
+
+    <div class="banner error" *ngIf="addError()">
+      <span>{{ addError() }}</span>
+      <button type="button" class="banner-dismiss" (click)="addError.set('')">×</button>
+    </div>
+    <div class="banner error" *ngIf="workspace.error()">
+      <span>{{ workspace.error() }}</span>
+      <button type="button" class="banner-dismiss" (click)="workspace.error.set('')">×</button>
+    </div>
+    <div class="banner" *ngIf="workspace.isFetching()">
+      <span class="spinner"></span><span>Loading traces…</span>
+    </div>
+
+    <div class="list">
+      <div class="empty" *ngIf="workspace.datasets().length === 0">
+        No datasets loaded. Use “+ Add dataset” or drop trace files here.
+      </div>
+
+      <section class="dataset" *ngFor="let ds of workspace.datasets(); trackBy: trackByKey">
+        <div class="dataset-header" (click)="toggleSection(ds.key)" [title]="ds.name">
+          <span class="chevron">{{ isCollapsed(ds.key) ? '▶' : '▼' }}</span>
+          <span class="kind">{{ ds.label }}</span>
+          <span class="dataset-name">{{ ds.name }}</span>
+          <span class="count">{{ countLabel(ds) }}</span>
+          <span class="sel-badge" *ngIf="ds.selected.length > 0">{{ ds.selected.length }} sel</span>
+          <button type="button" class="remove-btn" title="Remove this dataset" (click)="remove(ds, $event)">×</button>
+        </div>
+
+        <div class="dataset-body" *ngIf="!isCollapsed(ds.key)">
+          <div class="jump-row">
+            <input type="text" class="jump-input" placeholder="Add by index (e.g. 42 or 10-15)"
+                   [ngModel]="jumpInput(ds.key)" (ngModelChange)="setJumpInput(ds.key, $event)"
+                   (keydown.enter)="jump(ds)" />
+            <button type="button" class="mini-btn" [disabled]="!jumpInput(ds.key).trim()" (click)="jump(ds)">Add</button>
+          </div>
+          <div class="jump-error" *ngIf="jumpError(ds.key)">{{ jumpError(ds.key) }}</div>
+          <div class="dataset-error" *ngIf="ds.error">{{ ds.error }}</div>
+          <div class="empty" *ngIf="ds.loadingExamples">Loading examples…</div>
+          <div class="empty" *ngIf="!ds.loadingExamples && !ds.error && filtered(ds).length === 0">
+            {{ filter() ? 'No examples match “' + filter() + '”.' : 'No examples.' }}
+          </div>
+
+          <div class="example" *ngFor="let ex of filtered(ds); trackBy: trackByIndex"
+               [class.selected]="isSelected(ds, ex)" (click)="onRowClick(ds, ex)">
+            <input type="checkbox" class="checkbox" [checked]="isSelected(ds, ex)"
+                   (click)="$event.stopPropagation(); onRowClick(ds, ex)" />
+            <div class="example-content">
+              <div class="top-line">
+                <span class="idx">#{{ ex.index }}</span>
+                <span class="date" *ngIf="formatDate(ex.date)">{{ formatDate(ex.date) }}</span>
+                <span class="outcome" *ngIf="ex.outcome?.success !== undefined"
+                      [class.pass]="ex.outcome?.success" [class.fail]="!ex.outcome?.success">
+                  {{ ex.outcome?.success ? 'PASS' : 'FAIL' }}
+                </span>
+                <span class="reward" *ngIf="ex.outcome?.reward !== undefined">R: {{ formatReward(ex.outcome!.reward!) }}</span>
+                <span class="steps" *ngIf="ex.stepCount">{{ ex.stepCount }} {{ ex.stepCount === 1 ? 'step' : 'steps' }}</span>
+                <span class="row-actions">
+                  <button type="button" class="link-btn" title="Rename" (click)="startRename(ds, ex, $event)">✎</button>
+                  <button type="button" class="link-btn" title="Select only this example" (click)="selectOnly(ds, ex, $event)">Only</button>
+                </span>
+              </div>
+              <input *ngIf="isRenaming(ds, ex); else titleView" class="rename-input" type="text"
+                     [(ngModel)]="renameDraft" (click)="$event.stopPropagation()"
+                     (keydown.enter)="finishRename(ds, ex)" (keydown.escape)="cancelRename()"
+                     (blur)="finishRename(ds, ex)" />
+              <ng-template #titleView>
+                <div class="example-title" [title]="workspace.titleOf(ds.key, ex)">{{ workspace.titleOf(ds.key, ex) }}</div>
+              </ng-template>
+              <div class="example-id" *ngIf="ex.id && ex.id !== ex.title" [title]="ex.id">{{ ex.id }}</div>
+            </div>
+          </div>
+
+          <div class="load-more" *ngIf="ds.hasMore">
+            <button type="button" class="mini-btn" [disabled]="ds.loadingMore" (click)="workspace.loadMore(ds.key)">
+              {{ ds.loadingMore ? 'Loading…' : 'Load more' }}
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="drop-hint" *ngIf="dragOver()">Drop .json / .jsonl trace files to open them</div>
+  </aside>
+  <div class="resizer" (mousedown)="startResize($event)" title="Drag to resize"></div>
+</ng-template>

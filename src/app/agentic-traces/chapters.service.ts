@@ -255,7 +255,8 @@ Return ONLY valid JSON in this exact structure:
 }`;
   }
 
-  private async callGemini(prompt: string, apiKey: string): Promise<string> {
+  /** Sends `prompt` to Gemini; overridden where a backend proxies Gemini. */
+  protected async callGemini(prompt: string, apiKey: string): Promise<string> {
     const model = 'gemini-flash-lite-latest';
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 

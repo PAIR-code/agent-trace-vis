@@ -19,7 +19,12 @@ The app runs at `http://localhost:4200` and opens with the bundled sample traces
 
 ### 2. Bring your own traces
 
-The app reads OpenTraces JSON. To look at your own agent's traces, convert them with (or adapt) one of the converters in [`converters/`](converters/); see [`converters/README.md`](converters/README.md) for converting GitHub Copilot sessions and multi-agent team rollouts, and for how to write a converter for another agent.
+The app reads [OpenTraces](https://www.opentraces.ai) JSON. To look at your own agent's traces, convert them with (or adapt) one of the converters in [`converters/`](converters/); see [`converters/README.md`](converters/README.md) for converting GitHub Copilot sessions and multi-agent team rollouts, and for how to write a converter for another agent.
+
+Then either:
+
+- **Open them in the app:** use **+ Add dataset → Open local files…** in the examples sidebar, or drop `.json` / `.jsonl` files on it. Files are parsed in your browser and never uploaded; they're kept in the browser (IndexedDB) until you remove the dataset.
+- **Add them to the project's datasets:** put them in `data/local/traces/<dataset>/`, which `npm start` serves.
 
 ```
 agent-trace-vis/
@@ -28,9 +33,15 @@ agent-trace-vis/
     └── local/           ← your own traces (gitignored)
         └── traces/      ← one folder per dataset
 ```
-Each sub-folder becomes one dataset in the UI; a folder with the same name in both `testdata/` and `data/local/traces/` is merged. Converters write to `data/local/traces/` by default.
+Each sub-folder becomes one dataset in the sidebar; a folder with the same name in both `testdata/` and `data/local/traces/` is merged. Converters write to `data/local/traces/` by default.
 
 Before each start/build, `generate-manifest.js` copies the datasets into `.data-build/` (gitignored; served at `testdata/`) and writes the manifest. `npm start` gets every dataset. Builds and deploys get only the selected ones (below), in a separate folder, so deploying never changes what you see locally.
+
+#### The examples sidebar
+
+Every dataset you load gets a section in the sidebar listing its traces. Select several, within or across datasets, to compare them as rows on the timeline; **Only** selects just one, and the pencil renames a trace (kept in your browser). The workspace is in the URL (`?ds=<source>:<dataset>:<indices>`), so you can share what you're looking at.
+
+To load datasets from somewhere else (e.g. your own server), implement `TraceSource` in [`src/app/data/trace-source.ts`](src/app/data/trace-source.ts) and register it with the `TRACE_SOURCES` provider in [`src/app/app.config.ts`](src/app/app.config.ts).
 
 ### 3. Build and deploy (Netlify)
 
