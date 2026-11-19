@@ -31,7 +31,7 @@ import { TraceEntry } from '../agentic-traces/layout-types';
 import { hashString } from '../agentic-traces/layout-utils';
 import { TraceRecord } from '../agentic-traces/trace';
 import { TraceLoaderService } from '../agentic-traces/trace-loader.service';
-import { DatasetRef, formatDatasetRef } from './dataset-refs';
+import { DatasetRef, coalesceDatasetRefs, formatDatasetRef } from './dataset-refs';
 import { DatasetInfo, ExampleSummary, TRACE_SOURCES, TraceSource } from './trace-source';
 
 /** Examples fetched per page. */
@@ -68,6 +68,9 @@ export class WorkspaceService {
   readonly selectedEntries = signal<TraceEntry[]>([]);
   /** The trace the user just picked; the timeline makes it the active row. */
   readonly focusEntryId = signal<string | null>(null);
+  /** Shared sidebar UI state synced with URL config parameters. */
+  readonly sidebarCollapsed = signal(false);
+  readonly sidebarFilter = signal('');
   /** Number of trace fetches in flight. */
   private readonly pendingFetches = signal(0);
   readonly isFetching = computed(() => this.pendingFetches() > 0);
@@ -82,10 +85,16 @@ export class WorkspaceService {
   private readonly entries = new Map<string, TraceEntry>();
   /** Entry id -> where it came from. */
   private readonly entryOrigin = new Map<string, { key: string; index: number }>();
+  /** In-flight `addDataset` operations keyed by `<sourceId>:<datasetId>` to prevent concurrent races. */
+  private readonly inflightAdds = new Map<string, { promise: Promise<void>; pendingSelect: number[] }>();
   private renames: Record<string, string> = loadRenames();
 
   source(sourceId: string): TraceSource | undefined {
     return this.sources.find(s => s.id === sourceId);
+  }
+
+  normalizeDatasetId(sourceId: string, datasetId: string): string {
+    return this.source(sourceId)?.normalizeDatasetId?.(datasetId) ?? datasetId;
   }
 
   dataset(key: string): LoadedDataset | undefined {
@@ -110,18 +119,29 @@ export class WorkspaceService {
   }
 
   /**
-   * Restores the workspace from URL refs, then adds every default dataset. If
-   * nothing ends up selected, selects the first example of the first dataset.
+   * Restores the workspace from URL refs, or loads every default dataset when no
+   * explicit URL refs are present. If nothing ends up selected, selects the
+   * first example of the first dataset.
    */
   async init(refs: DatasetRef[]): Promise<void> {
-    // addDataset adds its sidebar row before its first await, so starting the
-    // loads together keeps the sidebar in order while they run in parallel.
-    const refLoads = refs.map(ref =>
-      this.addDataset(ref.sourceId, { id: ref.datasetId, name: '' }, ref.indices));
-    const available = await this.availableDatasets();
-    const defaultLoads = available.flatMap(({ source, datasets }) =>
-      datasets.filter(d => d.isDefault).map(ds => this.addDataset(source.id, ds)));
-    await Promise.all([...refLoads, ...defaultLoads]);
+    const coalesced = coalesceDatasetRefs(
+      refs.map(r => ({
+        ...r,
+        datasetId: this.normalizeDatasetId(r.sourceId, r.datasetId),
+      })),
+    );
+    if (coalesced.length > 0) {
+      await Promise.all(
+        coalesced.map(ref =>
+          this.addDataset(ref.sourceId, { id: ref.datasetId, name: '' }, ref.indices)),
+      );
+    } else {
+      const available = await this.availableDatasets();
+      await Promise.all(
+        available.flatMap(({ source, datasets }) =>
+          datasets.filter(d => d.isDefault).map(ds => this.addDataset(source.id, ds))),
+      );
+    }
     if (this.totalSelected() === 0) {
       const first = this.datasets().find(d => d.examples.length > 0);
       if (first) await this.setSelected(first.key, [first.examples[0].index], first.examples[0].index);
@@ -129,8 +149,8 @@ export class WorkspaceService {
   }
 
   /**
-   * Adds a dataset (or, if it's already loaded, adds `select` to its
-   * selection) and loads its first page of examples.
+   * Adds a dataset (or, if it's already loaded or loading, merges `select` into
+   * its selection) and loads its first page of examples.
    */
   async addDataset(sourceId: string, info: DatasetInfo, select: number[] = []): Promise<void> {
     const source = this.source(sourceId);
@@ -138,30 +158,51 @@ export class WorkspaceService {
       console.warn(`[Agent Trace] Unknown trace source "${sourceId}" for dataset "${info.id}".`);
       return;
     }
-    const key = `${sourceId}:${info.id}`;
+    const datasetId = source.normalizeDatasetId?.(info.id) ?? info.id;
+    const key = `${sourceId}:${datasetId}`;
+
+    const inflight = this.inflightAdds.get(key);
+    if (inflight) {
+      inflight.pendingSelect.push(...select);
+      await inflight.promise;
+      return;
+    }
+
     const existing = this.dataset(key);
     if (existing) {
       if (select.length) await this.setSelected(key, [...existing.selected, ...select], select[select.length - 1]);
       return;
     }
-    this.datasets.update(list => [...list, {
-      key, sourceId, datasetId: info.id,
-      name: info.name || source.datasetName?.(info.id) || info.id,
-      label: source.label,
-      examples: [], totalCount: null, hasMore: false,
-      loadingExamples: true, loadingMore: false, selected: [],
-    }]);
-    try {
-      const page = await source.listExamples(info.id, 0, PAGE_SIZE);
-      this.patch(key, { examples: page.examples, totalCount: page.totalCount, hasMore: page.hasMore, loadingExamples: false });
-      if (page.totalCount !== null && page.totalCount <= PREFETCH_LIMIT && page.totalCount > 0) {
-        await this.fetch(key, page.examples.map(e => e.index));
+
+    const entry = { promise: Promise.resolve(), pendingSelect: [...select] };
+    entry.promise = (async () => {
+      this.datasets.update(list => [...list, {
+        key, sourceId, datasetId,
+        name: info.name || source.datasetName?.(datasetId) || datasetId,
+        label: source.label,
+        examples: [], totalCount: null, hasMore: false,
+        loadingExamples: true, loadingMore: false, selected: [],
+      }]);
+      try {
+        const page = await source.listExamples(datasetId, 0, PAGE_SIZE);
+        this.patch(key, { examples: page.examples, totalCount: page.totalCount, hasMore: page.hasMore, loadingExamples: false });
+        if (page.totalCount !== null && page.totalCount <= PREFETCH_LIMIT && page.totalCount > 0) {
+          await this.fetch(key, page.examples.map(e => e.index));
+        }
+      } catch (err) {
+        this.patch(key, { loadingExamples: false, error: errorMessage(err) });
+        return;
       }
-    } catch (err) {
-      this.patch(key, { loadingExamples: false, error: errorMessage(err) });
-      return;
-    }
-    if (select.length) await this.setSelected(key, select, select[select.length - 1]);
+      const mergedSelect = [...new Set(entry.pendingSelect)];
+      if (mergedSelect.length) {
+        await this.setSelected(key, mergedSelect, mergedSelect[mergedSelect.length - 1]);
+      }
+    })().finally(() => {
+      this.inflightAdds.delete(key);
+    });
+
+    this.inflightAdds.set(key, entry);
+    await entry.promise;
   }
 
   async loadMore(key: string): Promise<void> {

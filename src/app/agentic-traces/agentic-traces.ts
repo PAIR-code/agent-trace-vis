@@ -35,11 +35,21 @@ import {
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute } from "@angular/router";
-import { UrlParamService } from "../shared/url-param.service";
+import { EXTRA_MANAGED_URL_PARAMS, UrlParamService } from "../shared/url-param.service";
+import { getParamFromMap, getParamValuesFromMap } from "../shared/url-params";
 import { AnalysisLayersService } from "./analysis-layers.service";
+import { ANALYSIS_PRESETS } from "./analysis-layers.types";
 import { ExamplesSidebarComponent } from "../data/examples-sidebar.component";
 import { INITIAL_DATASET_REFS } from "../data/initial-refs";
 import { DatasetRef, parseDatasetRef, parseIndices } from "../data/dataset-refs";
+import {
+  CustomSearchSpec,
+  LEGACY_CONFIG_PARAM_ALIASES,
+  MANAGED_URL_PARAM_KEYS,
+  parseUrlUiConfig,
+  resolvePendingUrlSelection,
+  serializeUrlUiConfig,
+} from "./url-config";
 import { WorkspaceService } from "../data/workspace.service";
 import { COLORS } from "./colors";
 import { MultiSelectDropdownComponent, DropdownItem } from "../shared/multi-select-dropdown.component";
@@ -89,8 +99,13 @@ interface LegendEntry {
 export class AgenticTracesComponent implements OnInit, OnDestroy {
   readonly workspace = inject(WorkspaceService);
   private readonly initialRefs = inject(INITIAL_DATASET_REFS, { optional: true });
+  private readonly extraManagedParams = inject(EXTRA_MANAGED_URL_PARAMS, { optional: true }) ?? [];
   /** True until the workspace has restored the URL and loaded the defaults. */
   private readonly initializing = signal(true);
+  private readonly initialExpandAll = signal(true);
+  private pendingActiveIndex: number | null = null;
+  private pendingMarkId: string | null = null;
+  private migratedLegacyKeys: string[] = [];
   isLoading = computed(() => this.initializing() || (this.workspace.isFetching() && this.traces().length === 0));
 
   traces = signal<TraceEntry[]>([]);
@@ -288,6 +303,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   /** Side-panel messages for the active trace. Search matches are highlighted in the text only. */
   threadMessages = computed(() => groupThreadMessages(this.activeTraceId(), this.marks()));
 
+  private readonly currentUrlConfigParams: () => Record<string, string | string[] | null>;
 
   constructor(
     public layersService: AnalysisLayersService,
@@ -295,29 +311,61 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     private route: ActivatedRoute,
     private urlParamService: UrlParamService,
   ) {
+    this.currentUrlConfigParams = computed(() => {
+      const presetByName = new Map(ANALYSIS_PRESETS.map(p => [p.name, p]));
+      const presets: string[] = [];
+      const searches: CustomSearchSpec[] = [];
+      for (const layer of this.layersService.layers()) {
+        if (!layer.enabled) continue;
+        const preset = layer.isPreset ? presetByName.get(layer.name) : undefined;
+        if (preset && preset.query === layer.query && preset.mode === layer.mode) {
+          presets.push(layer.name);
+        } else {
+          searches.push({ mode: layer.mode, query: layer.query });
+        }
+      }
+
+      const traces = this.traces();
+      const activeId = this.activeTraceId();
+      const activeIdx = activeId ? traces.findIndex(t => t.id === activeId) : -1;
+
+      return serializeUrlUiConfig({
+        axis: this.yAxisMode(),
+        wait: this.showUserWait(),
+        fill: this.stretch(),
+        chapters: this.chaptersService.mode(),
+        tokens: [...this.selectedTokenTypes()],
+        expandAll: this.traceLayouts().length === 0 ? this.initialExpandAll() : this.anyExpanded(),
+        presets,
+        searches,
+        searchMode: this.layersService.currentMode(),
+        activeIndex: activeIdx > 0 ? activeIdx : null,
+        markId: this.selectedMark()?.id ?? null,
+        legendCollapsed: this.isLegendCollapsed(),
+        sidebarCollapsed: this.workspace.sidebarCollapsed(),
+        sidebarFilter: this.workspace.sidebarFilter(),
+      });
+    });
     // Show the workspace's selected traces, keeping any row order the user dragged.
     effect(() => {
       const entries = this.workspace.selectedEntries();
-      untracked(() => {
-        const ids = new Set(entries.map(e => e.id));
-        const kept = [...this.selectedTraceIds()].filter(id => ids.has(id));
-        const added = entries.map(e => e.id).filter(id => !kept.includes(id));
-        this.traces.set(entries);
-        this.selectedTraceIds.set(new Set(groupOrder(entries, [...kept, ...added])));
-        this.processTraces();
-      });
+      const initializing = this.initializing();
+      untracked(() => this.syncWorkspaceEntries(entries, !initializing));
     });
     // The example just picked in the sidebar becomes the active row.
     effect(() => {
       const focus = this.workspace.focusEntryId();
-      if (focus) untracked(() => this.manualActiveTraceId.set(focus));
+      if (focus && !untracked(() => this.initializing())) {
+        untracked(() => this.manualActiveTraceId.set(focus));
+      }
     });
-    // Keep the URL in sync with the workspace, for sharing.
+    // Keep the URL in sync with the workspace and UI configs, for sharing.
     effect(() => {
       const refs = this.workspace.urlRefs();
+      const configParams = this.currentUrlConfigParams();
       if (untracked(() => this.initializing())) return;
       untracked(() => this.urlParamService.updateQueryParams(
-        { ds: refs, dataset: null, indices: null }, this.route));
+        { ds: refs, dataset: null, indices: null, ...configParams }, this.route));
     });
   }
 
@@ -353,27 +401,108 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     void this.initWorkspace();
   }
 
-  /** Restores the workspace from the URL (including older link formats), then loads the defaults. */
+  /** Restores the workspace and UI configuration from the URL, then loads defaults if empty. */
   private async initWorkspace() {
-    const params = this.route.snapshot.queryParamMap;
-    const refs: DatasetRef[] = params.getAll('ds')
+    const allParams = this.urlParamService.readAllQueryParams(this.route);
+    const uiConfig = parseUrlUiConfig(allParams);
+
+    this.yAxisMode.set(uiConfig.axis);
+    this.showUserWait.set(uiConfig.wait);
+    this.stretch.set(uiConfig.fill);
+    this.chaptersService.mode.set(uiConfig.chapters);
+    this.selectedTokenTypes.set(new Set(uiConfig.tokens));
+    this.initialExpandAll.set(uiConfig.expandAll);
+    this.isLegendCollapsed.set(uiConfig.legendCollapsed);
+    this.workspace.sidebarCollapsed.set(uiConfig.sidebarCollapsed);
+    this.workspace.sidebarFilter.set(uiConfig.sidebarFilter);
+    this.layersService.applyUrlLayers(
+      uiConfig.presets,
+      uiConfig.searches,
+      uiConfig.searchMode,
+    );
+    this.pendingActiveIndex = uiConfig.activeIndex;
+    this.pendingMarkId = uiConfig.markId;
+
+    const refs: DatasetRef[] = getParamValuesFromMap(allParams, ['ds'])
       .map(parseDatasetRef)
       .filter((r): r is DatasetRef => r !== null);
     const extraRefs = this.initialRefs?.() ?? [];
     // Older links: ?dataset=<sample id>&indices=0,2 (unless a deployment translated them).
-    const legacyDataset = params.get('dataset') || params.get('datasetId');
+    const legacyDataset = getParamFromMap(allParams, ['dataset', 'datasetId']);
     if (legacyDataset && extraRefs.length === 0) {
-      const legacyIndices = params.get('indices') ?? params.get('index') ?? '';
+      const legacyIndices = getParamFromMap(allParams, ['indices', 'index']) ?? '';
       refs.push({ sourceId: 'bundled', datasetId: legacyDataset, indices: parseIndices(legacyIndices) ?? [] });
     }
     refs.push(...extraRefs);
+
+    const legacyKeys = [
+      'dataset',
+      'datasetId',
+      'indices',
+      'index',
+      ...LEGACY_CONFIG_PARAM_ALIASES,
+      ...this.extraManagedParams,
+    ];
+    this.migratedLegacyKeys = legacyKeys.filter(k => allParams.has(k));
+
     try {
       await this.workspace.init(refs);
     } finally {
+      this.urlParamService.clearSearchParams([
+        'ds',
+        ...MANAGED_URL_PARAM_KEYS,
+        ...legacyKeys,
+      ]);
+      // Clear init-time focus so Promise.all dataset completion order doesn't overwrite URL `active=`.
+      this.workspace.focusEntryId.set(null);
       this.initializing.set(false);
+      this.syncWorkspaceEntries(this.workspace.selectedEntries(), true);
+      const legacyClears: Record<string, null> = {};
+      for (const k of this.migratedLegacyKeys) {
+        legacyClears[k] = null;
+      }
       this.urlParamService.updateQueryParams(
-        { ds: this.workspace.urlRefs(), dataset: null, indices: null }, this.route);
+        {
+          ds: this.workspace.urlRefs(),
+          dataset: null,
+          indices: null,
+          ...legacyClears,
+          ...this.currentUrlConfigParams(),
+        },
+        this.route,
+      );
     }
+  }
+
+  /** Syncs timeline traces and resolves URL-restored active/mark targets after init. */
+  private syncWorkspaceEntries(entries: TraceEntry[], applyPending: boolean): void {
+    if (this.traces() !== entries) {
+      const ids = new Set(entries.map(e => e.id));
+      const kept = [...this.selectedTraceIds()].filter(id => ids.has(id));
+      const added = entries.map(e => e.id).filter(id => !kept.includes(id));
+      this.traces.set(entries);
+      this.selectedTraceIds.set(new Set(groupOrder(entries, [...kept, ...added])));
+      this.processTraces();
+
+      if (!this.initialExpandAll() && entries.length > 0) {
+        this.collapsedTraceIds.set(new Set(entries.map(e => e.id)));
+      }
+    }
+    if (!applyPending) return;
+    if (this.pendingActiveIndex === null && this.pendingMarkId === null) return;
+
+    const resolved = resolvePendingUrlSelection({
+      pendingActiveIndex: this.pendingActiveIndex,
+      pendingMarkId: this.pendingMarkId,
+      entryIds: entries.map(e => e.id),
+      marks: this.marks(),
+      fallbackActiveTraceId: this.activeTraceId(),
+      initializing: false,
+    });
+    if (resolved.activeTraceId) this.manualActiveTraceId.set(resolved.activeTraceId);
+    if (resolved.mark) this.selectMark(resolved.mark);
+    this.pendingActiveIndex = resolved.nextPendingActiveIndex;
+    this.pendingMarkId = resolved.nextPendingMarkId;
   }
 
   onSidebarResizeStart(event: MouseEvent) {
@@ -606,7 +735,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     });
 
     this.traceLayouts.set(layout.traces);
-    this.layersService.reRunAllEnabledLayers(this.marks());
+    this.layersService.reRunAllEnabledLayers(this.marks(), false);
     this.chaptersService.annotateTraces(layout.traces, this.layersService.apiKey());
     this.contentWidth.set(layout.contentWidth);
     this.contentHeight.set(layout.contentHeight);
@@ -646,13 +775,16 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     const collapsed = new Set(this.collapsedTraceIds());
     if (!collapsed.delete(traceId)) collapsed.add(traceId);
     this.collapsedTraceIds.set(collapsed);
+    this.initialExpandAll.set(this.anyExpanded());
   }
 
   /** Collapses every shown row, or expands them all if none is open. */
   toggleExpandAll() {
-    this.collapsedTraceIds.set(this.anyExpanded()
+    const nextCollapsed = this.anyExpanded()
       ? new Set(this.traceLayouts().map(r => r.id))
-      : new Set<string>());
+      : new Set<string>();
+    this.collapsedTraceIds.set(nextCollapsed);
+    this.initialExpandAll.set(nextCollapsed.size === 0);
   }
 
   /** Toggles collapse/minimize state of the legend overlay. */

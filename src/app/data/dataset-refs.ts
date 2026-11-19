@@ -34,18 +34,67 @@ export function formatDatasetRef(ref: DatasetRef): string {
   return ref.indices.length ? `${base}:${ref.indices.join(',')}` : base;
 }
 
-/** Parses one `ds` URL parameter value; null if malformed. */
+/**
+ * Parses one `ds` URL parameter value; null if malformed.
+ *
+ * Supports both URI-encoded dataset IDs (`s2:123%3Aspark_samples:0,1`) and
+ * unencoded colons (`s2:123:spark_samples:0,1` or `s2:123:spark_samples`) by
+ * checking whether the trailing colon segment parses as an index list.
+ */
 export function parseDatasetRef(value: string): DatasetRef | null {
-  const parts = value.split(':');
-  if (parts.length < 2 || !parts[0] || !parts[1]) return null;
+  const firstColon = value.indexOf(':');
+  if (firstColon <= 0) return null;
+  const sourceId = value.slice(0, firstColon);
+  const rest = value.slice(firstColon + 1);
+  if (!rest || rest.startsWith(':')) return null;
+
+  const lastColon = rest.lastIndexOf(':');
+  let rawDatasetId = rest;
+  let indices: number[] = [];
+
+  if (lastColon > 0) {
+    const tail = rest.slice(lastColon + 1);
+    if (tail === '') {
+      rawDatasetId = rest.slice(0, lastColon);
+    } else {
+      const parsed = parseIndices(tail);
+      if (parsed !== null) {
+        rawDatasetId = rest.slice(0, lastColon);
+        indices = parsed;
+      }
+    }
+  }
+
   let datasetId: string;
   try {
-    datasetId = decodeURIComponent(parts[1]);
+    datasetId = decodeURIComponent(rawDatasetId);
   } catch {
     return null;
   }
-  const indices = parseIndices(parts.slice(2).join(':'));
-  return { sourceId: parts[0], datasetId, indices: indices ?? [] };
+  if (!datasetId) return null;
+  return { sourceId, datasetId, indices };
+}
+
+/**
+ * Merges dataset references sharing the same `(sourceId, datasetId)` in
+ * first-seen order, deduplicating their selected example indices.
+ */
+export function coalesceDatasetRefs(refs: readonly DatasetRef[]): DatasetRef[] {
+  const byKey = new Map<string, DatasetRef>();
+  for (const ref of refs) {
+    const key = `${ref.sourceId}\0${ref.datasetId}`;
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, {
+        sourceId: ref.sourceId,
+        datasetId: ref.datasetId,
+        indices: [...new Set(ref.indices)],
+      });
+    } else {
+      existing.indices = [...new Set([...existing.indices, ...ref.indices])];
+    }
+  }
+  return [...byKey.values()];
 }
 
 /**

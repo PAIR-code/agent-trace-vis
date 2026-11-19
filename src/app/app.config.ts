@@ -19,17 +19,21 @@
  * @fileoverview Angular application configuration (routing, HTTP client).
  */
 
-import { ApplicationConfig } from '@angular/core';
-import { provideRouter, withHashLocation } from '@angular/router';
-import { provideHttpClient, withFetch } from '@angular/common/http';
-import { routes } from './app.routes';
-import { BundledSource } from './data/bundled-source';
-import { LocalFilesSource } from './data/local-files-source';
-import { TRACE_SOURCES } from './data/trace-source';
+import {LocationStrategy} from '@angular/common';
+import {provideHttpClient, withFetch} from '@angular/common/http';
+import {ApplicationConfig} from '@angular/core';
+import {provideRouter, withHashLocation} from '@angular/router';
+
+import {routes} from './app.routes';
+import {BundledSource} from './data/bundled-source';
+import {LocalFilesSource} from './data/local-files-source';
+import {TRACE_SOURCES} from './data/trace-source';
+import {PreserveSearchHashLocationStrategy} from './shared/preserve-search-hash-location.strategy';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideRouter(routes, withHashLocation()),
+    { provide: LocationStrategy, useClass: PreserveSearchHashLocationStrategy },
     provideHttpClient(withFetch()),
     // Where datasets come from (see data/trace-source.ts).
     { provide: TRACE_SOURCES, useExisting: BundledSource, multi: true },

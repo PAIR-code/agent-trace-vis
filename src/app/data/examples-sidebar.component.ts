@@ -46,9 +46,9 @@ export class ExamplesSidebarComponent implements OnDestroy {
   readonly workspace = inject(WorkspaceService);
   private readonly localFiles = inject(LocalFilesSource, { optional: true });
 
-  readonly collapsed = signal(false);
+  readonly collapsed = this.workspace.sidebarCollapsed;
   readonly width = signal(300);
-  readonly filter = signal('');
+  readonly filter = this.workspace.sidebarFilter;
   readonly collapsedSections = signal<Set<string>>(new Set());
   readonly jumpInputs = signal<Record<string, string>>({});
   readonly jumpErrors = signal<Record<string, string>>({});

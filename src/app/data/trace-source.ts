@@ -78,6 +78,8 @@ export interface TraceSource {
   loadTraces(datasetId: string, indices: number[]): Promise<TraceRecord[]>;
   /** Display name for a dataset that isn't listed (e.g. restored from a URL). */
   datasetName?(datasetId: string): string;
+  /** Canonicalizes a dataset id (e.g. stripping trailing slashes or normalizing delimiters). */
+  normalizeDatasetId?(datasetId: string): string;
   /** Called when the user removes the dataset from the workspace. */
   onRemove?(datasetId: string): void;
   /** Extra "Add dataset" menu items. */

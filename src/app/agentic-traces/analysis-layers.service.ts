@@ -45,6 +45,7 @@ import {
   ANALYSIS_PRESETS,
 } from './analysis-layers.types';
 import { Mark } from './marks';
+import { CustomSearchSpec } from './url-config';
 
 @Injectable()
 export class AnalysisLayersService {
@@ -175,12 +176,53 @@ export class AnalysisLayersService {
   }
 
   /** Re-run searches for all currently enabled layers (e.g. after a new layout). */
-  reRunAllEnabledLayers(marks: Mark[]): void {
+  reRunAllEnabledLayers(marks: Mark[], promptForKey = true): void {
     if (marks.length === 0) return;
     for (const layer of this.layers()) {
       if (layer.enabled) {
-        this.runSearch(layer.id, marks);
+        this.runSearch(layer.id, marks, promptForKey);
       }
+    }
+  }
+
+  /** Restores enabled preset and custom search layers from URL config without prompting for an API key. */
+  applyUrlLayers(
+    presets: readonly string[],
+    searches: readonly CustomSearchSpec[],
+    searchMode: 'fuzzy' | 'semantic',
+  ): void {
+    this.currentMode.set(searchMode);
+    if (presets.length > 0) {
+      const presetSet = new Set(presets.map(p => p.toLowerCase()));
+      this.layers.update(layers =>
+        layers.map(l =>
+          l.isPreset && presetSet.has(l.name.toLowerCase())
+            ? { ...l, enabled: true }
+            : l,
+        ),
+      );
+    }
+    if (searches.length > 0) {
+      const added: AnalysisLayer[] = [];
+      const existing = this.layers();
+      for (const [idx, s] of searches.entries()) {
+        const palette = s.mode === 'semantic' ? USER_AI_COLORS : USER_TEXT_COLORS;
+        const usedColors = new Set([...existing, ...added].map(l => l.color));
+        const color = palette.find(c => !usedColors.has(c)) || palette[0];
+        added.push({
+          id: crypto.randomUUID(),
+          name: this.generateName(s.query),
+          query: s.query,
+          mode: s.mode,
+          color,
+          enabled: true,
+          results: new Map<string, SearchResult>(),
+          loading: false,
+          isPreset: false,
+          createdAt: Date.now() + idx,
+        });
+      }
+      this.layers.update(layers => [...added, ...layers]);
     }
   }
 
@@ -300,12 +342,12 @@ export class AnalysisLayersService {
 
   // ─── Private ──────────────────────────────────────────────────────
 
-  private runSearch(layerId: string, marks: Mark[]): void {
+  private runSearch(layerId: string, marks: Mark[], promptForKey = true): void {
     const layer = this.layers().find(l => l.id === layerId);
     if (!layer) return;
 
     if (layer.mode === 'semantic' && !this.apiKey()) {
-      if (!this.ensureApiKey()) {
+      if (!promptForKey || !this.ensureApiKey()) {
         this.updateLayer(layerId, { enabled: false, loading: false });
         return;
       }
