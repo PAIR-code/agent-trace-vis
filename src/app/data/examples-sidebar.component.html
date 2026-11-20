@@ -51,9 +51,6 @@
       <span>{{ workspace.error() }}</span>
       <button type="button" class="banner-dismiss" (click)="workspace.error.set('')">×</button>
     </div>
-    <div class="banner" *ngIf="workspace.isFetching()">
-      <span class="spinner"></span><span>Loading traces…</span>
-    </div>
 
     <div class="list">
       <div class="empty" *ngIf="workspace.datasets().length === 0">
@@ -64,8 +61,13 @@
         <div class="dataset-header" (click)="toggleSection(ds.key)" [title]="ds.name">
           <span class="chevron">{{ isCollapsed(ds.key) ? '▶' : '▼' }}</span>
           <span class="dataset-name">{{ ds.name }}</span>
-          <span class="count">{{ countLabel(ds) }}</span>
-          <span class="sel-badge" *ngIf="ds.selected.length > 0">{{ ds.selected.length }} sel</span>
+          <ng-container *ngIf="counter(ds) as c">
+            <span class="spinner count-spinner" *ngIf="c.loading; else countText" role="status" [attr.aria-label]="c.title" [title]="c.title"></span>
+            <ng-template #countText>
+              <span class="spinner count-spinner" *ngIf="ds.fetchingTraces > 0" role="status" aria-label="Loading traces…" title="Loading traces…"></span>
+              <span class="count" [title]="c.title"><ng-container *ngIf="c.selected"><strong class="sel-count">{{ c.selected }}</strong>/</ng-container>{{ c.total }}</span>
+            </ng-template>
+          </ng-container>
           <button type="button" class="remove-btn" title="Remove this dataset" (click)="remove(ds, $event)">×</button>
         </div>
 

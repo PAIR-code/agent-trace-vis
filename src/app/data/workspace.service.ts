@@ -51,6 +51,8 @@ export interface LoadedDataset {
   hasMore: boolean;
   loadingExamples: boolean;
   loadingMore: boolean;
+  /** Trace fetches in flight for this dataset (its header shows a spinner meanwhile). */
+  fetchingTraces: number;
   /** Example indices selected, in selection order. */
   selected: number[];
   error?: string;
@@ -179,7 +181,7 @@ export class WorkspaceService {
         key, sourceId, datasetId,
         name: info.name || source.datasetName?.(datasetId) || datasetId,
         examples: [], totalCount: null, hasMore: false,
-        loadingExamples: true, loadingMore: false, selected: [],
+        loadingExamples: true, loadingMore: false, fetchingTraces: 0, selected: [],
       }]);
       try {
         const page = await source.listExamples(datasetId, 0, PAGE_SIZE);
@@ -305,6 +307,7 @@ export class WorkspaceService {
     const missing = indices.filter(i => !this.entries.has(`${key}#${i}`));
     if (missing.length === 0) return;
     this.pendingFetches.update(n => n + 1);
+    this.adjustFetching(key, 1);
     try {
       const records = await source.loadTraces(ds.datasetId, missing);
       missing.forEach((index, i) => {
@@ -316,7 +319,13 @@ export class WorkspaceService {
       this.error.set(`${ds.name}: ${errorMessage(err)}`);
     } finally {
       this.pendingFetches.update(n => n - 1);
+      this.adjustFetching(key, -1);
     }
+  }
+
+  private adjustFetching(key: string, delta: number): void {
+    this.datasets.update(list => list.map(d =>
+      d.key === key ? { ...d, fetchingTraces: Math.max(0, d.fetchingTraces + delta) } : d));
   }
 
   private addEntry(key: string, index: number, record: TraceRecord): void {

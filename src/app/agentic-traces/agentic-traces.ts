@@ -66,7 +66,7 @@ import { TraceTrackComponent } from "./trace-track";
 import { ScrubBarComponent, ScrubEvent } from "./scrub-bar";
 import { groupOrder } from "./agent-groups";
 import { buildLinks, rowGeometry } from "./links";
-import { AnnotationMode, ChaptersService, annotationBarHeight } from "./chapters.service";
+import { ANNOTATION_BAR_HEIGHT, ChaptersService } from "./chapters.service";
 
 /** Dev helpers exposed on `window` (a convention shared with the other pages). */
 type DevWindow = Window & { clearCache?: () => void; clearcache?: () => void };
@@ -214,7 +214,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
       this.traceLayouts(),
       this.collapsedTraceIds(),
       this.expandedFileTraceIds(),
-      annotationBarHeight(this.chaptersService.mode()),
+      ANNOTATION_BAR_HEIGHT,
     ),
     new Map(this.traces().map(t => [t.id, t]))));
 
@@ -335,7 +335,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
         axis: this.yAxisMode(),
         wait: this.showUserWait(),
         fill: this.stretch(),
-        chapters: this.chaptersService.mode(),
         tokens: [...this.selectedTokenTypes()],
         expandAll: this.traceLayouts().length === 0 ? this.initialExpandAll() : this.anyExpanded(),
         presets,
@@ -411,7 +410,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     this.yAxisMode.set(uiConfig.axis);
     this.showUserWait.set(uiConfig.wait);
     this.stretch.set(uiConfig.fill);
-    this.chaptersService.mode.set(uiConfig.chapters);
     this.selectedTokenTypes.set(new Set(uiConfig.tokens));
     this.initialExpandAll.set(uiConfig.expandAll);
     this.isLegendCollapsed.set(uiConfig.legendCollapsed);
@@ -699,14 +697,6 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   setYAxisMode(mode: AxisMode) {
     this.yAxisMode.set(mode);
     this.processTraces();
-  }
-
-  /** Sets which upper annotation strips are shown (both, chapters, events, or off). */
-  setAnnotationMode(mode: AnnotationMode) {
-    this.chaptersService.mode.set(mode);
-    if (mode !== 'off') {
-      this.chaptersService.annotateTraces(this.traceLayouts(), this.layersService.apiKey());
-    }
   }
 
   /** Prompts for the Gemini API key when the user clicks the inline prompt button in the chapter bar. */

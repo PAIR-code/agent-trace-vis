@@ -31,6 +31,7 @@ import { LocalFilesSource } from './local-files-source';
 import { DatasetInfo, ExampleSummary, SourceAction, TraceSource } from './trace-source';
 import { parseIndices } from './dataset-refs';
 import { LoadedDataset, WorkspaceService } from './workspace.service';
+import { DatasetCounter, datasetCounter } from './dataset-counter';
 import { isRowToggleKey } from './row-selection';
 
 @Component({
@@ -48,7 +49,8 @@ export class ExamplesSidebarComponent implements OnDestroy {
   readonly collapsed = this.workspace.sidebarCollapsed;
   readonly width = signal(300);
   readonly filter = this.workspace.sidebarFilter;
-  readonly collapsedSections = signal<Set<string>>(new Set());
+  /** Datasets the user opened; all start collapsed so the list stays short. */
+  readonly expandedSections = signal<Set<string>>(new Set());
   readonly jumpInputs = signal<Record<string, string>>({});
   readonly jumpErrors = signal<Record<string, string>>({});
   readonly menuOpen = signal(false);
@@ -152,13 +154,15 @@ export class ExamplesSidebarComponent implements OnDestroy {
   // --- Sections and examples --------------------------------------------------
 
   isCollapsed(key: string): boolean {
-    return this.collapsedSections().has(key);
+    // While filtering, open every dataset so matches are visible.
+    if (this.filter().trim()) return false;
+    return !this.expandedSections().has(key);
   }
 
   toggleSection(key: string): void {
-    const next = new Set(this.collapsedSections());
+    const next = new Set(this.expandedSections());
     if (!next.delete(key)) next.add(key);
-    this.collapsedSections.set(next);
+    this.expandedSections.set(next);
   }
 
   remove(ds: LoadedDataset, event: MouseEvent): void {
@@ -166,10 +170,9 @@ export class ExamplesSidebarComponent implements OnDestroy {
     this.workspace.removeDataset(ds.key);
   }
 
-  countLabel(ds: LoadedDataset): string {
-    const loaded = ds.examples.length;
-    if (ds.totalCount !== null) return loaded < ds.totalCount ? `${loaded} / ${ds.totalCount}` : `${ds.totalCount}`;
-    return ds.hasMore ? `${loaded}+` : `${loaded}`;
+  counter(ds: LoadedDataset): DatasetCounter {
+    return datasetCounter(ds.selected.length, ds.examples.length, ds.totalCount, ds.hasMore,
+      ds.loadingExamples || ds.loadingMore);
   }
 
   filtered(ds: LoadedDataset): ExampleSummary[] {

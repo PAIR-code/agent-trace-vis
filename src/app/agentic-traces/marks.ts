@@ -25,7 +25,7 @@
  */
 
 import { getAgentColor } from './colors';
-import { ChannelId, channelCenter } from './channels';
+import { ChannelId, LANE_HEIGHT, channelCenter } from './channels';
 import { SLOT_EDIT_HEIGHT, linesToBarHeight } from './file-lane';
 import { AxisMode, BASE_OFFSET, NodeMessages, ReasoningStepType, ReasoningTraceNode, ReasoningTraceStep, TraceNodeType } from './layout-types';
 import { getStepTokens, stepAxisLength, stepTokenSegments, truncate, wordCount } from './layout-utils';
@@ -81,7 +81,7 @@ export interface Mark {
 }
 
 /** Vertical placement relative to the channel's center line. */
-type Anchor =
+export type Anchor =
   | 'above'   // sits just above the line
   | 'below'   // sits just below the line
   | 'center'  // centered on the line
@@ -156,6 +156,20 @@ function anchorY(anchor: Anchor, center: number, height: number): number {
   }
 }
 
+/**
+ * Tallest a mark can be on one side of its lane's center line (22px) and still
+ * stay inside the lane, expanded or collapsed (every lane and the collapsed
+ * track are LANE_HEIGHT tall with the line in the middle).
+ */
+export const MAX_HALF_LANE_MARK_HEIGHT = Math.floor(LANE_HEIGHT / 2) - 1;
+
+/** Keeps an anchored mark inside its lane: 'above' and 'hang' marks get half a lane. */
+export function clampToLane(anchor: Anchor, height: number): number {
+  return anchor === 'above' || anchor === 'hang' || anchor === 'below'
+    ? Math.min(height, MAX_HALF_LANE_MARK_HEIGHT)
+    : height;
+}
+
 /** Speech (user/response) height: 10–22px by step tokens; constant off the time axis. */
 const SPEECH_FIXED_HEIGHT = 18;
 function speechHeight(tokens: number, maxTokens: number, mode: AxisMode): number {
@@ -163,15 +177,21 @@ function speechHeight(tokens: number, maxTokens: number, mode: AxisMode): number
   return Math.round(Math.min(22, 10 + 12 * tokens / maxTokens));
 }
 
+/** Shallowest thinking block, so even a short think stays visible below the line. */
+const MIN_THINKING_HEIGHT = 8;
+
 /**
- * Thinking-block depth: 8–40px by thinking tokens. Constant off the time axis:
- * 30px in tokens mode (the block still spans its step), speech-bar height in
- * sequence mode (it is one slot, the mirror of the response bar above the line).
+ * Thinking-block depth: 8–22px by thinking tokens, so it stays inside the agent
+ * lane (and the collapsed track) like the speech bars above the line. Constant
+ * off the time axis: the full half lane in tokens mode (the block still spans
+ * its step), speech-bar height in sequence mode (it is one slot, the mirror of
+ * the response bar above the line).
  */
-function effortHeight(tokens: number, maxTokens: number, mode: AxisMode): number {
+export function effortHeight(tokens: number, maxTokens: number, mode: AxisMode): number {
   if (mode === 'sequence') return SPEECH_FIXED_HEIGHT;
-  if (mode === 'tokens') return 30;
-  return 8 + 32 * tokens / maxTokens;
+  if (mode === 'tokens') return MAX_HALF_LANE_MARK_HEIGHT;
+  const fraction = maxTokens > 0 ? Math.min(1, tokens / maxTokens) : 0;
+  return MIN_THINKING_HEIGHT + (MAX_HALF_LANE_MARK_HEIGHT - MIN_THINKING_HEIGHT) * fraction;
 }
 
 // ---------------------------------------------------------------------------
@@ -374,10 +394,11 @@ export function buildMarks(trace: MarkTraceInput, axis: XAxis, mode: AxisMode,
       }
 
       const tokens = sizeTokens(step, node, tokenTypes);
-      const height = spec.height === 'speech' ? speechHeight(tokens, trace.maxStepTokens, mode)
+      const height = clampToLane(spec.anchor,
+        spec.height === 'speech' ? speechHeight(tokens, trace.maxStepTokens, mode)
         : spec.height === 'effort' ? effortHeight(tokens, maxEffortTokens, mode)
         : spec.height === 'lines' ? (mode === 'sequence' ? SLOT_EDIT_HEIGHT : linesToBarHeight(artifactLines ?? 0))
-        : spec.height;
+        : spec.height);
 
       const look = markLook(node, stepColor);
       if (isArtifact) look.icon = 'artifact';

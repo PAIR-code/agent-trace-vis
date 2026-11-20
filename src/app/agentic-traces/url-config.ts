@@ -23,7 +23,6 @@
 import {getParamFromMap, getParamValuesFromMap} from '../shared/url-params';
 
 import {ANALYSIS_PRESETS} from './analysis-layers.types';
-import {AnnotationMode} from './chapters.service';
 import {AxisMode} from './layout-types';
 
 /** Token usage metric identifiers accepted in the `tokens` URL parameter. */
@@ -42,6 +41,7 @@ export const MANAGED_URL_PARAM_KEYS: readonly string[] = [
   'axis',
   'wait',
   'fill',
+  // Legacy: chapters are always on now. Kept managed so old ?chapters= links get cleaned up.
   'chapters',
   'tokens',
   'expand',
@@ -80,7 +80,6 @@ export interface UrlUiConfig {
   axis: AxisMode;
   wait: boolean;
   fill: boolean;
-  chapters: AnnotationMode;
   tokens: string[];
   expandAll: boolean;
   presets: string[];
@@ -99,7 +98,6 @@ export function defaultUrlUiConfig(): UrlUiConfig {
     axis: 'time',
     wait: false,
     fill: false,
-    chapters: 'chapters',
     tokens: [...DEFAULT_TOKEN_METRICS],
     expandAll: true,
     presets: [],
@@ -126,14 +124,6 @@ function parseAxisMode(raw: string | undefined): AxisMode {
   if (v === 'tokens') return 'tokens';
   if (v === 'steps' || v === 'sequence') return 'sequence';
   return 'time';
-}
-
-function parseChaptersMode(raw: string | undefined): AnnotationMode {
-  const v = (raw ?? '').trim().toLowerCase();
-  if (v === 'off' || v === '0' || v === 'false') return 'off';
-  if (v === 'both') return 'both';
-  if (v === 'events') return 'events';
-  return 'chapters';
 }
 
 function parseTokenMetrics(rawValues: readonly string[]): string[] {
@@ -248,7 +238,6 @@ export function parseUrlUiConfig(
       false,
     ),
     fill: parseBoolFlag(getParamFromMap(params, ['fill', 'stretch']), false),
-    chapters: parseChaptersMode(getParamFromMap(params, ['chapters'])),
     tokens: parseTokenMetrics(getParamValuesFromMap(params, ['tokens'])),
     expandAll: parseExpandAll(
       getParamFromMap(params, ['expand', 'expandAll']),
@@ -292,7 +281,7 @@ export function serializeUrlUiConfig(
           : config.axis,
     wait: config.wait ? '1' : null,
     fill: config.fill ? '1' : null,
-    chapters: config.chapters === 'chapters' ? null : config.chapters,
+    chapters: null,
     tokens: isDefaultTokens
       ? null
       : canonicalTokens.length === 0

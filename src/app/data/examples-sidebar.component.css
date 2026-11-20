@@ -263,14 +263,19 @@
   font-weight: 500;
 }
 
-.count,
-.sel-badge {
+.count {
   font-size: 0.68rem;
   color: #6b7280;
   white-space: nowrap;
 }
 
-.sel-badge {
+.count-spinner {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+}
+
+.sel-count {
+  font-weight: 700;
   color: #1d4ed8;
 }
 

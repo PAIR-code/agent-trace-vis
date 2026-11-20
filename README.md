@@ -70,10 +70,10 @@ Before each start/build, `generate-manifest.js` copies the datasets into
 Every dataset you load gets a section in the sidebar listing its traces. Select
 several, within or across datasets, to compare them as rows on the timeline;
 **Only** selects just one, and the pencil renames a trace (kept in your
-browser). The workspace and UI configuration (`ds`, `axis`, `wait`, `fill`,
-`chapters`, `tokens`, `expand`, `preset`, `q`, `searchMode`, `active`, `mark`,
-`legend`, `sidebar`, `filter`) are synced in the URL, so you can share what
-you're looking at.
+browser). Datasets start collapsed; click a dataset to list its traces. The
+workspace and UI configuration (`ds`, `axis`, `wait`, `fill`, `tokens`,
+`expand`, `preset`, `q`, `searchMode`, `active`, `mark`, `legend`, `sidebar`,
+`filter`) are synced in the URL, so you can share what you're looking at.
 
 To load datasets from somewhere else (e.g. your own server), implement
 `TraceSource` in [`src/app/data/trace-source.ts`](src/app/data/trace-source.ts)

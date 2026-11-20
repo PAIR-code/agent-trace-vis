@@ -45,15 +45,12 @@ export interface TraceAnnotations {
   events: TraceKeyEvent[];
 }
 
-export type AnnotationMode = 'both' | 'chapters' | 'events' | 'off';
-
 /** Height in px of the unified upper chapter/event bar. */
 export const CHAPTERS_STRIP_HEIGHT = 20;
 export const EVENTS_STRIP_HEIGHT = 0;
 
-export function annotationBarHeight(mode: AnnotationMode): number {
-  return mode === 'off' ? 0 : CHAPTERS_STRIP_HEIGHT;
-}
+/** Height in px of the annotation bar above each trace. Chapters are always shown. */
+export const ANNOTATION_BAR_HEIGHT = CHAPTERS_STRIP_HEIGHT;
 
 interface GeminiResponse {
   candidates?: Array<{
@@ -68,9 +65,6 @@ const LEGACY_CACHE_PREFIX = 'agentic_traces_chapters_cache_';
 
 @Injectable({ providedIn: 'root' })
 export class ChaptersService {
-  /** Whether the upper chapter bar is shown ('chapters' / 'both') or hidden ('off'). */
-  mode = signal<AnnotationMode>('chapters');
-
   /** Trace ID -> resolved chapters and key events. */
   annotations = signal<Map<string, TraceAnnotations>>(new Map());
 
@@ -82,8 +76,6 @@ export class ChaptersService {
 
   /** Trigger non-blocking background annotation for all currently laid-out traces. */
   annotateTraces(layouts: TraceLayout[], apiKey: string): void {
-    if (this.mode() === 'off') return;
-
     for (const trace of layouts) {
       if (this.annotations().has(trace.id) || this.loadingIds().has(trace.id)) {
         continue;

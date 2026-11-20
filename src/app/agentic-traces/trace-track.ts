@@ -26,7 +26,7 @@
 
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { CHANNELS, COLLAPSED_TRACK, Channel, ChannelId, FILES_LANE, channelCenter, collapsedY, laneGeometry, usedChannels } from './channels';
-import { AnnotationMode, CHAPTERS_STRIP_HEIGHT, TraceAnnotations, annotationBarHeight } from './chapters.service';
+import { ANNOTATION_BAR_HEIGHT, CHAPTERS_STRIP_HEIGHT, TraceAnnotations } from './chapters.service';
 import { COLORS } from './colors';
 import { FILE_ROW_HEIGHT, FileRow } from './file-lane';
 import { TraceLayout } from './layout-types';
@@ -80,7 +80,6 @@ export class TraceTrackComponent {
 
   /** Auto-annotated chapters and key events for this trace. */
   annotations = input<TraceAnnotations | undefined>(undefined);
-  annotationMode = input<AnnotationMode>('chapters');
   annotationsLoading = input<boolean>(false);
   hasApiKey = input<boolean>(true);
 
@@ -96,7 +95,7 @@ export class TraceTrackComponent {
   readonly fileRowHeight = FILE_ROW_HEIGHT;
   readonly chaptersStripHeight = CHAPTERS_STRIP_HEIGHT;
 
-  annotationHeight = computed(() => annotationBarHeight(this.annotationMode()));
+  readonly annotationHeight = ANNOTATION_BAR_HEIGHT;
 
   /** Left offset where this trace's timeline starts (subagents start at their branch x). */
   traceStartX = computed(() => {
