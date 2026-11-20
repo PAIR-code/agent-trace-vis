@@ -18,7 +18,7 @@
 /**
  * @fileoverview The sample datasets served with the app: `testdata/manifest.json`
  * lists datasets, each a list of trace files relative to `testdata/`. They're
- * loaded by default.
+ * offered as demo traces in the "Add dataset" menu.
  */
 
 import { HttpClient } from '@angular/common/http';
@@ -49,7 +49,7 @@ export class BundledSource implements TraceSource {
   private readonly records = new Map<string, Promise<Array<TraceRecord | null>>>();
 
   async listDatasets(): Promise<DatasetInfo[]> {
-    return (await this.getManifest()).map(m => ({ id: m.id, name: m.name, isDefault: true }));
+    return (await this.getManifest()).map(m => ({ id: m.id, name: m.name, isDemo: true }));
   }
 
   datasetName(datasetId: string): string {

@@ -28,8 +28,8 @@ npm install
 npm start
 ```
 
-The app runs at `http://localhost:4200` and opens with the bundled sample
-traces.
+The app runs at `http://localhost:4200`. Open the bundled sample traces from
+**+ Add dataset → Demo traces…**.
 
 ### 2. Bring your own traces
 

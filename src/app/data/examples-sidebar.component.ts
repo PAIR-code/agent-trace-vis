@@ -19,21 +19,18 @@
  * @fileoverview The examples sidebar: one collapsible section per loaded
  * dataset, listing its examples to select (several, across datasets, to
  * compare), rename, or jump to by index; plus an "Add dataset" menu fed by the
- * registered trace sources. Local trace files can also be dropped on it.
+ * registered trace sources, whose last entry opens a picker of demo traces.
+ * Local trace files can also be dropped on it.
  */
 
 import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { AddMenuGroup, AddMenuItem, DEMO_TRACES_LABEL, buildAddMenu } from './add-menu';
 import { LocalFilesSource } from './local-files-source';
 import { DatasetInfo, ExampleSummary, SourceAction, TraceSource } from './trace-source';
 import { parseIndices } from './dataset-refs';
 import { LoadedDataset, WorkspaceService } from './workspace.service';
-
-interface MenuGroup {
-  source: TraceSource;
-  datasets: Array<DatasetInfo & { loaded: boolean }>;
-}
 
 @Component({
   selector: 'app-examples-sidebar',
@@ -41,6 +38,7 @@ interface MenuGroup {
   imports: [CommonModule, FormsModule],
   templateUrl: './examples-sidebar.component.html',
   styleUrls: ['./examples-sidebar.component.css'],
+  host: { '(document:keydown.escape)': 'closeDemoPicker()' },
 })
 export class ExamplesSidebarComponent implements OnDestroy {
   readonly workspace = inject(WorkspaceService);
@@ -53,8 +51,12 @@ export class ExamplesSidebarComponent implements OnDestroy {
   readonly jumpInputs = signal<Record<string, string>>({});
   readonly jumpErrors = signal<Record<string, string>>({});
   readonly menuOpen = signal(false);
-  readonly menuGroups = signal<MenuGroup[]>([]);
+  readonly menuGroups = signal<AddMenuGroup[]>([]);
   readonly menuLoading = signal(false);
+  readonly demoTracesLabel = DEMO_TRACES_LABEL;
+  /** Demo datasets offered by the picker behind the menu's "Demo traces" entry. */
+  readonly demos = signal<AddMenuItem[]>([]);
+  readonly demoPickerOpen = signal(false);
   readonly addError = signal('');
   /** `<datasetKey>#<index>` of the example being renamed. */
   readonly renaming = signal<string | null>(null);
@@ -83,12 +85,25 @@ export class ExamplesSidebarComponent implements OnDestroy {
     this.menuOpen.set(true);
     this.menuLoading.set(true);
     const loaded = new Set(this.workspace.datasets().map(d => d.key));
-    const groups = await this.workspace.availableDatasets();
-    this.menuGroups.set(groups.map(g => ({
-      source: g.source,
-      datasets: g.datasets.map(d => ({ ...d, loaded: loaded.has(`${g.source.id}:${d.id}`) })),
-    })));
+    const menu = buildAddMenu(await this.workspace.availableDatasets(), loaded);
+    this.menuGroups.set(menu.groups);
+    this.demos.set(menu.demos);
     this.menuLoading.set(false);
+  }
+
+  openDemoPicker(): void {
+    this.menuOpen.set(false);
+    this.demoPickerOpen.set(true);
+  }
+
+  closeDemoPicker(): void {
+    this.demoPickerOpen.set(false);
+  }
+
+  async addDemo(item: AddMenuItem): Promise<void> {
+    if (item.loaded) return;
+    this.demoPickerOpen.set(false);
+    await this.workspace.addDataset(item.source.id, item.dataset, [0]);
   }
 
   async addFromMenu(source: TraceSource, ds: DatasetInfo): Promise<void> {
@@ -268,6 +283,8 @@ export class ExamplesSidebarComponent implements OnDestroy {
   }
 
   private stopResize(): void {
+    // Nothing to undo unless a resize is in progress.
+    if (!this.onMove && !this.onUp) return;
     if (this.onMove) window.removeEventListener('mousemove', this.onMove);
     if (this.onUp) window.removeEventListener('mouseup', this.onUp);
     this.onMove = this.onUp = undefined;

@@ -120,8 +120,9 @@ export class WorkspaceService {
 
   /**
    * Restores the workspace from URL refs, or loads every default dataset when no
-   * explicit URL refs are present. If nothing ends up selected, selects the
-   * first example of the first dataset.
+   * explicit URL refs are present. Demo datasets are never loaded here unless a
+   * URL ref names them; the "Add dataset" menu's demo picker offers them. If nothing
+   * ends up selected, selects the first example of the first dataset.
    */
   async init(refs: DatasetRef[]): Promise<void> {
     const coalesced = coalesceDatasetRefs(
@@ -139,7 +140,7 @@ export class WorkspaceService {
       const available = await this.availableDatasets();
       await Promise.all(
         available.flatMap(({ source, datasets }) =>
-          datasets.filter(d => d.isDefault).map(ds => this.addDataset(source.id, ds))),
+          datasets.filter(d => d.isDefault && !d.isDemo).map(ds => this.addDataset(source.id, ds))),
       );
     }
     if (this.totalSelected() === 0) {

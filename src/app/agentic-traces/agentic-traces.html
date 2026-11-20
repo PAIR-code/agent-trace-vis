@@ -246,7 +246,10 @@
     <div class="loading-spinner" *ngIf="isLoading()"></div>
     <div class="loading-text" *ngIf="isLoading(); else noData">Loading datasets and traces...</div>
     <ng-template #noData>
-      <div class="loading-text">Select examples on the left to see their traces.</div>
+      <div class="loading-text" *ngIf="workspace.datasets().length > 0; else noDatasets">Select examples on the left to see their traces.</div>
+      <ng-template #noDatasets>
+        <div class="loading-text">Use “+ Add dataset” on the left to open a demo trace or your own trace files.</div>
+      </ng-template>
     </ng-template>
   </div>
 </ng-template>

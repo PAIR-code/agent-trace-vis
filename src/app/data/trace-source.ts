@@ -35,8 +35,13 @@ export interface DatasetInfo {
   /** Unique within its source; part of shareable URLs. */
   id: string;
   name: string;
-  /** Loaded automatically when the app opens. */
+  /** Loaded automatically when the app opens without datasets in its URL. */
   isDefault?: boolean;
+  /**
+   * A demo dataset: offered by the "Add dataset" menu's "Demo traces" picker
+   * rather than loaded automatically. A URL that names it still loads it.
+   */
+  isDemo?: boolean;
 }
 
 /** One example (trace) in a dataset, as listed in the sidebar. */

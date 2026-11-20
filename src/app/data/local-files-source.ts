@@ -49,7 +49,7 @@ export class LocalFilesSource implements TraceSource {
 
   async listDatasets(): Promise<DatasetInfo[]> {
     await this.loadCache();
-    // Cached datasets come back automatically, like the samples.
+    // Cached datasets come back automatically after a refresh.
     return [...this.datasets.values()].map(d => ({ id: d.id, name: d.name, isDefault: true }));
   }
 
