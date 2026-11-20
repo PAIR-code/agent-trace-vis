@@ -254,16 +254,6 @@
   color: #6b7280;
 }
 
-.kind {
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: #3a506b;
-  color: #fff;
-}
-
 .dataset-name {
   flex: 1;
   min-width: 0;
@@ -323,13 +313,17 @@
 }
 
 .example.selected {
-  background: #eff6ff;
+  background: #dbeafe;
   border-left-color: #2563eb;
 }
 
-.checkbox {
-  margin-top: 2px;
-  flex: 0 0 auto;
+.example.selected:hover {
+  background: #bfdbfe;
+}
+
+.example:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
 }
 
 .example-content {
@@ -343,11 +337,6 @@
   gap: 6px;
   font-size: 0.68rem;
   color: #6b7280;
-}
-
-.idx {
-  font-weight: 600;
-  color: #374151;
 }
 
 .outcome {
@@ -391,14 +380,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   margin-top: 2px;
-}
-
-.example-id {
-  font-size: 0.66rem;
-  color: #9ca3af;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .load-more {

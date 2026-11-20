@@ -59,6 +59,8 @@ import { AxisMode, hasTimestamps, layoutTraces, TraceEntry, TraceLayout, TraceNo
 import { Mark } from "./marks";
 import { groupThreadMessages } from "./thread-helper";
 import { PanelMessage, getRoleLabel, speakerStyle, getHighlightedTextForViewer } from "./viewer-helpers";
+import { FileContentPreview, fileContentPreview } from './file-content';
+import type { ReasoningStepType } from './layout-types';
 import { measureDrop } from "./drag-drop-helper";
 import { TraceTrackComponent } from "./trace-track";
 import { ScrubBarComponent, ScrubEvent } from "./scrub-bar";
@@ -649,6 +651,16 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   getSpeakerBgColorForViewer = (msg: PanelMessage) => this.speakerStyle(msg).bg;
   getSpeakerBorderForViewer = (msg: PanelMessage) => this.speakerStyle(msg).border;
   getHighlightedTextForViewer = (msg: PanelMessage) => getHighlightedTextForViewer(msg, this.layersService, this.highlightedChunkId());
+  /** Parsed once per tool call: the panel asks on every change detection. */
+  private readonly fileContentCache = new WeakMap<object, FileContentPreview | null>();
+  getFileContentForViewer = (msg: { data?: any; stepType?: ReasoningStepType }): FileContentPreview | null => {
+    const toolCall = msg.data?.toolCall;
+    if (!toolCall || typeof toolCall !== 'object') return null;
+    if (!this.fileContentCache.has(toolCall)) {
+      this.fileContentCache.set(toolCall, fileContentPreview(toolCall.input, msg.stepType));
+    }
+    return this.fileContentCache.get(toolCall) ?? null;
+  };
 
   private speakerStyle(msg: PanelMessage) {
     const traceId = msg.traceId || this.activeTraceId();

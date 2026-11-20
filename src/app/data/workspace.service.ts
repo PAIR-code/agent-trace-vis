@@ -46,8 +46,6 @@ export interface LoadedDataset {
   sourceId: string;
   datasetId: string;
   name: string;
-  /** The source's short label, e.g. "SAMPLE". */
-  label: string;
   examples: ExampleSummary[];
   totalCount: number | null;
   hasMore: boolean;
@@ -180,7 +178,6 @@ export class WorkspaceService {
       this.datasets.update(list => [...list, {
         key, sourceId, datasetId,
         name: info.name || source.datasetName?.(datasetId) || datasetId,
-        label: source.label,
         examples: [], totalCount: null, hasMore: false,
         loadingExamples: true, loadingMore: false, selected: [],
       }]);

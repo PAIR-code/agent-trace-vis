@@ -63,7 +63,6 @@
       <section class="dataset" *ngFor="let ds of workspace.datasets(); trackBy: trackByKey">
         <div class="dataset-header" (click)="toggleSection(ds.key)" [title]="ds.name">
           <span class="chevron">{{ isCollapsed(ds.key) ? '▶' : '▼' }}</span>
-          <span class="kind">{{ ds.label }}</span>
           <span class="dataset-name">{{ ds.name }}</span>
           <span class="count">{{ countLabel(ds) }}</span>
           <span class="sel-badge" *ngIf="ds.selected.length > 0">{{ ds.selected.length }} sel</span>
@@ -85,12 +84,11 @@
           </div>
 
           <div class="example" *ngFor="let ex of filtered(ds); trackBy: trackByIndex"
-               [class.selected]="isSelected(ds, ex)" (click)="onRowClick(ds, ex)">
-            <input type="checkbox" class="checkbox" [checked]="isSelected(ds, ex)"
-                   (click)="$event.stopPropagation(); onRowClick(ds, ex)" />
+               role="button" tabindex="0" [attr.aria-pressed]="isSelected(ds, ex)"
+               [class.selected]="isSelected(ds, ex)" (click)="onRowClick(ds, ex)"
+               (keydown)="onRowKeydown(ds, ex, $event)">
             <div class="example-content">
               <div class="top-line">
-                <span class="idx">#{{ ex.index }}</span>
                 <span class="date" *ngIf="formatDate(ex.date)">{{ formatDate(ex.date) }}</span>
                 <span class="outcome" *ngIf="ex.outcome?.success !== undefined"
                       [class.pass]="ex.outcome?.success" [class.fail]="!ex.outcome?.success">
@@ -108,9 +106,8 @@
                      (keydown.enter)="finishRename(ds, ex)" (keydown.escape)="cancelRename()"
                      (blur)="finishRename(ds, ex)" />
               <ng-template #titleView>
-                <div class="example-title" [title]="workspace.titleOf(ds.key, ex)">{{ workspace.titleOf(ds.key, ex) }}</div>
+                <div class="example-title" [title]="rowTooltip(ds, ex)">{{ workspace.titleOf(ds.key, ex) }}</div>
               </ng-template>
-              <div class="example-id" *ngIf="ex.id && ex.id !== ex.title" [title]="ex.id">{{ ex.id }}</div>
             </div>
           </div>
 

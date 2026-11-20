@@ -31,6 +31,7 @@ import { LocalFilesSource } from './local-files-source';
 import { DatasetInfo, ExampleSummary, SourceAction, TraceSource } from './trace-source';
 import { parseIndices } from './dataset-refs';
 import { LoadedDataset, WorkspaceService } from './workspace.service';
+import { isRowToggleKey } from './row-selection';
 
 @Component({
   selector: 'app-examples-sidebar',
@@ -180,6 +181,16 @@ export class ExamplesSidebarComponent implements OnDestroy {
       (ex.id?.toLowerCase().includes(q) ?? false));
   }
 
+  /**
+   * Hover text for an example row. The row hides the index and ID to keep the
+   * list compact, but both still work in the filter box, so expose them here.
+   */
+  rowTooltip(ds: LoadedDataset, ex: ExampleSummary): string {
+    const title = this.workspace.titleOf(ds.key, ex);
+    const id = ex.id && ex.id !== title ? `\n${ex.id}` : '';
+    return `#${ex.index} ${title}${id}`;
+  }
+
   isSelected(ds: LoadedDataset, ex: ExampleSummary): boolean {
     return ds.selected.includes(ex.index);
   }
@@ -187,6 +198,13 @@ export class ExamplesSidebarComponent implements OnDestroy {
   onRowClick(ds: LoadedDataset, ex: ExampleSummary): void {
     if (this.renaming()) return;
     void this.workspace.toggle(ds.key, ex.index);
+  }
+
+  /** Enter or Space on a focused row toggles it, like a click. */
+  onRowKeydown(ds: LoadedDataset, ex: ExampleSummary, event: KeyboardEvent): void {
+    if (!isRowToggleKey(event)) return;
+    event.preventDefault();  // Space would otherwise scroll the list.
+    this.onRowClick(ds, ex);
   }
 
   selectOnly(ds: LoadedDataset, ex: ExampleSummary, event: MouseEvent): void {

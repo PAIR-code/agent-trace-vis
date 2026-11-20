@@ -24,6 +24,7 @@ import { Component, Input, Output, EventEmitter, ElementRef, ViewChild, OnChange
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SafeHtml } from '@angular/platform-browser';
+import { FILE_CONTENT_PREVIEW_LINES, FileContentLine, FileContentPreview } from '../agentic-traces/file-content';
 
 export interface ConversationMessage {
   id: string;
@@ -85,6 +86,7 @@ export interface ConversationMessage {
                 <span class="timestamp" *ngIf="msg.timestamp">{{ formatTime(msg.timestamp) }}</span>
               </div>
               <div class="message-body" *ngIf="msg.text" [innerHTML]="getHighlightedText(msg)"></div>
+              <ng-container [ngTemplateOutlet]="fileContentTpl" [ngTemplateOutletContext]="{ $implicit: msg }"></ng-container>
               <div class="step-tokens" *ngIf="msg.data?.actionCount || msg.data?.token_usage" style="font-size: 11px; color: #9ca3af; margin-top: 2px;">
                 <span *ngIf="msg.data?.actionCount">{{ msg.data.actionCount }} actions</span>
                 <span *ngIf="msg.data?.actionCount && msg.data?.token_usage"> · </span>
@@ -129,6 +131,7 @@ export interface ConversationMessage {
                   <span class="timestamp" *ngIf="child.timestamp">{{ formatTime(child.timestamp) }}</span>
                 </div>
                 <div class="message-body" [innerHTML]="getHighlightedText(child)"></div>
+                <ng-container [ngTemplateOutlet]="fileContentTpl" [ngTemplateOutletContext]="{ $implicit: child }"></ng-container>
                 
                 <!-- Raw JSON Section for Child -->
                 <div class="raw-json-section" *ngIf="child.data">
@@ -160,6 +163,17 @@ export interface ConversationMessage {
       </div>
     </div>
   </div>
+
+    <!-- Content written by a file create / edit tool call, truncated with a Show more toggle -->
+    <ng-template #fileContentTpl let-m>
+      <div class="file-content" *ngIf="getFileContent(m) as fc">
+        <pre class="file-content-pre"><div *ngFor="let line of visibleFileLines(m.id, fc)" class="fc-line" [ngClass]="'fc-' + line.kind"><span class="fc-sign" *ngIf="fc.isDiff">{{ diffSign(line) }}</span>{{ line.text }}</div></pre>
+        <button type="button" class="raw-json-btn fc-toggle" *ngIf="fc.lines.length > fileContentPreviewLines"
+                (click)="toggleFileContent(m.id); $event.stopPropagation()">
+          {{ isFileContentExpanded(m.id) ? '▴ Show less' : '▾ Show more (' + (fc.lines.length - fileContentPreviewLines) + ' more lines)' }}
+        </button>
+      </div>
+    </ng-template>
 
     <!-- Full Screen JSON Modal -->
     <div class="fullscreen-json-overlay" *ngIf="fullScreenJsonData" (click)="closeFullScreenJson()">
@@ -574,6 +588,43 @@ export interface ConversationMessage {
       background: #e2e8f0;
     }
 
+    .file-content {
+      margin-top: 6px;
+    }
+
+    .file-content-pre {
+      margin: 0;
+      font-size: 0.72rem;
+      line-height: 1.45;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      padding: 6px 0;
+      border-radius: 4px;
+      overflow-x: auto;
+      color: #334155;
+    }
+
+    .fc-line {
+      padding: 0 8px;
+      white-space: pre;
+      min-height: 1.45em;
+    }
+
+    .fc-sign {
+      display: inline-block;
+      width: 1.2em;
+      color: #94a3b8;
+      user-select: none;
+    }
+
+    .fc-add { background: #ecfdf5; color: #166534; }
+    .fc-del { background: #fef2f2; color: #991b1b; }
+    .fc-hunk { color: #64748b; background: #f1f5f9; }
+
+    .fc-toggle {
+      margin-top: 2px;
+    }
+
     .raw-json-pre {
       margin: 6px 0 0 0;
       font-size: 0.75rem;
@@ -670,6 +721,8 @@ export class ConversationViewerComponent implements OnChanges {
   @Input() getSpeakerBorder: (msg: any) => string = () => '';
   @Input() getSpeakerLabel: (msg: any) => string = (msg) => msg.speaker || msg.type || '';
   @Input() getHighlightedText: (msg: any) => string | SafeHtml = (msg) => msg.text || '';
+  /** Content a file tool call wrote, shown under the message text; null hides it. */
+  @Input() getFileContent: (msg: any) => FileContentPreview | null = () => null;
 
   // Custom templates
   @Input() headerActionsTemplate: any;
@@ -748,6 +801,26 @@ export class ConversationViewerComponent implements OnChanges {
     }
     const formatted = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     return formatted;
+  }
+
+  // File content view state: messages whose full file content is shown.
+  readonly fileContentPreviewLines = FILE_CONTENT_PREVIEW_LINES;
+  expandedFileContent = new Set<string>();
+
+  toggleFileContent(id: string) {
+    if (!this.expandedFileContent.delete(id)) this.expandedFileContent.add(id);
+  }
+
+  isFileContentExpanded(id: string): boolean {
+    return this.expandedFileContent.has(id);
+  }
+
+  visibleFileLines(id: string, fc: FileContentPreview): FileContentLine[] {
+    return this.isFileContentExpanded(id) ? fc.lines : fc.lines.slice(0, this.fileContentPreviewLines);
+  }
+
+  diffSign(line: FileContentLine): string {
+    return line.kind === 'add' ? '+' : line.kind === 'del' ? '-' : ' ';
   }
 
   // Raw JSON view state
