@@ -20,9 +20,21 @@
  * semantic search with span-level highlights.
  */
 
-import { Injectable } from '@angular/core';
-import { Observable, of, from, forkJoin } from 'rxjs';
-import { map } from 'rxjs/operators';
+import {Injectable, signal} from '@angular/core';
+import {Observable, forkJoin, from, of} from 'rxjs';
+import {map} from 'rxjs/operators';
+
+/** Timing and cache outcome of one semantic `search()` call. */
+export interface SearchRunInfo {
+  /** Model the search was keyed on (and sent to, for cache misses). */
+  readonly model: string;
+  /** Wall time from the start of the search until all traces finished. */
+  readonly elapsedMs: number;
+  /** Traces that called the model. */
+  readonly modelCalls: number;
+  /** Traces served from the memory or localStorage cache. */
+  readonly cacheHits: number;
+}
 
 export interface ReferenceChip {
   nodeId: string;
@@ -122,21 +134,44 @@ export function fillTemplate(template: string, values: Record<string, string | u
   return template.replace(re, (_, key: string) => `${values[key]}`);
 }
 
+/** Computes a short deterministic 32-bit hash for a string. */
+function hashString(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash |= 0; // Convert to 32bit integer
+  }
+  return 't' + Math.abs(hash).toString(36);
+}
+
+/**
+ * Cache hash for a semantic search: the model and the full prompt, so results
+ * from one model are never served for another.
+ */
+export function searchCacheHash(model: string, prompt: string): string {
+  return hashString(`${model}\n${prompt}`);
+}
+
 @Injectable({ providedIn: 'root' })
 export class SearchService {
 
   private memoryCache = new Map<string, Map<string, SearchResult>>();
 
-  /** Computes a short deterministic 32-bit hash for a string. */
-  private hashString(str: string): string {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash |= 0; // Convert to 32bit integer
-    }
-    return 't' + Math.abs(hash).toString(36);
-  }
+  /** Model used for semantic search. Part of the cache key. */
+  readonly model = signal<string>(SEMANTIC_MODEL);
+
+  /**
+   * Models offered by the dev-only model picker next to the AI toggle. Empty
+   * (the default) hides the picker and the other search dev controls.
+   */
+  readonly devModels = signal<readonly string[]>([]);
+
+  /** When true, semantic search ignores cached results and calls the model. */
+  readonly skipCache = signal(false);
+
+  /** Outcome of the most recent semantic search, or null before the first. */
+  readonly lastRun = signal<SearchRunInfo | null>(null);
 
   /** Clear all cached search results from memory and window.localStorage. Returns number of keys removed. */
   clearCache(): number {
@@ -228,9 +263,12 @@ export class SearchService {
           groups.set(tid, list);
         }
 
+        const model = this.model();
+        const stats = { modelCalls: 0, cacheHits: 0 };
+        const startedAt = Date.now();
         const observables: Observable<Map<string, SearchResult>>[] = [];
         for (const [tid, traceNodes] of groups.entries()) {
-          observables.push(this.semanticSearch(trimmed, referenceChips, traceNodes, apiKey));
+          observables.push(this.semanticSearch(trimmed, referenceChips, traceNodes, apiKey, model, stats));
         }
 
         if (observables.length === 0) {
@@ -245,6 +283,7 @@ export class SearchService {
                 merged.set(key, val);
               }
             }
+            this.lastRun.set({ model, elapsedMs: Date.now() - startedAt, ...stats });
             return merged;
           })
         );
@@ -289,7 +328,9 @@ export class SearchService {
     query: string,
     referenceChips: ReferenceChip[],
     nodes: Array<{ id: string; role: string; speaker?: string; text: string; traceId?: string }>,
-    apiKey: string
+    apiKey: string,
+    model: string,
+    stats: { modelCalls: number; cacheHits: number },
   ): Observable<Map<string, SearchResult>> {
     if (!apiKey) {
       console.warn('SearchService: No Gemini API key provided, falling back to fuzzy match.');
@@ -297,43 +338,18 @@ export class SearchService {
     }
 
     const prompt = this.buildPrompt(query, referenceChips, nodes);
-    const promptHash = this.hashString(prompt);
+    const promptHash = searchCacheHash(model, prompt);
     const cacheKey = `agentic_traces_search_cache_${promptHash}`;
 
-    // 1. Check in-memory cache
-    if (this.memoryCache.has(promptHash)) {
-      console.log('[Search] Cache hit (memory) for query:', query);
-      return of(this.memoryCache.get(promptHash)!);
+    const cached = this.skipCache() ? undefined : this.readCache(promptHash, cacheKey, query);
+    if (cached) {
+      stats.cacheHits++;
+      return of(cached);
     }
 
-    // 2. Check localStorage cache
-    try {
-      const cachedData = window.localStorage.getItem(cacheKey);
-      if (cachedData) {
-        console.log('[Search] Cache hit (localStorage) for query:', query);
-        const parsed = JSON.parse(cachedData) as any;
-        // Supports both older format (direct results object) and new format ({timestamp, results}):
-        const resultsObj = parsed && parsed.results ? parsed.results : parsed;
-        const resultsMap = new Map<string, SearchResult>(Object.entries(resultsObj));
-
-        // Update timestamp in localStorage so it stays fresh in LRU order
-        try {
-          const cacheEntry = {
-            timestamp: Date.now(),
-            results: resultsObj
-          };
-          window.localStorage.setItem(cacheKey, JSON.stringify(cacheEntry));
-        } catch { }
-
-        this.memoryCache.set(promptHash, resultsMap);
-        return of(resultsMap);
-      }
-    } catch (e) {
-      console.warn('[Search] Failed to read from localStorage cache:', e);
-    }
-
+    stats.modelCalls++;
     console.log(`[Search] Sending API Request to Gemini (${prompt.length.toLocaleString()} chars):\n`, prompt);
-    return from(this.callGemini(prompt, apiKey)).pipe(
+    return from(this.callGemini(prompt, apiKey, model)).pipe(
       map(responseText => {
         console.log(`[Search] Received API Response from Gemini (${responseText.length.toLocaleString()} chars):\n`, responseText);
         const results = this.parseResults(responseText, nodes);
@@ -365,6 +381,47 @@ export class SearchService {
         return results;
       })
     );
+  }
+
+  /** Returns cached results for `promptHash` from memory or localStorage. */
+  private readCache(
+    promptHash: string,
+    cacheKey: string,
+    query: string
+  ): Map<string, SearchResult> | undefined {
+    // 1. Check in-memory cache
+    const inMemory = this.memoryCache.get(promptHash);
+    if (inMemory) {
+      console.log('[Search] Cache hit (memory) for query:', query);
+      return inMemory;
+    }
+
+    // 2. Check localStorage cache
+    try {
+      const cachedData = window.localStorage.getItem(cacheKey);
+      if (cachedData) {
+        console.log('[Search] Cache hit (localStorage) for query:', query);
+        const parsed = JSON.parse(cachedData) as Record<string, unknown>;
+        // Supports both older format (direct results object) and new format ({timestamp, results}):
+        const resultsObj = (parsed['results'] ?? parsed) as Record<string, SearchResult>;
+        const resultsMap = new Map<string, SearchResult>(Object.entries(resultsObj));
+
+        // Update timestamp in localStorage so it stays fresh in LRU order
+        try {
+          const cacheEntry = {
+            timestamp: Date.now(),
+            results: resultsObj
+          };
+          window.localStorage.setItem(cacheKey, JSON.stringify(cacheEntry));
+        } catch { }
+
+        this.memoryCache.set(promptHash, resultsMap);
+        return resultsMap;
+      }
+    } catch (e) {
+      console.warn('[Search] Failed to read from localStorage cache:', e);
+    }
+    return undefined;
   }
 
   private buildPrompt(
@@ -430,8 +487,8 @@ export class SearchService {
     return [];
   }
 
-  private async callGemini(prompt: string, apiKey: string): Promise<string> {
-    const model = SEMANTIC_MODEL;
+  /** Sends `prompt` to `model`; overridden where a backend proxies Gemini. */
+  protected async callGemini(prompt: string, apiKey: string, model: string): Promise<string> {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const body = {

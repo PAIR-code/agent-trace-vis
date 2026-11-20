@@ -24,6 +24,7 @@ import { Component, Input, ViewChild, ElementRef, AfterViewInit, AfterViewChecke
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SearchBarComponent } from '../shared/search/search-bar.component';
+import { SearchDevControlsComponent } from '../shared/search/search-dev-controls.component';
 import { AnalysisLayersService } from './analysis-layers.service';
 import { AnalysisLayer } from './analysis-layers.types';
 import { Mark } from './marks';
@@ -31,7 +32,7 @@ import { Mark } from './marks';
 @Component({
   selector: 'app-analysis-toolbar',
   standalone: true,
-  imports: [CommonModule, FormsModule, SearchBarComponent],
+  imports: [CommonModule, FormsModule, SearchBarComponent, SearchDevControlsComponent],
   templateUrl: './analysis-toolbar.component.html',
   styleUrls: ['./analysis-toolbar.component.css'],
 })

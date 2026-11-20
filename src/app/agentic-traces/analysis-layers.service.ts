@@ -26,7 +26,6 @@ import { objectUrlFromSafeSource, setAnchorHref } from 'safevalues/dom';
 import {
   SearchService,
   SearchResult,
-  SEMANTIC_MODEL,
   SEMANTIC_GENERATION_CONFIG,
   SEMANTIC_MATCH_THRESHOLD,
   SEMANTIC_TURN_FORMAT,
@@ -296,7 +295,7 @@ export class AnalysisLayersService {
     const methods: AnalysisConfigV1['methods'] = {};
     if (searches.some(s => s.method === 'semantic')) {
       methods.semantic = {
-        model: SEMANTIC_MODEL,
+        model: this.searchService.model(),
         generationConfig: { ...SEMANTIC_GENERATION_CONFIG },
         scope: 'perTrace',
         turnFormat: SEMANTIC_TURN_FORMAT,
