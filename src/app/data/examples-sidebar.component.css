@@ -6,15 +6,7 @@
   color: #1f2937;
 }
 
-.collapsed-strip {
-  width: 28px;
-  border-right: 1px solid #e5e7eb;
-  background: #f8fafc;
-  display: flex;
-  justify-content: center;
-  padding-top: 8px;
-}
-
+/* The header matches the trace panel on the right (conversation-viewer). */
 .sidebar {
   position: relative;
   display: flex;
@@ -31,65 +23,69 @@
   outline-offset: -4px;
 }
 
-.resizer {
-  width: 5px;
-  cursor: col-resize;
-  background: transparent;
-  flex: 0 0 5px;
-}
-
-.resizer:hover {
-  background: #cbd5e1;
-}
-
+/* "Examples · N selected · Deselect all" on one row, the filter under it. */
 .header {
-  padding: 10px 10px 8px;
-  border-bottom: 1px solid #e5e7eb;
+  padding: 12px 16px;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
 }
 
 .title-row {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
-.title {
+.header h3 {
+  margin: 0;
+  flex-shrink: 0;
+  font-size: 1rem;
   font-weight: 600;
-  font-size: 0.9rem;
+  color: #0f172a;
+  white-space: nowrap;
 }
 
 .selected-count {
   margin-left: auto;
-  color: #6b7280;
+  font-size: 0.8rem;
+  color: #64748b;
+  white-space: nowrap;
 }
 
+/* Below the datasets, so it reads as "add another". */
 .add-row {
   position: relative;
+  padding: 10px;
 }
 
 .add-btn {
-  width: 100%;
-  padding: 6px 8px;
-  border: 1px solid #3a506b;
+  padding: 4px 10px;
+  border: 1px solid #cbd5e1;
   border-radius: 6px;
-  background: #3a506b;
-  color: #fff;
+  background: #fff;
+  color: #3a506b;
+  font: inherit;
+  font-size: 0.75rem;
   font-weight: 500;
   cursor: pointer;
 }
 
 .add-btn:hover {
-  background: #2c3e54;
+  background: #f1f5f9;
+  border-color: #94a3b8;
 }
 
 .menu {
   position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
+  top: calc(100% - 6px);
+  left: 10px;
+  right: 10px;
   z-index: 50;
   background: #fff;
   border: 1px solid #d1d5db;
@@ -292,6 +288,97 @@
   color: #b91c1c;
 }
 
+/* Dataset header actions appear on hover: "Select all / Deselect all" and the remove button. */
+.select-all-btn {
+  display: none;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.68rem;
+  color: #3a506b;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.select-all-btn:hover {
+  text-decoration: underline;
+}
+
+.dataset-header:hover .select-all-btn {
+  display: inline;
+}
+
+/* Group by: a compact picker, then one collapsible header per value. */
+.group-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 2px;
+  font-size: 0.7rem;
+  color: #6b7280;
+}
+
+.group-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.group-select {
+  font: inherit;
+  font-size: 0.7rem;
+  max-width: 180px;
+  padding: 1px 2px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: #fff;
+  color: #374151;
+}
+
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 16px;
+  cursor: pointer;
+  border-top: 1px solid #eef2f6;
+  font-size: 0.75rem;
+}
+
+.group-header:hover {
+  background: #f8fafc;
+}
+
+.group-header:hover .select-all-btn {
+  display: inline;
+}
+
+.group-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #334155;
+}
+
+.group-body .example {
+  padding-left: 22px;
+}
+
+.subagent-count {
+  color: #94a3b8;
+}
+
+.dataset-header .remove-btn {
+  visibility: hidden;
+}
+
+.dataset-header:hover .remove-btn {
+  visibility: visible;
+}
+
 .jump-row {
   display: flex;
   gap: 6px;
@@ -432,7 +519,7 @@
 
 .demo-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   padding: 14px 16px 10px;
   border-bottom: 1px solid #e5e7eb;
@@ -442,12 +529,6 @@
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
-}
-
-.demo-subtitle {
-  margin: 4px 0 0;
-  font-size: 0.75rem;
-  color: #6b7280;
 }
 
 .demo-close {

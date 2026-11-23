@@ -1,8 +1,4 @@
-<div class="collapsed-strip" *ngIf="collapsed(); else open">
-  <button type="button" class="icon-btn" title="Show examples" (click)="collapsed.set(false)">»</button>
-</div>
-
-<ng-template #open>
+<ng-container *ngIf="!collapsed()">
   <aside class="sidebar"
          [style.width.px]="width()"
          [class.drag-over]="dragOver()"
@@ -11,34 +7,11 @@
          (drop)="onDrop($event)">
     <div class="header">
       <div class="title-row">
-        <span class="title">Examples</span>
+        <h3>Examples</h3>
         <span class="selected-count">{{ workspace.totalSelected() }} selected</span>
         <button type="button" class="mini-btn" [disabled]="workspace.totalSelected() === 0"
-                title="Unselect every example" (click)="workspace.clearSelection()">Unselect all</button>
-        <button type="button" class="icon-btn" title="Hide examples" (click)="collapsed.set(true)">«</button>
+                title="Deselect every example" (click)="workspace.clearSelection()">Deselect all</button>
       </div>
-
-      <div class="add-row">
-        <button type="button" class="add-btn" (click)="toggleMenu()">+ Add dataset</button>
-        <div class="menu" *ngIf="menuOpen()">
-          <div class="menu-empty" *ngIf="menuLoading()">Loading datasets…</div>
-          <ng-container *ngFor="let group of menuGroups()">
-            <div class="menu-group-label">{{ group.label }}</div>
-            <button type="button" class="menu-item" *ngFor="let item of group.items"
-                    [disabled]="item.loaded" (click)="addFromMenu(item.source, item.dataset)">
-              {{ item.dataset.name }}<span class="menu-note" *ngIf="item.loaded"> (loaded)</span>
-            </button>
-          </ng-container>
-          <div class="menu-divider" *ngIf="actions().length > 0 && menuGroups().length > 0"></div>
-          <button type="button" class="menu-item action" *ngFor="let a of actions()"
-                  (click)="runAction(a.source, a.action)">{{ a.action.label }}</button>
-          <ng-container *ngIf="demos().length > 0">
-            <div class="menu-divider" *ngIf="actions().length > 0 || menuGroups().length > 0"></div>
-            <button type="button" class="menu-item action demo-entry" (click)="openDemoPicker()">{{ demoTracesLabel }}…</button>
-          </ng-container>
-        </div>
-      </div>
-
       <input type="text" class="filter" placeholder="Filter by #index, title, id, or dataset…"
              [ngModel]="filter()" (ngModelChange)="filter.set($event)" />
     </div>
@@ -54,13 +27,17 @@
 
     <div class="list">
       <div class="empty" *ngIf="workspace.datasets().length === 0">
-        No datasets loaded. Use “+ Add dataset” to open a demo trace or your own, or drop trace files here.
+        No datasets loaded. Use “+ Add dataset” below to open a demo trace or your own, or drop trace files here.
       </div>
 
       <section class="dataset" *ngFor="let ds of workspace.datasets(); trackBy: trackByKey">
         <div class="dataset-header" (click)="toggleSection(ds.key)" [title]="ds.name">
           <span class="chevron">{{ isCollapsed(ds.key) ? '▶' : '▼' }}</span>
           <span class="dataset-name">{{ ds.name }}</span>
+          <!-- Shown on hover, like the remove button -->
+          <button type="button" class="select-all-btn" *ngIf="ds.examples.length > 0"
+                  [title]="ds.selected.length > 0 ? 'Deselect every example in this dataset' : 'Select every listed example in this dataset'"
+                  (click)="toggleSelectAll(ds, $event)">{{ ds.selected.length > 0 ? 'Deselect all' : 'Select all' }}</button>
           <ng-container *ngIf="counter(ds) as c">
             <span class="spinner count-spinner" *ngIf="c.loading; else countText" role="status" [attr.aria-label]="c.title" [title]="c.title"></span>
             <ng-template #countText>
@@ -85,61 +62,91 @@
             {{ filter() ? 'No examples match “' + filter() + '”.' : 'No examples.' }}
           </div>
 
-          <div class="example" *ngFor="let ex of filtered(ds); trackBy: trackByIndex"
-               role="button" tabindex="0" [attr.aria-pressed]="isSelected(ds, ex)"
-               [class.selected]="isSelected(ds, ex)" (click)="onRowClick(ds, ex)"
-               (keydown)="onRowKeydown(ds, ex, $event)">
-            <div class="example-content">
-              <div class="top-line">
-                <span class="date" *ngIf="formatDate(ex.date)">{{ formatDate(ex.date) }}</span>
-                <span class="outcome" *ngIf="ex.outcome?.success !== undefined"
-                      [class.pass]="ex.outcome?.success" [class.fail]="!ex.outcome?.success">
-                  {{ ex.outcome?.success ? 'PASS' : 'FAIL' }}
-                </span>
-                <span class="reward" *ngIf="ex.outcome?.reward !== undefined">R: {{ formatReward(ex.outcome!.reward!) }}</span>
-                <span class="steps" *ngIf="ex.stepCount">{{ ex.stepCount }} {{ ex.stepCount === 1 ? 'step' : 'steps' }}</span>
-                <span class="row-actions">
-                  <button type="button" class="link-btn" title="Rename" (click)="startRename(ds, ex, $event)">✎</button>
-                  <button type="button" class="link-btn" title="Select only this example" (click)="selectOnly(ds, ex, $event)">Only</button>
-                </span>
-              </div>
-              <input *ngIf="isRenaming(ds, ex); else titleView" class="rename-input" type="text"
-                     [(ngModel)]="renameDraft" (click)="$event.stopPropagation()"
-                     (keydown.enter)="finishRename(ds, ex)" (keydown.escape)="cancelRename()"
-                     (blur)="finishRename(ds, ex)" />
-              <ng-template #titleView>
-                <div class="example-title" [title]="rowTooltip(ds, ex)">{{ workspace.titleOf(ds.key, ex) }}</div>
-              </ng-template>
-            </div>
+          <!-- Group by: only offered when the examples have metadata worth grouping on -->
+          <div class="group-row" *ngIf="groupFields(ds).length > 0">
+            <label class="group-label">Group by
+              <select class="group-select" [ngModel]="groupField(ds)" (ngModelChange)="setGroupField(ds, $event)">
+                <option value="">None</option>
+                <option *ngFor="let f of groupFields(ds)" [value]="f.key">{{ fieldLabel(f) }}</option>
+              </select>
+            </label>
+            <span class="spinner count-spinner" *ngIf="groupField(ds) && ds.loadingMore" role="status"
+                  aria-label="Listing all examples…" title="Listing all examples…"></span>
           </div>
 
-          <div class="load-more" *ngIf="ds.hasMore">
+          <ng-container *ngIf="groupField(ds); else flatList">
+            <ng-container *ngFor="let g of groups(ds); trackBy: trackByGroup">
+              <div class="group-header" (click)="toggleGroup(g)" [title]="g.label">
+                <span class="chevron">{{ isGroupOpen(g) ? '▼' : '▶' }}</span>
+                <span class="group-name">{{ g.label }}</span>
+                <button type="button" class="select-all-btn"
+                        [title]="g.selected > 0 ? 'Deselect this group' : 'Select every example in this group'"
+                        (click)="toggleGroupSelection(ds, g, $event)">{{ g.selected > 0 ? 'Deselect' : 'Select' }}</button>
+                <span class="count"><ng-container *ngIf="g.selected"><strong class="sel-count">{{ g.selected }}</strong>/</ng-container>{{ g.examples.length }}</span>
+              </div>
+              <ng-container *ngIf="isGroupOpen(g)">
+                <div class="group-body">
+                  <ng-container *ngFor="let ex of g.examples; trackBy: trackByIndex"
+                                [ngTemplateOutlet]="exampleRow" [ngTemplateOutletContext]="{ ds: ds, ex: ex }"></ng-container>
+                </div>
+              </ng-container>
+            </ng-container>
+          </ng-container>
+          <ng-template #flatList>
+            <ng-container *ngFor="let ex of filtered(ds); trackBy: trackByIndex"
+                          [ngTemplateOutlet]="exampleRow" [ngTemplateOutletContext]="{ ds: ds, ex: ex }"></ng-container>
+          </ng-template>
+
+          <div class="load-more" *ngIf="ds.hasMore && !groupField(ds)">
             <button type="button" class="mini-btn" [disabled]="ds.loadingMore" (click)="workspace.loadMore(ds.key)">
               {{ ds.loadingMore ? 'Loading…' : 'Load more' }}
             </button>
           </div>
         </div>
       </section>
+
+      <!-- Add dataset: below the datasets. New sources first, then demos, then datasets the sources offer. -->
+      <div class="add-row">
+        <button type="button" class="add-btn" (click)="toggleMenu()">+ Add dataset</button>
+        <div class="menu" #addMenu *ngIf="menuOpen()">
+          <button type="button" class="menu-item action" *ngFor="let a of actions()"
+                  (click)="runAction(a.source, a.action)">{{ a.action.label }}</button>
+          <ng-container *ngIf="demos().length > 0">
+            <div class="menu-divider" *ngIf="actions().length > 0"></div>
+            <button type="button" class="menu-item action demo-entry" (click)="openDemoPicker()">{{ demoTracesLabel }}…</button>
+          </ng-container>
+          <div class="menu-divider"
+               *ngIf="(menuLoading() || menuGroups().length > 0) && (actions().length > 0 || demos().length > 0)"></div>
+          <div class="menu-empty" *ngIf="menuLoading()">Loading datasets…</div>
+          <ng-container *ngFor="let group of menuGroups()">
+            <div class="menu-group-label">{{ group.label }}</div>
+            <button type="button" class="menu-item" *ngFor="let item of group.items"
+                    [disabled]="item.loaded" (click)="addFromMenu(item.source, item.dataset)">
+              {{ item.dataset.name }}<span class="menu-note" *ngIf="item.loaded"> (loaded)</span>
+            </button>
+          </ng-container>
+        </div>
+      </div>
     </div>
 
     <div class="drop-hint" *ngIf="dragOver()">Drop .json / .jsonl trace files to open them</div>
   </aside>
-  <div class="resizer" (mousedown)="startResize($event)" title="Drag to resize"></div>
-</ng-template>
+</ng-container>
+<!-- Drag to resize; click to minimize / reopen (same as the trace panel on the right). -->
+<app-panel-splitter side="left" [collapsed]="collapsed()" [width]="width()"
+                    [minWidth]="220" [maxWidth]="560"
+                    (collapsedChange)="collapsed.set($event)"
+                    (widthChange)="width.set($event)"></app-panel-splitter>
 
 <div class="demo-overlay" *ngIf="demoPickerOpen()" (click)="closeDemoPicker()">
   <div class="demo-card" role="dialog" aria-modal="true" [attr.aria-label]="demoTracesLabel" (click)="$event.stopPropagation()">
     <div class="demo-header">
-      <div>
-        <h3>{{ demoTracesLabel }}</h3>
-        <p class="demo-subtitle">Pick a demo dataset to add to the sidebar.</p>
-      </div>
+      <h3>{{ demoTracesLabel }}</h3>
       <button type="button" class="icon-btn demo-close" title="Close" (click)="closeDemoPicker()">×</button>
     </div>
     <div class="demo-list">
       <button type="button" class="demo-item" *ngFor="let item of demos()"
               [disabled]="item.loaded" (click)="addDemo(item)">
-        <span class="kind">{{ item.source.label }}</span>
         <span class="demo-name">{{ item.dataset.name }}</span>
         <span class="menu-note" *ngIf="item.loaded">loaded</span>
       </button>
@@ -149,3 +156,36 @@
     </div>
   </div>
 </div>
+
+<!-- One example row in the list (flat or inside a group) -->
+<ng-template #exampleRow let-ds="ds" let-ex="ex">
+  <div class="example"
+       role="button" tabindex="0" [attr.aria-pressed]="isSelected(ds, ex)"
+       [class.selected]="isSelected(ds, ex)" (click)="onRowClick(ds, ex)"
+       (keydown)="onRowKeydown(ds, ex, $event)">
+    <div class="example-content">
+      <div class="top-line">
+        <span class="date" *ngIf="formatDate(ex.date)">{{ formatDate(ex.date) }}</span>
+        <span class="outcome" *ngIf="ex.outcome?.success !== undefined"
+              [class.pass]="ex.outcome?.success" [class.fail]="!ex.outcome?.success">
+          {{ ex.outcome?.success ? 'PASS' : 'FAIL' }}
+        </span>
+        <span class="reward" *ngIf="ex.outcome?.reward !== undefined">R: {{ formatReward(ex.outcome!.reward!) }}</span>
+        <span class="steps" *ngIf="ex.stepCount">{{ ex.stepCount }} {{ ex.stepCount === 1 ? 'step' : 'steps' }}</span>
+        <span class="subagent-count" *ngIf="subagentCount(ds, ex) as n"
+              [title]="n + ' subagent traces, selected along with this one'">+{{ n }} {{ n === 1 ? 'subagent' : 'subagents' }}</span>
+        <span class="row-actions">
+          <button type="button" class="link-btn" title="Rename" (click)="startRename(ds, ex, $event)">✎</button>
+          <button type="button" class="link-btn" title="Select only this example" (click)="selectOnly(ds, ex, $event)">Only</button>
+        </span>
+      </div>
+      <input *ngIf="isRenaming(ds, ex); else titleView" class="rename-input" type="text"
+             [(ngModel)]="renameDraft" (click)="$event.stopPropagation()"
+             (keydown.enter)="finishRename(ds, ex)" (keydown.escape)="cancelRename()"
+             (blur)="finishRename(ds, ex)" />
+      <ng-template #titleView>
+        <div class="example-title" [title]="rowTooltip(ds, ex)">{{ workspace.titleOf(ds.key, ex) }}</div>
+      </ng-template>
+    </div>
+  </div>
+</ng-template>

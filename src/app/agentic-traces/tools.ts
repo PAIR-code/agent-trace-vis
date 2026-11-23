@@ -165,16 +165,76 @@ export function isMessageTool(stepType: S | undefined): boolean {
   return stepType === S.SEND_MESSAGE || stepType === S.RECEIVE_MESSAGE;
 }
 
-/** Glyph for a tool mark: a terminal for commands, a magnifier for web / code search. */
-export function toolIcon(stepType: S | undefined): 'command' | 'search' | undefined {
+/** Glyphs that tell tool kinds apart in the tools lane (the "Tool icons" toggle shows or hides them). */
+export type ToolIcon = 'command' | 'git' | 'python' | 'folder' | 'web' | 'search' | 'link' | 'agent';
+export const TOOL_ICONS: ReadonlySet<string> =
+  new Set<ToolIcon>(['command', 'git', 'python', 'folder', 'web', 'search', 'link', 'agent']);
+
+/**
+ * Simple shell commands shown by name (tiny text in the terminal box) rather
+ * than a generic `>_`. At most four letters, to fit the 12px mark.
+ */
+const SIMPLE_COMMANDS: ReadonlySet<string> = new Set([
+  'ls', 'cat', 'cd', 'pwd', 'echo', 'head', 'tail', 'wc', 'rm', 'cp', 'mv',
+  'grep', 'rg', 'find', 'sed', 'awk', 'diff', 'curl', 'tree', 'npm', 'make',
+]);
+/** Leading words that wrap the real command (`sudo`, `env`, `timeout 30`, ...). */
+const COMMAND_PREFIXES: ReadonlySet<string> = new Set(['sudo', 'env', 'time', 'nohup', 'exec', 'command']);
+/** Commands that only set up the shell; the next command in the line is the real one. */
+const SETUP_COMMANDS: ReadonlySet<string> = new Set(['cd', 'export', 'source', '.', 'set', 'unset', 'pushd', 'popd']);
+
+/** A shell command's text, from a run-command tool input. */
+export function commandText(input: unknown): string {
+  if (typeof input === 'string' && !input.trim().startsWith('{')) return stripQuotes(input);
+  const obj = asObject(input);
+  const v = obj['CommandLine'] ?? obj['command'] ?? obj['cmd'];
+  return typeof v === 'string' ? stripQuotes(v) : Array.isArray(v) ? v.join(' ') : '';
+}
+
+/**
+ * Glyph for a shell command, by the program it runs: the git logo for git,
+ * the Python logo for Python (python, pip, pytest, ...), the program's name for
+ * simple commands (ls, cat, ...), else the generic terminal `>_`. Setup steps
+ * like `cd dir &&` and wrappers like `sudo` / `timeout 30` are skipped.
+ */
+export function commandGlyph(command: string): { icon: ToolIcon; text?: string } {
+  let firstSetup: string | undefined;
+  for (const segment of command.split(/&&|\|\||;|\||\n/)) {
+    const words = segment.trim().split(/\s+/).filter(Boolean);
+    while (words.length > 0 && (/^\w+=/.test(words[0]) || COMMAND_PREFIXES.has(words[0]))) words.shift();
+    if (words[0] === 'timeout') words.splice(0, /^\d/.test(words[1] ?? '') ? 2 : 1);
+    if (words.length === 0) continue;
+    const program = words[0].split('/').pop()!.toLowerCase();
+    if (SETUP_COMMANDS.has(program)) {
+      firstSetup ??= program;
+      continue;
+    }
+    if (program === 'git') return { icon: 'git' };
+    if (/^(python[\d.]*|pip\d*|pytest|ipython|jupyter)$/.test(program) ||
+        words.some(w => /^python[\d.]*$/.test(w.split('/').pop()!))) {
+      return { icon: 'python' };
+    }
+    if (SIMPLE_COMMANDS.has(program)) return { icon: 'command', text: program };
+    return { icon: 'command' };
+  }
+  // Only setup steps (e.g. a bare `cd dir`).
+  return firstSetup && SIMPLE_COMMANDS.has(firstSetup) ? { icon: 'command', text: firstSetup } : { icon: 'command' };
+}
+
+/**
+ * Glyph for a tool mark: a terminal for commands, a folder for directory
+ * listings, a globe for web search, a magnifier for code search, a link for
+ * URL fetches, and a branch for subagent launches. Other tools (and file
+ * tools, which are drawn in the files lane) get none: a plain circle.
+ */
+export function toolIcon(stepType: S | undefined): ToolIcon | undefined {
   switch (stepType) {
-    case S.RUN_COMMAND:
-    case S.LIST_DIRECTORY:
-      return 'command';
-    case S.SEARCH_WEB:
-    case S.CODE_SEARCH:
-    case S.READ_URL_CONTENT:
-      return 'search';
+    case S.RUN_COMMAND: return 'command';
+    case S.LIST_DIRECTORY: return 'folder';
+    case S.SEARCH_WEB: return 'web';
+    case S.CODE_SEARCH: return 'search';
+    case S.READ_URL_CONTENT: return 'link';
+    case S.INVOKE_SUBAGENT: return 'agent';
   }
   return undefined;
 }

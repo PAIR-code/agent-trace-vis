@@ -51,6 +51,8 @@ export function buildBackboneLines(
   marks: Mark[],
   /** Where the line begins: the axis origin, or for a subagent where it was launched. */
   startX: number = BASE_OFFSET,
+  /** "Color by": draw the whole line in `lineColor`, not each step's agent color. */
+  uniformColor = false,
 ): BackboneLine[] {
   const lines: BackboneLine[] = [];
 
@@ -78,7 +80,7 @@ export function buildBackboneLines(
   }
 
   backboneSegments.forEach((seg, segIndex) => {
-    const segColor = getSegmentColor(seg.x1, marks, lineColor);
+    const segColor = uniformColor ? lineColor : getSegmentColor(seg.x1, marks, lineColor);
     const path = `M ${seg.x1} ${cy} L ${seg.x2} ${cy}`;
     const strokeDasharray = seg.type === 'dotted' ? '4,6' : undefined;
 

@@ -14,35 +14,47 @@
     (focusChange)="layersService.searchFocused.set($event)">
   </app-search-bar>
 
+  <!-- The AI search model is picked in the top bar's "More settings" panel. -->
+
   <!-- Scrollable Layer Chips list -->
   <div class="chips-scroll-container">
     <button class="scroll-btn left" *ngIf="showLeftScroll" (click)="scrollChips(-200)" title="Scroll left">&#10094;</button>
 
     <div class="layer-chips" #chipsContainer (scroll)="onScroll()">
-      <!-- Active and Preset search layers -->
-      <div *ngFor="let layer of layersService.layers(); trackBy: trackByLayerId"
-           class="layer-chip"
-           [style.background]="layer.enabled ? layer.color : 'transparent'"
-           [style.borderColor]="layer.color"
-           [class.disabled]="!layer.enabled"
-           [class.loading]="layer.loading"
-           (click)="onChipClick($event, layer)">
-        <span class="chip-ai-marker" *ngIf="layer.mode === 'semantic'">&#10022;</span>
-        <span class="chip-label">{{ layer.name }}</span>
-        <div class="chip-spinner" *ngIf="layer.loading"></div>
-        <button class="chip-remove" (click)="onRemove($event, layer)" title="Remove layer">&#x2715;</button>
+      <!-- Chips grouped under small labels ("Your searches", then each preset category), thin lines between groups. Empty groups are hidden. -->
+      <div class="chip-group" *ngFor="let group of chipGroups(); trackBy: trackByGroupLabel">
+        <span class="chip-group-label">{{ group.label }}</span>
+        <div class="chip-group-chips">
+          <div *ngFor="let layer of group.layers; trackBy: trackByLayerId"
+               class="layer-chip"
+               [style.background]="layer.enabled ? layer.color : 'transparent'"
+               [style.borderColor]="layer.color"
+               [class.disabled]="!layer.enabled"
+               [class.loading]="layer.loading"
+               [title]="chipTitle(layer)"
+               (click)="onChipClick($event, layer)">
+            <span class="chip-ai-marker" *ngIf="layer.mode === 'semantic'">&#10022;</span>
+            <span class="chip-label">{{ layer.name }}</span>
+            <div class="chip-spinner" *ngIf="layer.loading"></div>
+            <span class="chip-duration"
+                  *ngIf="!layer.loading && layer.mode === 'semantic' && layer.durationMs != null">
+              {{ formatDuration(layer.durationMs) }}
+            </span>
+            <button class="chip-remove" (click)="onRemove($event, layer)" title="Remove layer">&#x2715;</button>
+          </div>
+        </div>
       </div>
     </div>
 
     <button class="scroll-btn right" *ngIf="showRightScroll" (click)="scrollChips(200)" title="Scroll right">&#10095;</button>
   </div>
 
-  <!-- Download all searches as a JSON config for external pipelines -->
+  <!-- Export searches (and optionally their current matches) as JSON for external pipelines -->
   <button class="download-config-btn"
-          (click)="layersService.downloadConfig()"
+          (click)="layersService.exportDialogOpen.set(true)"
           [disabled]="layersService.layers().length === 0"
-          title="Export autoraters"
-          aria-label="Export autoraters">
+          title="Export searches"
+          aria-label="Export searches">
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
          stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M12 3v12"></path>
@@ -79,12 +91,29 @@
              [(ngModel)]="editingColor">
     </div>
   </div>
+  <div class="popover-section" *ngIf="editingLayer.reports.length > 0">
+    <label class="popover-label">Report</label>
+    <div class="popover-report">
+      <div class="report-entry" *ngFor="let r of editingLayer.reports">
+        <div class="report-trace" *ngIf="editingLayer.reports.length > 1">
+          {{ r.traceId }} · {{ r.found ? 'found' : 'not found' }}
+        </div>
+        <div class="report-text">{{ r.report || '(no report)' }}</div>
+      </div>
+    </div>
+  </div>
   <div class="popover-matches">
-    Matches: {{ editingLayer.results.size }} nodes
+    Evidence: {{ editingLayer.results.size }} steps
+    <ng-container *ngIf="editingLayer.model"> · {{ editingLayer.model }}</ng-container>
+    <ng-container *ngIf="editingLayer.durationMs != null"> · {{ formatDuration(editingLayer.durationMs) }}</ng-container>
   </div>
   <div class="popover-actions">
     <button class="popover-btn rerun" [disabled]="!hasChanges" (click)="onSave()">
       {{ queryChanged ? 'Save & rerun' : 'Save' }}
+    </button>
+    <button class="popover-btn rerun" *ngIf="!queryChanged" (click)="onRerun()"
+            [title]="editingLayer.mode === 'semantic' ? 'Rerun with ' + layersService.model() : 'Rerun'">
+      Rerun
     </button>
     <button class="popover-btn cancel-edit" (click)="closePopover()">Cancel</button>
   </div>
