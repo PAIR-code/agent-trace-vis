@@ -33,6 +33,8 @@ export interface ConversationMessage {
   timestamp?: string | number;
   children?: ConversationMessage[];
   data?: any;
+  /** Output tokens spent on this message (estimated unless `exact`). */
+  outTokens?: { tokens: number; exact: boolean };
 }
 
 @Component({
@@ -68,6 +70,8 @@ export interface ConversationMessage {
         <!-- Scrollable Thread Area -->
         <div class="thread-scroll" #threadScrollContainer (scroll)="onScroll($event)">
           <div class="message-list">
+          <!-- Optional content above the messages (e.g. search reports) -->
+          <ng-container *ngIf="topTemplate" [ngTemplateOutlet]="topTemplate"></ng-container>
           <ng-container *ngFor="let msg of messages">
             <!-- Message Card -->
             <div [id]="'msg-' + msg.id"
@@ -128,6 +132,8 @@ export interface ConversationMessage {
                    (mouseleave)="messageHover.emit(null)">
                 <div class="child-header">
                   <span class="role-badge" [style.color]="getSpeakerColor(child)">{{ getSpeakerLabel(child) }}</span>
+                  <span class="child-tokens" *ngIf="child.outTokens as t"
+                        [title]="t.exact ? 'Output tokens (from the trace)' : 'Estimated share of the output tokens of this step, by the size of each part'">{{ t.exact ? '' : '≈' }}{{ t.tokens | number }} out</span>
                   <span class="timestamp" *ngIf="child.timestamp">{{ formatTime(child.timestamp) }}</span>
                 </div>
                 <div class="message-body" [innerHTML]="getHighlightedText(child)"></div>
@@ -347,6 +353,14 @@ export interface ConversationMessage {
       box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
     }
 
+    .child-tokens {
+      margin-left: auto;
+      margin-right: 8px;
+      font-size: 11px;
+      color: #9ca3af;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
     .message-meta {
       display: flex;
       justify-content: space-between;
@@ -726,6 +740,8 @@ export class ConversationViewerComponent implements OnChanges {
 
   // Custom templates
   @Input() headerActionsTemplate: any;
+  /** Rendered at the top of the scrolling message list. */
+  @Input() topTemplate: any;
   @Input() messageActionsTemplate: any;
   @Input() betweenMessagesTemplate: any;
 

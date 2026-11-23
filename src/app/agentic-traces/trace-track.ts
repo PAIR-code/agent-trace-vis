@@ -25,12 +25,14 @@
  */
 
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
-import { CHANNELS, COLLAPSED_TRACK, Channel, ChannelId, FILES_LANE, channelCenter, collapsedY, laneGeometry, usedChannels } from './channels';
+import { CHANNELS, COLLAPSED_TRACK, Channel, ChannelId, FILES_LANE, channelCenter, collapsedY, expandedY, laneGeometry, usedChannels } from './channels';
 import { ANNOTATION_BAR_HEIGHT, CHAPTERS_STRIP_HEIGHT, TraceAnnotations } from './chapters.service';
 import { COLORS } from './colors';
 import { FILE_ROW_HEIGHT, FileRow } from './file-lane';
-import { TraceLayout } from './layout-types';
+import type { TraceSearchReport } from './search-reports';
+import { BASE_OFFSET, InlineSubagentBar, SUBAGENT_ROW_HEIGHT, TraceLayout, subagentLaneHeight } from './layout-types';
 import { Mark } from './marks';
+import { TOOL_ICONS } from './tools';
 
 export interface PlacedChapter {
   id: string;
@@ -45,6 +47,11 @@ export interface PlacedChapter {
   isActive: boolean;
   isEven: boolean;
   isSingleTurn: boolean;
+}
+
+/** A search's verdict on a row: its own report, plus how many inline subagents it was found in. */
+export interface RowSearchReport extends TraceSearchReport {
+  subagentsFound?: number;
 }
 
 @Component({
@@ -82,12 +89,20 @@ export class TraceTrackComponent {
   annotations = input<TraceAnnotations | undefined>(undefined);
   annotationsLoading = input<boolean>(false);
   hasApiKey = input<boolean>(true);
+  /** Tool marks show a glyph per kind of tool; off, every tool is a plain dot. */
+  toolIcons = input(true);
+  /** Enabled semantic searches' verdicts for this row (dots at the title's right end). */
+  searchReports = input<RowSearchReport[]>([]);
 
   markSelect = output<Mark>();
   markHover = output<string | null>();
   toggleFiles = output<void>();
   toggleExpand = output<void>();
   requestApiKey = output<void>();
+  /** Hovering a search dot: its report and where to show it (null on leave). */
+  searchDotHover = output<{ report: RowSearchReport; x: number; y: number } | null>();
+  /** Clicking a search dot: open this row's report for that search. */
+  searchDotClick = output<string>();
 
   readonly colors = COLORS;
   readonly channels = CHANNELS;
@@ -102,7 +117,7 @@ export class TraceTrackComponent {
     const parentX = this.trace().parent?.x;
     if (parentX !== undefined) return parentX;
     const drawn = this.trace().marks.filter(m => m.width > 0);
-    return drawn.length > 0 ? Math.min(...drawn.map(m => m.x)) : 24;
+    return drawn.length > 0 ? Math.min(...drawn.map(m => m.x)) : BASE_OFFSET;
   });
 
   /** Unified chapters & single-turn events mapped to the current X-axis coordinates. */
@@ -174,7 +189,9 @@ export class TraceTrackComponent {
     }
 
     return visible.map((item, k) => {
-      const left = item.x0;
+      // The first chapter has no divider, so its label lines up with the row's
+      // left edge (like the title) instead of the axis origin BASE_OFFSET in.
+      const left = k === 0 ? Math.max(0, item.x0 - BASE_OFFSET) : item.x0;
       const nextLeft = k + 1 < visible.length ? visible[k + 1].x0 : maxRight;
       const maxWidth = Math.max(24, nextLeft - left - 6);
       const rawDuration = Math.max(6, item.x1 - left);
@@ -259,9 +276,81 @@ export class TraceTrackComponent {
   /** File markers draw at y=14 within their row group (see the files lane markup). */
   collapsedFilesTransform = `translate(0, ${COLLAPSED_TRACK.center - 14})`;
 
+  onSearchDotEnter(report: RowSearchReport, event: MouseEvent): void {
+    const r = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    this.searchDotHover.emit({ report, x: r.right, y: r.bottom });
+  }
+
+  onSearchDotClick(report: RowSearchReport, event: MouseEvent): void {
+    event.stopPropagation();
+    this.searchDotClick.emit(report.layerId);
+  }
+
+  /** Color of the first search found in this row with nothing to highlight; tints the title. */
+  traceLevelColor = computed(() => this.searchReports().find(r => r.state === 'found' && r.traceLevel)?.color ?? null);
+
+  searchDotTitle(r: RowSearchReport): string {
+    return r.state === 'running' ? `${r.name}: searching…` : '';
+  }
+
+  // --- "Subagents inline" ------------------------------------------------------
+
+  readonly subagentLaneHeight = subagentLaneHeight;
+  readonly subagentBarHeight = SUBAGENT_ROW_HEIGHT - 2;
+
+  /** Center y of a sub-row in the subagents lane. */
+  subagentRowCenter(row: number): number {
+    return 4 + row * SUBAGENT_ROW_HEIGHT + SUBAGENT_ROW_HEIGHT / 2;
+  }
+
+  /**
+   * One vertical line per launch point, from the agent line (above the
+   * subagents lane, so negative y) down to the lowest bar it launched. Each
+   * bar then joins it with a short line to its right, so lines don't cross.
+   */
+  subagentTrunks = computed(() => {
+    const sub = this.trace().subagents;
+    if (!sub) return [];
+    const top = -(this.geometry().height - this.laneCenter('agent'));
+    const byX = new Map<number, { x: number; y1: number; y2: number; color: string }>();
+    for (const bar of sub.bars) {
+      const key = Math.round(bar.launchX);
+      const y2 = this.subagentRowCenter(bar.row);
+      const trunk = byX.get(key);
+      if (trunk) trunk.y2 = Math.max(trunk.y2, y2);
+      else byX.set(key, { x: bar.launchX, y1: top, y2, color: bar.color });
+    }
+    return [...byX.values()];
+  });
+
+  /**
+   * Trace id of the inline subagent being hovered: hovering its bar or any of
+   * its marks (e.g. its file edits) highlights both.
+   */
+  hoveredSubagent = computed(() => this.subagentOf(this.hoveredId()));
+
+  private subagentOf(markId: string | null): string | null {
+    const sub = this.trace().subagents;
+    if (!markId || !sub) return null;
+    const bar = sub.bars.find(b => b.mark && markId.startsWith(b.mark.traceId + '_'));
+    return bar?.mark?.traceId ?? null;
+  }
+
+  /** Whether the selected mark belongs to this inline subagent. */
+  isSubagentSelected(bar: InlineSubagentBar): boolean {
+    return !!bar.mark && this.subagentOf(this.selectedId()) === bar.mark.traceId;
+  }
+
+  /** The mark's glyph, unless it is a tool glyph and tool icons are off. */
+  iconOf(mark: Mark): string | undefined {
+    const icon = mark.look.icon;
+    return icon && !this.toolIcons() && TOOL_ICONS.has(icon) ? undefined : icon;
+  }
+
+  /** Expanded: centered on the mark's lane line. Collapsed: anchored to the shared line. */
   markY(mark: Mark): number {
     if (!this.expanded()) return collapsedY(mark);
-    return mark.y - channelCenter(mark.channel) + this.laneCenter(mark.channel);
+    return expandedY(mark, this.laneCenter(mark.channel));
   }
 
   /**

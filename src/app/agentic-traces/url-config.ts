@@ -41,6 +41,11 @@ export const MANAGED_URL_PARAM_KEYS: readonly string[] = [
   'axis',
   'wait',
   'fill',
+  'tools',
+  'subagents',
+  'colorBy',
+  'sortBy',
+  'sortDir',
   // Legacy: chapters are always on now. Kept managed so old ?chapters= links get cleaned up.
   'chapters',
   'tokens',
@@ -52,6 +57,7 @@ export const MANAGED_URL_PARAM_KEYS: readonly string[] = [
   'mark',
   'legend',
   'sidebar',
+  'panel',
   'filter',
 ];
 
@@ -80,6 +86,16 @@ export interface UrlUiConfig {
   axis: AxisMode;
   wait: boolean;
   fill: boolean;
+  /** Tool marks show a glyph per kind of tool (`tools=dots` turns them into plain dots). */
+  toolIcons: boolean;
+  /** Subagents drawn inline in their parent's row (`subagents=inline`). */
+  subagentsInline: boolean;
+  /** Metadata field whole traces are colored by (`colorBy=<field>`), or null for agent colors. */
+  colorBy: string | null;
+  /** Key rows are sorted by (`sortBy=<key>`, see trace-sort.ts), or null for selection order. */
+  sortBy: string | null;
+  /** Sort largest first (`sortDir=desc`). */
+  sortDesc: boolean;
   tokens: string[];
   expandAll: boolean;
   presets: string[];
@@ -89,6 +105,8 @@ export interface UrlUiConfig {
   markId: string | null;
   legendCollapsed: boolean;
   sidebarCollapsed: boolean;
+  /** The trace conversation panel on the right is minimized. */
+  panelCollapsed: boolean;
   sidebarFilter: string;
 }
 
@@ -98,6 +116,11 @@ export function defaultUrlUiConfig(): UrlUiConfig {
     axis: 'time',
     wait: false,
     fill: false,
+    toolIcons: true,
+    subagentsInline: false,
+    colorBy: null,
+    sortBy: null,
+    sortDesc: false,
     tokens: [...DEFAULT_TOKEN_METRICS],
     expandAll: true,
     presets: [],
@@ -107,6 +130,7 @@ export function defaultUrlUiConfig(): UrlUiConfig {
     markId: null,
     legendCollapsed: false,
     sidebarCollapsed: false,
+    panelCollapsed: false,
     sidebarFilter: '',
   };
 }
@@ -238,6 +262,11 @@ export function parseUrlUiConfig(
       false,
     ),
     fill: parseBoolFlag(getParamFromMap(params, ['fill', 'stretch']), false),
+    toolIcons: (getParamFromMap(params, ['tools']) ?? '').trim().toLowerCase() !== 'dots',
+    subagentsInline: (getParamFromMap(params, ['subagents']) ?? '').trim().toLowerCase() === 'inline',
+    colorBy: (getParamFromMap(params, ['colorBy']) ?? '').trim() || null,
+    sortBy: (getParamFromMap(params, ['sortBy']) ?? '').trim() || null,
+    sortDesc: (getParamFromMap(params, ['sortDir']) ?? '').trim().toLowerCase() === 'desc',
     tokens: parseTokenMetrics(getParamValuesFromMap(params, ['tokens'])),
     expandAll: parseExpandAll(
       getParamFromMap(params, ['expand', 'expandAll']),
@@ -254,6 +283,7 @@ export function parseUrlUiConfig(
     markId: rawMark ? rawMark : null,
     legendCollapsed: parseCollapsed(getParamFromMap(params, ['legend'])),
     sidebarCollapsed: parseCollapsed(getParamFromMap(params, ['sidebar'])),
+    panelCollapsed: parseCollapsed(getParamFromMap(params, ['panel'])),
     sidebarFilter: getParamFromMap(params, ['filter']) ?? '',
   };
 }
@@ -281,6 +311,11 @@ export function serializeUrlUiConfig(
           : config.axis,
     wait: config.wait ? '1' : null,
     fill: config.fill ? '1' : null,
+    tools: config.toolIcons ? null : 'dots',
+    subagents: config.subagentsInline ? 'inline' : null,
+    colorBy: config.colorBy || null,
+    sortBy: config.sortBy || null,
+    sortDir: config.sortBy && config.sortDesc ? 'desc' : null,
     chapters: null,
     tokens: isDefaultTokens
       ? null
@@ -301,6 +336,7 @@ export function serializeUrlUiConfig(
     mark: config.markId ? config.markId : null,
     legend: config.legendCollapsed ? 'collapsed' : null,
     sidebar: config.sidebarCollapsed ? 'collapsed' : null,
+    panel: config.panelCollapsed ? 'collapsed' : null,
     filter: config.sidebarFilter.trim() ? config.sidebarFilter.trim() : null,
   };
 }

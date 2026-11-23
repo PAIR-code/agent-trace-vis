@@ -52,7 +52,7 @@ export const COLORS = {
   USER_BG: '#ffffff',       // User bubble background
   USER_BORDER: '#9ca3af',   // User bubble border
   
-  AGENT: '#d97706',         // Fallback Agent / Warm Orange
+  AGENT: '#e9a944',         // Fallback Agent / Muted Mustard
   
   
   // Viewer-specific conversation bubble colors
@@ -88,26 +88,26 @@ export const SPEAKER_STYLES: { [key: string]: SpeakerStyle } = {
 
 // Standard Agent Palette: Map known agent names to distinct theme colors
 const AGENT_COLORS: Record<string, string> = {
-  'jetski': '#d97706',          // Warm Orange
-  'swe-agent': '#10b981',       // Emerald Green
-  'developer agent': '#6366f1', // Indigo
-  'agent': '#d97706',           // Default Agent color
+  'jetski': '#e9a944',          // Muted Mustard
+  'swe-agent': '#5fa592',       // Sage
+  'developer agent': '#6a85c2', // Slate Blue
+  'agent': '#e9a944',           // Default Agent color
 };
 
-// Maximally-distinct curated categorical palette
+// Muted, earthy categorical palette (the first four are the core colors)
 const DISTINCT_PALETTE = [
-  '#0284c7', // Ocean Blue
-  '#059669', // Emerald Green
-  '#d97706', // Warm Amber / Orange
-  '#4f46e5', // Indigo
-  '#e11d48', // Crimson Rose
-  '#7c3aed', // Violet / Purple
-  '#0891b2', // Cyan
-  '#ea580c', // Bright Orange
-  '#16a34a', // Leaf Green
-  '#db2777', // Pink
-  '#ca8a04', // Gold
-  '#475569', // Slate
+  '#5fa592', // Sage
+  '#e9a944', // Muted Mustard
+  '#6a85c2', // Slate Blue
+  '#e06a43', // Terracotta / Coral
+  '#a86fb5', // Dusty Plum
+  '#9aa83f', // Olive
+  '#3a9bab', // Teal
+  '#db7489', // Dusty Rose
+  '#c98945', // Caramel
+  '#6db35a', // Moss Green
+  '#4e66b0', // Indigo Slate
+  '#b8553f', // Brick
 ];
 
 export function getAgentColor(agentName?: string | null, model?: string | null): string {
@@ -118,22 +118,22 @@ export function getAgentColor(agentName?: string | null, model?: string | null):
   if (cleanModel) {
     const lowerModel = cleanModel.toLowerCase();
     if (lowerModel.includes('gemini') || lowerModel.includes('google')) {
-      return '#4f46e5'; // Indigo
+      return '#6a85c2'; // Slate Blue
     }
     if (lowerModel.includes('claude') || lowerModel.includes('anthropic') || lowerModel.includes('sonnet') || lowerModel.includes('opus') || lowerModel.includes('haiku')) {
-      return '#0284c7'; // Ocean Blue
+      return '#e9a944'; // Muted Mustard
     }
     if (lowerModel.includes('gpt') || lowerModel.includes('openai') || lowerModel.includes('cerebras')) {
-      return '#059669'; // Emerald Green
+      return '#5fa592'; // Sage
     }
     if (lowerModel.includes('llama') || lowerModel.includes('meta')) {
-      return '#2563eb'; // Royal Blue
+      return '#4e66b0'; // Indigo Slate
     }
     if (lowerModel.includes('mistral')) {
-      return '#0d9488'; // Teal
+      return '#3a9bab'; // Teal
     }
     if (lowerModel.includes('qwen')) {
-      return '#06b6d4'; // Cyan
+      return '#9aa83f'; // Olive
     }
   }
 
@@ -145,10 +145,8 @@ export function getAgentColor(agentName?: string | null, model?: string | null):
     }
   }
 
-  let key = cleanAgent;
-  if (cleanModel && cleanModel.toLowerCase() !== cleanAgent.toLowerCase()) {
-    key = `${cleanAgent} (${cleanModel})`;
-  }
+  // By name alone, so every step of the same agent gets one color whatever its model.
+  const key = cleanAgent;
 
   if (key.toLowerCase() === 'agent') {
     return COLORS.AGENT;
