@@ -32,6 +32,38 @@
 .row-trace-title:hover .row-trace-title-text { color: #0f172a; text-decoration: underline; text-decoration-color: #94a3b8; text-underline-offset: 2px; }
 
 /* Subagent rows: lighter title, placed at the branch point */
+/* A search found in the trace as a whole (no step to highlight): tint the title in its color. */
+.row-trace-title-text.trace-level-match {
+  background: color-mix(in srgb, var(--match-color) 22%, transparent);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+/* Search verdict dots at the title's right end (see trace-track.html). */
+.search-dots {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  align-self: center;
+  flex-shrink: 0;
+}
+.search-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 1.5px solid var(--dot-color);
+  cursor: pointer;
+}
+.search-dot.state-found { background: var(--dot-color); }
+.search-dot.state-notFound { background: #fff; }
+.search-dot.state-failed { border-color: #cbd5e1; background: #f1f5f9; }
+.search-dot.state-running { background: var(--dot-color); animation: search-dot-pulse 1.2s ease-in-out infinite; }
+.search-dot:hover { transform: scale(1.3); }
+.search-dots + .expand-toggle { margin-left: 4px; }
+@keyframes search-dot-pulse { 0%, 100% { opacity: 0.25; } 50% { opacity: 0.9; } }
+
 .row-trace-title.is-subagent .row-trace-title-text { font-weight: 600; color: #475569; }
 .subagent-tag { font-weight: 500; color: #94a3b8; margin-right: 2px; }
 
@@ -73,8 +105,7 @@
 
 /* Lane labels, right-aligned, on every row */
 .lane-label,
-.files-label,
-.annotation-lane-label {
+.files-label {
   font-size: 0.55rem;
   font-weight: 500;
   color: #64748b;
@@ -85,15 +116,13 @@
 
 .files-label { line-height: 1; }
 
-.lane-label,
-.annotation-lane-label {
+.lane-label {
   position: absolute;
   right: 8px;
   z-index: 20;
   transform: translateY(-50%);
   transition: opacity 0.3s ease;
 }
-.annotation-lane-label { top: 50%; }
 .lane-label.hidden { opacity: 0; }
 
 /* ── Upper unified chapter / event annotation bar ── */
@@ -105,7 +134,6 @@
   flex-shrink: 0;
   border-radius: 6px 6px 0 0;
   overflow: hidden;
-  background: #f8fafc;
   border-bottom: 1px solid #cbd5e1;
   transition: height 0.2s ease, filter 0.3s ease, opacity 0.3s ease;
 }
@@ -114,7 +142,6 @@
   position: relative;
   width: 100%;
   flex-shrink: 0;
-  background: #f8fafc;
 }
 
 .annotation-status {
@@ -167,10 +194,10 @@
 }
 
 .chapter-tick {
-  width: 1.5px;
-  height: 12px;
-  background: #94a3b8;
-  border-radius: 1px;
+  /* Full strip height, so it meets the bar's bottom border, in the same gray. */
+  align-self: stretch;
+  width: 1px;
+  background: #cbd5e1;
   flex-shrink: 0;
 }
 
@@ -251,7 +278,6 @@
   z-index: 10;
   cursor: pointer;
   pointer-events: auto;
-  opacity: 0.65;
   outline: none;
   user-select: none;
   -webkit-user-drag: none;
@@ -277,29 +303,52 @@
 }
 .vis-node.selected { outline: 3px solid #3b82f6; }
 
-/* Per type. --mark-fill / --mark-border carry the step's agent color (set inline). */
-.vis-node.user_input { background: var(--user-bg); border: 1.5px solid var(--user-border); border-radius: 2px; }
-.vis-node.response { background: var(--mark-fill); border-radius: 2px; }
-.vis-node.thinking { background: var(--mark-fill); border-radius: 0 0 3px 3px; z-index: 5; }
+/*
+ * Marks are opaque, so overlapping marks don't blend; their colors are muted
+ * toward the lane background instead. --mark-fill / --mark-border carry the
+ * step's agent color (set inline).
+ */
+.vis-node {
+  --fill: color-mix(in srgb, var(--mark-fill) 85%, #f8f7f3);
+  --outline: color-mix(in srgb, var(--mark-border) 85%, #f8f7f3);
+  --user-outline: color-mix(in srgb, var(--user-border) 60%, #f8f7f3);
+  --tool-outline: color-mix(in srgb, var(--tool-line) 60%, #f8f7f3);
+  --error-muted: color-mix(in srgb, var(--error) 60%, #f8f7f3);
+}
+/* Hovered or selected: full-strength colors. */
+.vis-node:hover, .vis-node.is-hovered, .vis-node.selected {
+  --fill: var(--mark-fill);
+  --outline: var(--mark-border);
+  --user-outline: var(--user-border);
+  --tool-outline: var(--tool-line);
+  --error-muted: var(--error);
+}
+
+/* Per type */
+.vis-node.user_input { background: var(--user-bg); border: 1.5px solid var(--user-outline); border-radius: 2px; }
+.vis-node.response { background: var(--fill); border-radius: 2px; }
+/* Thinking hangs off the line when collapsed; expanded, it's centered in its lane, so round every corner. */
+.vis-node.thinking { background: var(--fill); border-radius: 0 0 3px 3px; z-index: 5; }
+.row-main-track:not(.collapsed) .vis-node.thinking { border-radius: 3px; }
 /* Harness messages: a tool-style circle, outlined in the step's agent color */
-.vis-node.system { background: var(--user-bg); border: 1.5px solid var(--mark-border); border-radius: 50%; }
+.vis-node.system { background: var(--user-bg); border: 1.5px solid var(--outline); border-radius: 50%; }
 .vis-node.tool_call,
-.vis-node.tool_data { background: var(--user-bg); border: 1.5px solid var(--tool-line); border-radius: 50%; }
+.vis-node.tool_data { background: var(--user-bg); border: 1.5px solid var(--tool-outline); border-radius: 50%; }
 .vis-node.error { background: var(--error-light); border-radius: 50%; }
-.vis-node.is-failed { border-color: var(--error); background: var(--error-light); }
+.vis-node.is-failed { border-color: var(--error-muted); background: var(--error-light); }
 
 /* Icons */
-.vis-node.command { background: #6b7280; border: none; border-radius: 3px; }
-.vis-node.command.is-failed { background: var(--error); }
+.vis-node.command { background: color-mix(in srgb, #6b7280 60%, #f8fafc); border: none; border-radius: 3px; }
+.vis-node.command.is-failed { background: var(--error-muted); }
 /* A write to one of the agent's own plan / scratch files: a file edit bar, but white */
 .vis-node.artifact { background: #ffffff; border: 1px solid var(--tool-line); border-radius: 1.5px; }
 /*
  * Peer messages (team traces), in the agent's color: a filled diamond when
  * sent, an outlined circle when read / waited for. Lines between rows join them.
  */
-.vis-node.message-send { background: var(--mark-fill); border: none; border-radius: 1.5px; transform: rotate(45deg) scale(0.85); opacity: 0.9; }
-.vis-node.message-receive { background: #ffffff; border: 2px solid var(--mark-fill); border-radius: 50%; box-sizing: border-box; opacity: 0.9; }
-.vis-node.message-receive.is-failed { border-color: var(--error); }
+.vis-node.message-send { background: var(--fill); border: none; border-radius: 1.5px; transform: rotate(45deg) scale(0.85); }
+.vis-node.message-receive { background: #ffffff; border: 2px solid var(--fill); border-radius: 50%; box-sizing: border-box; }
+.vis-node.message-receive.is-failed { border-color: var(--error-muted); }
 .command-content {
   display: flex;
   justify-content: center;
@@ -313,9 +362,41 @@
   font-weight: bold;
   color: #ffffff;
 }
-.vis-node.search { background: transparent; border: none; }
-.vis-node.search svg { display: block; width: 100%; height: 100%; color: #000000; }
-.vis-node.search.is-failed svg { color: var(--error); }
+/* A simple command's name (ls, cat, head, ...): up to four letters in the 12px box. */
+.command-content.named {
+  padding: 0;
+  font-size: 5.5px;
+  letter-spacing: -0.3px;
+  overflow: hidden;
+}
+/* Line-drawn tool glyphs (search, web, link, folder, agent): no circle behind them. */
+.vis-node.search,
+.vis-node.web,
+.vis-node.link,
+.vis-node.folder,
+.vis-node.agent { background: transparent; border: none; }
+.vis-node.search svg,
+.vis-node.web svg,
+.vis-node.link svg,
+.vis-node.folder svg,
+.vis-node.agent svg { display: block; width: 100%; height: 100%; color: color-mix(in srgb, #000000 60%, #f8fafc); }
+.vis-node.is-failed svg { color: var(--error-muted); }
+
+/*
+ * Logo glyphs (GitHub mark, Python): always gray like the other tool glyphs
+ * (the Python logo's two halves in two grays so its shape still reads), red
+ * when the command failed.
+ */
+.vis-node.git,
+.vis-node.python { background: transparent; border: none; }
+.vis-node.git svg,
+.vis-node.python svg { display: block; width: 100%; height: 100%; }
+.vis-node .git-fill,
+.vis-node .py-blue { fill: color-mix(in srgb, #000000 60%, #f8fafc); }
+.vis-node .py-yellow { fill: color-mix(in srgb, #000000 38%, #f8fafc); }
+.vis-node.is-failed .git-fill,
+.vis-node.is-failed .py-blue { fill: var(--error-muted); }
+.vis-node.is-failed .py-yellow { fill: color-mix(in srgb, var(--error) 35%, #f8fafc); }
 
 /*
  * Search: matches keep their color and glow (box-shadow set inline);
@@ -331,6 +412,28 @@
 .vis-node.dimmed.is-failed svg { color: #6b7280; }
 
 /* ── Files lane ── */
+/* "Subagents inline": one packed lane of subagent bars (see trace-track.html). */
+.subagents-lane {
+  position: relative;
+  flex-shrink: 0;
+  background: #e1e6ec; /* cool gray between scratch files and files (channels.ts) */
+  pointer-events: auto; /* .row-lanes has pointer-events: none */
+  z-index: 10;
+}
+.subagents-label { top: 50%; }
+.subagents-svg { position: absolute; top: 0; left: 0; overflow: visible; }
+.subagent-bar { cursor: pointer; }
+.subagent-connector { fill: none; stroke-width: 0.8; opacity: 0.6; }
+.subagent-trunk { fill: none; stroke-width: 0.8; opacity: 0.6; pointer-events: none; }
+.subagent-bar.faded { opacity: 0.3; }
+.subagent-span { opacity: 0.85; transition: opacity 0.15s ease; }
+.subagent-end { fill: #334155; }
+.subagent-bar:hover .subagent-span,
+.subagent-bar.is-hovered .subagent-span { opacity: 1; stroke: #0f172a; stroke-width: 1; }
+.subagent-bar.selected .subagent-span { opacity: 1; stroke: #3b82f6; stroke-width: 1.5; }
+.subagent-bar:hover .subagent-connector,
+.subagent-bar.is-hovered .subagent-connector { opacity: 1; stroke-width: 1.2; }
+
 .files-lane {
   position: relative;
   flex-shrink: 0;
@@ -439,6 +542,14 @@
 }
 .file-marker.edit.plan { fill: #94a3b8; opacity: 0.6; }
 
+/* A delete: a solid dot where the file's line ends. */
+.file-marker.delete {
+  fill: #334155;
+  transition: cx 0.3s ease, r 0.15s ease, fill 0.15s ease;
+}
+.file-marker.delete.is-hovered,
+.file-marker.delete.selected { fill: #0f172a; opacity: 1; }
+
 .file-marker:hover,
 .file-marker.is-hovered,
 .file-marker.selected { stroke: #0f172a; opacity: 1; }
@@ -449,6 +560,9 @@
 .file-marker.edit.selected { fill: #0f172a; opacity: 1; }
 
 .file-marker.dimmed:not(.selected):not(.is-hovered) { opacity: .25; }
+/* Linked hover with an inline subagent's bar: its file events stand out, others fade. */
+.files-svg.subagent-focus .file-marker:not(.linked):not(.selected) { opacity: .2; }
+.files-svg.subagent-focus .file-marker.linked { opacity: 1; stroke: #0f172a; stroke-width: 1.5; }
 
 .file-search-halo {
   opacity: .5;

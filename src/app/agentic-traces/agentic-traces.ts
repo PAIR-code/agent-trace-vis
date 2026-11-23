@@ -52,10 +52,15 @@ import {
   serializeUrlUiConfig,
 } from "./url-config";
 import { WorkspaceService } from "../data/workspace.service";
-import { COLORS } from "./colors";
+import { COLORS, lightenColor } from "./colors";
+import { MetaField, analyzeFields, fieldColorScale, formatMetaValue, scalarMetadata } from "./metadata-fields";
+import { TraceSearchReport, traceSearchReports } from "./search-reports";
+import type { RowSearchReport } from "./trace-track";
 import { MultiSelectDropdownComponent, DropdownItem } from "../shared/multi-select-dropdown.component";
 import { AnalysisToolbarComponent } from "./analysis-toolbar.component";
 import { ConversationViewerComponent } from "../shared/conversation-viewer.component";
+import { PanelSplitterComponent } from "../shared/panel-splitter.component";
+import { ExportDialogComponent } from "./export-dialog.component";
 import { AxisMode, hasTimestamps, layoutTraces, TraceEntry, TraceLayout, TraceNodeType } from "./layout";
 import { Mark } from "./marks";
 import { groupThreadMessages } from "./thread-helper";
@@ -91,6 +96,8 @@ interface LegendEntry {
     MultiSelectDropdownComponent,
     AnalysisToolbarComponent,
     ConversationViewerComponent,
+    PanelSplitterComponent,
+    ExportDialogComponent,
     TraceTrackComponent,
     ScrubBarComponent,
     ExamplesSidebarComponent,
@@ -139,6 +146,105 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   effectiveAxisMode = computed<AxisMode>(() =>
     this.yAxisMode() === 'time' && !this.timeAvailable() ? 'sequence' : this.yAxisMode());
   stretch = signal<boolean>(false);
+  /** Tool marks show a glyph per kind of tool; off, every tool is a plain dot. */
+  toolIcons = signal(true);
+  /** Subagents as bars in their parent's packed subagents lane, instead of rows. */
+  subagentsInline = signal(false);
+  /** The top bar's "More settings" panel is open. */
+  settingsOpen = signal(false);
+  /** "Color by": a metadata field to color whole traces by, or '' for agent colors. */
+  colorBy = signal('');
+
+  private definedSelectedTraces = computed(() =>
+    this.selectedTraces().filter((t): t is TraceEntry => t !== undefined));
+
+  /**
+   * Marks as searches see them. With subagents inline, a row's subagents are
+   * part of its run, so each row is searched as one trace (its marks and its
+   * subagents', in time order) and gets one report covering all of them.
+   */
+  searchMarks = computed<Mark[]>(() => {
+    if (!this.subagentsInline()) return this.marks();
+    const time = (m: Mark) => (m.timestamp ? new Date(m.timestamp).getTime() : NaN);
+    return this.traceLayouts().flatMap(t => {
+      if (!t.subagents) return t.marks;
+      const all = [...t.marks, ...t.subagents.marks].map((m, i) => ({ m, i, t: time(m) }));
+      // Stable: by time where both have one, else in row order.
+      all.sort((a, b) => (isNaN(a.t) || isNaN(b.t) ? a.i - b.i : a.t - b.t || a.i - b.i));
+      return all.map(({ m }) => (m.traceId === t.id ? m : { ...m, traceId: t.id }));
+    });
+  });
+
+  /** Enabled semantic searches' reports, by trace id (see search-reports.ts). */
+  searchReportsByTrace = computed(() => {
+    const marks = this.searchMarks();
+    return traceSearchReports(this.layersService.layers(), marks, [...new Set(marks.map(m => m.traceId))]);
+  });
+
+  /** A row's search dots: its own report per search, counting inline subagents it was found in. */
+  rowSearchReports(t: TraceLayout): RowSearchReport[] {
+    const byTrace = this.searchReportsByTrace();
+    const own = byTrace.get(t.id) ?? [];
+    const subs = t.subagents?.bars.map(b => byTrace.get(b.id) ?? []) ?? [];
+    return own.map(r => {
+      const subagentsFound = subs.filter(list => list.some(x => x.layerId === r.layerId && x.state === 'found')).length;
+      return subagentsFound > 0 ? { ...r, subagentsFound, state: r.state === 'notFound' ? 'found' : r.state } : r;
+    });
+  }
+
+  /** The hovered search dot's report, shown in a floating card. */
+  searchPopover = signal<{ report: RowSearchReport; x: number; y: number } | null>(null);
+
+  /** Search the side panel's report section points at (highlighted), after a dot click. */
+  focusedReportLayer = signal<string | null>(null);
+
+  /** The active trace's reports, for the side panel. */
+  activeSearchReports = computed<TraceSearchReport[]>(() =>
+    this.searchReportsByTrace().get(this.activeTraceId() ?? '') ?? []);
+
+  /** A search dot was clicked: show that row's trace in the side panel, at its reports. */
+  openSearchReport(traceId: string, layerId: string): void {
+    this.selectedMark.set(null);
+    this.manualActiveTraceId.set(traceId);
+    this.focusedReportLayer.set(layerId);
+    this.panelCollapsed.set(false);
+    this.searchPopover.set(null);
+    setTimeout(() => document.getElementById(`search-report-${layerId}`)?.scrollIntoView?.({ block: 'nearest' }));
+  }
+
+  /** Selected traces that no other selected trace launched. */
+  private rootTraces = computed(() => {
+    const traces = this.definedSelectedTraces();
+    const ids = new Set(traces.map(t => t.id));
+    return traces.filter(t => !t.parentId || !ids.has(t.parentId));
+  });
+
+  /** Metadata fields of the selected traces worth coloring by. */
+  colorFields = computed<MetaField[]>(() =>
+    analyzeFields(this.rootTraces().map(t => scalarMetadata(t.data?.metadata))));
+
+  /** The active color-by field, if it's still offered. */
+  colorField = computed(() => this.colorFields().find(f => f.key === this.colorBy()));
+
+  /**
+   * Each selected trace's color under "Color by": its root trace's value, on
+   * the field's scale; subagents get a lighter shade of their run's color.
+   */
+  traceColors = computed<Map<string, string> | undefined>(() => {
+    const field = this.colorField();
+    if (!field) return undefined;
+    const scale = fieldColorScale(field);
+    const traces = this.definedSelectedTraces();
+    const byId = new Map(traces.map(t => [t.id, t]));
+    const colors = new Map<string, string>();
+    for (const t of traces) {
+      let root = t;
+      for (let i = 0; i < 20 && root.parentId && byId.has(root.parentId); i++) root = byId.get(root.parentId)!;
+      const color = scale(scalarMetadata(root.data?.metadata)?.[field.key]);
+      colors.set(t.id, root === t ? color : lightenColor(color, 0.35));
+    }
+    return colors;
+  });
   timeTicks = signal<{ label: string; x: number }[]>([]);
   showUserWait = signal<boolean>(false);
   isLegendCollapsed = signal<boolean>(false);
@@ -161,7 +267,8 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   /** One laid-out row per selected trace. */
   traceLayouts = signal<TraceLayout[]>([]);
   /** Every mark across all rows. */
-  marks = computed(() => this.traceLayouts().flatMap(t => t.marks));
+  /** Every mark, including inline subagents' (drawn as bars, but shown in the side panel and searched). */
+  marks = computed(() => this.traceLayouts().flatMap(t => t.subagents ? [...t.marks, ...t.subagents.marks] : t.marks));
   /** Re-layouts create new row objects; key by id so rows (and their marks) keep their DOM and animate. */
   trackByTraceId = (_: number, t: TraceLayout) => t.id;
 
@@ -170,16 +277,13 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   contentHeight = signal<number>(1000);
   contentWidth = signal<number>(500);
   sidebarWidth = signal<number>(420);
+  /** The trace conversation panel on the right is minimized (only its splitter shows). */
+  panelCollapsed = signal(false);
   containerWidth = signal<number>(typeof window !== 'undefined' ? Math.max(500, window.innerWidth - 450 - 50) : 1000);
 
   /** Re-lays out the rows when the timeline area changes width. */
   private resizeObserver = new ResizeObserver(([entry]) => this.onScrollAreaResize(entry.contentRect.width));
   private scrollArea?: HTMLElement;
-  private isResizingSidebar = false;
-  private resizeStartX = 0;
-  private resizeStartWidth = 0;
-  private mouseMoveListener?: (e: MouseEvent) => void;
-  private mouseUpListener?: (e: MouseEvent) => void;
 
   /** The scroll area comes and goes with the loading screen; observe whichever is current. */
   @ViewChild('visScrollArea', { static: false })
@@ -192,8 +296,9 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   }
 
   private onScrollAreaResize(contentWidth: number) {
-    // 32px slack: the last mark extends past its timestamp, so the full width would scroll horizontally.
-    const width = Math.floor(contentWidth - 32);
+    // 12px slack: with the scroll area's 8px right padding, room for the row drag
+    // handles (18px past each row) without scrolling horizontally.
+    const width = Math.floor(contentWidth - 12);
     if (width > 0 && Math.abs(width - this.containerWidth()) > 2) {
       this.containerWidth.set(Math.max(500, width));
       if (this.traces().length > 0) {
@@ -228,29 +333,28 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
 
   legendEntries = computed<LegendEntry[]>(() => {
     const traces = this.selectedTraces();
-    const modelEntries: LegendEntry[] = [];
-    const seenNames = new Set<string>();
+    const field = this.colorField();
+    const modelEntries: LegendEntry[] = field ? this.colorLegend(field) : [];
+    // One entry per agent name (agents of the same name share a color); its
+    // models, in first-seen order, go in the sub-label.
+    const modelsByName = new Map<string, string[]>();
 
-    for (const trace of traces) {
-      const agents = trace?.agents;
-      if (agents) {
-        for (const a of agents) {
-          const entryKey = a.model ? `${a.name} (${a.model})` : a.name;
-          if (!seenNames.has(entryKey)) {
-            seenNames.add(entryKey);
-            
-            let label = a.name;
-            let subLabel = a.model ? `(${a.model})` : undefined;
-
-            modelEntries.push({
-              label: label,
-              subLabel: subLabel,
-              color: a.color,
-              isAI: true,
-            });
-          }
+    for (const trace of field ? [] : traces) {
+      for (const a of trace?.agents ?? []) {
+        let models = modelsByName.get(a.name);
+        if (!models) {
+          models = [];
+          modelsByName.set(a.name, models);
+          modelEntries.push({ label: a.name, color: a.color, isAI: true });
         }
+        if (a.model && !models.includes(a.model)) models.push(a.model);
       }
+    }
+    for (const entry of modelEntries) {
+      const models = modelsByName.get(entry.label) ?? [];
+      if (models.length === 0) continue;
+      const shown = models.slice(0, 3).join(', ');
+      entry.subLabel = `(${shown}${models.length > 3 ? `, +${models.length - 3} more` : ''})`;
     }
 
     if (modelEntries.length === 0) {
@@ -278,6 +382,22 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     ];
   });
 
+  /** Legend entries for "Color by": each value present, or a numeric field's range. */
+  private colorLegend(field: MetaField): LegendEntry[] {
+    const scale = fieldColorScale(field);
+    if (field.kind === 'numeric') {
+      return [
+        { label: `${field.key}: ${formatMetaValue(field.min)}`, color: scale(field.min), isAI: true },
+        { label: `${field.key}: ${formatMetaValue(field.max)}`, color: scale(field.max), isAI: true },
+      ];
+    }
+    const present = new Set(this.rootTraces().map(t => scalarMetadata(t.data?.metadata)?.[field.key]));
+    const entries: LegendEntry[] = field.values.filter(v => present.has(v))
+      .map(v => ({ label: `${field.key}: ${formatMetaValue(v)}`, color: scale(v), isAI: true }));
+    if (present.has(undefined)) entries.push({ label: `${field.key}: (none)`, color: scale(undefined), isAI: true });
+    return entries;
+  }
+
   /** Trace shown in the side panel: the selected mark's, else the clicked row (if still shown), else the first. */
   activeTraceId = computed(() => {
     const selectedMark = this.selectedMark();
@@ -291,6 +411,12 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
       return manual;
     }
     return ids.values().next().value;
+  });
+
+  /** The row showing the active trace: its own, or the row an inline subagent is drawn in. */
+  activeRowId = computed(() => {
+    const id = this.activeTraceId();
+    return this.traceLayouts().find(t => t.subagents?.bars.some(b => b.id === id))?.id ?? id;
   });
 
   activeTraceStepsCount = computed(() => {
@@ -337,6 +463,9 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
         axis: this.yAxisMode(),
         wait: this.showUserWait(),
         fill: this.stretch(),
+        toolIcons: this.toolIcons(),
+        subagentsInline: this.subagentsInline(),
+        colorBy: this.colorBy() || null,
         tokens: [...this.selectedTokenTypes()],
         expandAll: this.traceLayouts().length === 0 ? this.initialExpandAll() : this.anyExpanded(),
         presets,
@@ -346,6 +475,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
         markId: this.selectedMark()?.id ?? null,
         legendCollapsed: this.isLegendCollapsed(),
         sidebarCollapsed: this.workspace.sidebarCollapsed(),
+        panelCollapsed: this.panelCollapsed(),
         sidebarFilter: this.workspace.sidebarFilter(),
       });
     });
@@ -413,10 +543,14 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     this.yAxisMode.set(uiConfig.axis);
     this.showUserWait.set(uiConfig.wait);
     this.stretch.set(uiConfig.fill);
+    this.toolIcons.set(uiConfig.toolIcons);
+    this.subagentsInline.set(uiConfig.subagentsInline);
+    this.colorBy.set(uiConfig.colorBy ?? '');
     this.selectedTokenTypes.set(new Set(uiConfig.tokens));
     this.initialExpandAll.set(uiConfig.expandAll);
     this.isLegendCollapsed.set(uiConfig.legendCollapsed);
     this.workspace.sidebarCollapsed.set(uiConfig.sidebarCollapsed);
+    this.panelCollapsed.set(uiConfig.panelCollapsed);
     this.workspace.sidebarFilter.set(uiConfig.sidebarFilter);
     this.layersService.applyUrlLayers(
       uiConfig.presets,
@@ -508,55 +642,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     this.pendingMarkId = resolved.nextPendingMarkId;
   }
 
-  onSidebarResizeStart(event: MouseEvent) {
-    event.preventDefault();
-    event.stopPropagation();
-    this.isResizingSidebar = true;
-    this.resizeStartX = event.clientX;
-    this.resizeStartWidth = this.sidebarWidth();
-
-    document.body.style.userSelect = 'none';
-    document.body.style.cursor = 'col-resize';
-
-    this.mouseMoveListener = (e: MouseEvent) => {
-      if (!this.isResizingSidebar) return;
-      const deltaX = e.clientX - this.resizeStartX;
-      const minWidth = 260;
-      const maxWidth = Math.max(minWidth, Math.min(window.innerWidth - 300, 1200));
-      const newWidth = Math.max(minWidth, Math.min(maxWidth, this.resizeStartWidth - deltaX));
-      this.sidebarWidth.set(newWidth);
-    };
-
-    this.mouseUpListener = () => {
-      this.isResizingSidebar = false;
-      document.body.style.userSelect = '';
-      document.body.style.cursor = '';
-      if (this.mouseMoveListener) {
-        window.removeEventListener('mousemove', this.mouseMoveListener);
-        this.mouseMoveListener = undefined;
-      }
-      if (this.mouseUpListener) {
-        window.removeEventListener('mouseup', this.mouseUpListener);
-        this.mouseUpListener = undefined;
-      }
-    };
-
-    window.addEventListener('mousemove', this.mouseMoveListener);
-    window.addEventListener('mouseup', this.mouseUpListener);
-  }
-
   ngOnDestroy() {
-    if (this.mouseMoveListener) {
-      window.removeEventListener('mousemove', this.mouseMoveListener);
-      this.mouseMoveListener = undefined;
-    }
-    if (this.mouseUpListener) {
-      window.removeEventListener('mouseup', this.mouseUpListener);
-      this.mouseUpListener = undefined;
-    }
-    document.body.style.userSelect = '';
-    document.body.style.cursor = '';
-
     this.resizeObserver.disconnect();
     const w = window as DevWindow;
     if (w.clearCache === this.clearCacheFn) {
@@ -738,10 +824,12 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
       selectedTokenTypes: this.selectedTokenTypes(),
       containerWidth: this.containerWidth(),
       stretch: this.stretch(),
+      subagentsInline: this.subagentsInline(),
+      traceColors: this.traceColors(),
     });
 
     this.traceLayouts.set(layout.traces);
-    this.layersService.reRunAllEnabledLayers(this.marks(), false);
+    this.layersService.reRunAllEnabledLayers(this.searchMarks(), false);
     this.chaptersService.annotateTraces(layout.traces, this.layersService.apiKey());
     this.contentWidth.set(layout.contentWidth);
     this.contentHeight.set(layout.contentHeight);

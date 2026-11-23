@@ -24,7 +24,7 @@
  */
 
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AddMenuGroup, AddMenuItem, DEMO_TRACES_LABEL, buildAddMenu } from './add-menu';
 import { LocalFilesSource } from './local-files-source';
@@ -33,16 +33,38 @@ import { parseIndices } from './dataset-refs';
 import { LoadedDataset, WorkspaceService } from './workspace.service';
 import { DatasetCounter, datasetCounter } from './dataset-counter';
 import { isRowToggleKey } from './row-selection';
+import { PanelSplitterComponent } from '../shared/panel-splitter.component';
+import { MAX_CATEGORIES, MetaField, MetaValue, analyzeFields, compareMetaValues, formatMetaValue } from '../agentic-traces/metadata-fields';
+
+/** Group-by option for the examples' titles (their task text), alongside metadata fields. */
+const TITLE_FIELD = '__title__';
+
+/** A dataset's listed examples, split into top-level ones and the subagents listed under them. */
+interface ListedExamples {
+  top: ExampleSummary[];
+  /** Example indices of each top-level example's listed subagents (any depth). */
+  children: Map<number, number[]>;
+  /** Categorical metadata fields of the top-level examples. */
+  fields: MetaField[];
+}
+
+export interface ExampleGroup {
+  /** `<datasetKey>|<value>`, for open/closed state. */
+  id: string;
+  label: string;
+  examples: ExampleSummary[];
+  selected: number;
+}
 
 @Component({
   selector: 'app-examples-sidebar',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, PanelSplitterComponent],
   templateUrl: './examples-sidebar.component.html',
   styleUrls: ['./examples-sidebar.component.css'],
   host: { '(document:keydown.escape)': 'closeDemoPicker()' },
 })
-export class ExamplesSidebarComponent implements OnDestroy {
+export class ExamplesSidebarComponent {
   readonly workspace = inject(WorkspaceService);
   private readonly localFiles = inject(LocalFilesSource, { optional: true });
 
@@ -65,18 +87,11 @@ export class ExamplesSidebarComponent implements OnDestroy {
   readonly renaming = signal<string | null>(null);
   renameDraft = '';
   readonly dragOver = signal(false);
+  /** The open "Add dataset" menu; it sits below the datasets, so it's scrolled into view. */
+  private readonly addMenu = viewChild<ElementRef<HTMLElement>>('addMenu');
 
   readonly actions = computed(() =>
     this.workspace.sources.flatMap(s => (s.actions ?? []).map(action => ({ source: s, action }))));
-
-  private resizeStartX = 0;
-  private resizeStartWidth = 0;
-  private onMove?: (e: MouseEvent) => void;
-  private onUp?: () => void;
-
-  ngOnDestroy(): void {
-    this.stopResize();
-  }
 
   // --- Add dataset menu -----------------------------------------------------
 
@@ -87,11 +102,19 @@ export class ExamplesSidebarComponent implements OnDestroy {
     }
     this.menuOpen.set(true);
     this.menuLoading.set(true);
+    this.scrollMenuIntoView();
     const loaded = new Set(this.workspace.datasets().map(d => d.key));
     const menu = buildAddMenu(await this.workspace.availableDatasets(), loaded);
     this.menuGroups.set(menu.groups);
     this.demos.set(menu.demos);
     this.menuLoading.set(false);
+    this.scrollMenuIntoView();
+  }
+
+  /** After the next render, so the menu's final size is known. */
+  private scrollMenuIntoView(): void {
+    // `scrollIntoView` is missing from server-side DOMs (tests).
+    setTimeout(() => this.addMenu()?.nativeElement.scrollIntoView?.({ block: 'nearest' }));
   }
 
   openDemoPicker(): void {
@@ -151,6 +174,117 @@ export class ExamplesSidebarComponent implements OnDestroy {
     }
   }
 
+  // --- Subagents and grouping ----------------------------------------------------
+
+  /** Group-by field per dataset key; absent means no grouping. */
+  readonly groupBy = signal<Record<string, string>>({});
+  /** Open groups, by ExampleGroup id; groups start closed. */
+  readonly openGroups = signal<Set<string>>(new Set());
+  private readonly listedCache = new WeakMap<ExampleSummary[], ListedExamples>();
+
+  /**
+   * Splits the listed examples: subagents whose launching trace is listed
+   * aren't shown (selecting the parent selects them), only counted.
+   */
+  listed(ds: LoadedDataset): ListedExamples {
+    const cached = this.listedCache.get(ds.examples);
+    if (cached) return cached;
+    const byId = new Map<string, ExampleSummary>();
+    for (const ex of ds.examples) if (ex.id) byId.set(ex.id, ex);
+    const rootOf = (ex: ExampleSummary): ExampleSummary => {
+      let cur = ex;
+      for (let i = 0; i < 20 && cur.parentId && byId.has(cur.parentId); i++) cur = byId.get(cur.parentId)!;
+      return cur;
+    };
+    const top: ExampleSummary[] = [];
+    const children = new Map<number, number[]>();
+    for (const ex of ds.examples) {
+      const root = rootOf(ex);
+      if (root === ex) top.push(ex);
+      else children.set(root.index, [...(children.get(root.index) ?? []), ex.index]);
+    }
+    const fields = analyzeFields(top.map(ex => ex.metadata)).filter(f => f.kind === 'categorical');
+    // The task text itself, when several examples share it (e.g. one prompt per condition).
+    const titles = new Set(top.map(ex => ex.title));
+    if (titles.size >= 2 && titles.size <= MAX_CATEGORIES) {
+      fields.unshift({ key: TITLE_FIELD, kind: 'categorical', values: [...titles].sort() });
+    }
+    const out = { top, children, fields };
+    this.listedCache.set(ds.examples, out);
+    return out;
+  }
+
+  subagentCount(ds: LoadedDataset, ex: ExampleSummary): number {
+    return this.listed(ds).children.get(ex.index)?.length ?? 0;
+  }
+
+  groupFields(ds: LoadedDataset): MetaField[] {
+    return this.listed(ds).fields;
+  }
+
+  fieldLabel(field: MetaField): string {
+    return field.key === TITLE_FIELD ? 'task (title)' : field.key;
+  }
+
+  groupField(ds: LoadedDataset): string {
+    return this.groupBy()[ds.key] ?? '';
+  }
+
+  setGroupField(ds: LoadedDataset, field: string): void {
+    this.groupBy.update(m => {
+      const next = { ...m };
+      if (field) next[ds.key] = field; else delete next[ds.key];
+      return next;
+    });
+    // Grouping needs every example's metadata (summaries only; no traces).
+    if (field) void this.workspace.loadAll(ds.key);
+  }
+
+  /** The filtered top-level examples, grouped by the dataset's group-by field (values in order, missing last). */
+  groups(ds: LoadedDataset): ExampleGroup[] {
+    const field = this.groupField(ds);
+    const byValue = new Map<MetaValue | undefined, ExampleSummary[]>();
+    for (const ex of this.filtered(ds)) {
+      const v = field === TITLE_FIELD ? ex.title : ex.metadata?.[field];
+      byValue.set(v, [...(byValue.get(v) ?? []), ex]);
+    }
+    const values = [...byValue.keys()].sort((a, b) =>
+      a === undefined ? 1 : b === undefined ? -1 : compareMetaValues(a, b));
+    const selected = new Set(ds.selected);
+    return values.map(v => {
+      const examples = byValue.get(v)!;
+      return {
+        id: `${ds.key}|${formatMetaValue(v)}`,
+        label: formatMetaValue(v),
+        examples,
+        selected: examples.filter(ex => selected.has(ex.index)).length,
+      };
+    });
+  }
+
+  isGroupOpen(group: ExampleGroup): boolean {
+    return !!this.filter().trim() || this.openGroups().has(group.id);
+  }
+
+  toggleGroup(group: ExampleGroup): void {
+    const next = new Set(this.openGroups());
+    if (!next.delete(group.id)) next.add(group.id);
+    this.openGroups.set(next);
+  }
+
+  /** Selects the group's examples (with their subagents), or deselects them if any are selected. */
+  async toggleGroupSelection(ds: LoadedDataset, group: ExampleGroup, event: MouseEvent): Promise<void> {
+    event.stopPropagation();
+    const { children } = this.listed(ds);
+    const indices = group.examples.flatMap(ex => [ex.index, ...(children.get(ex.index) ?? [])]);
+    if (group.selected > 0) {
+      const drop = new Set(indices);
+      await this.workspace.setSelected(ds.key, ds.selected.filter(i => !drop.has(i)));
+    } else {
+      await this.workspace.setSelected(ds.key, [...ds.selected, ...indices]);
+    }
+  }
+
   // --- Sections and examples --------------------------------------------------
 
   isCollapsed(key: string): boolean {
@@ -170,15 +304,22 @@ export class ExamplesSidebarComponent implements OnDestroy {
     this.workspace.removeDataset(ds.key);
   }
 
+  /** Deselects the dataset's examples if any are selected, else selects every listed one. */
+  async toggleSelectAll(ds: LoadedDataset, event: MouseEvent): Promise<void> {
+    event.stopPropagation();
+    await this.workspace.setSelected(ds.key, ds.selected.length > 0 ? [] : ds.examples.map(e => e.index));
+  }
+
   counter(ds: LoadedDataset): DatasetCounter {
     return datasetCounter(ds.selected.length, ds.examples.length, ds.totalCount, ds.hasMore,
       ds.loadingExamples || ds.loadingMore);
   }
 
   filtered(ds: LoadedDataset): ExampleSummary[] {
+    const top = this.listed(ds).top;
     const q = this.filter().trim().toLowerCase();
-    if (!q || ds.name.toLowerCase().includes(q)) return ds.examples;
-    return ds.examples.filter(ex =>
+    if (!q || ds.name.toLowerCase().includes(q)) return top;
+    return top.filter(ex =>
       `#${ex.index}`.includes(q) ||
       this.workspace.titleOf(ds.key, ex).toLowerCase().includes(q) ||
       (ex.id?.toLowerCase().includes(q) ?? false));
@@ -287,29 +428,5 @@ export class ExamplesSidebarComponent implements OnDestroy {
 
   trackByKey = (_: number, ds: LoadedDataset) => ds.key;
   trackByIndex = (_: number, ex: ExampleSummary) => ex.index;
-
-  // --- Resizing -----------------------------------------------------------------
-
-  startResize(event: MouseEvent): void {
-    event.preventDefault();
-    this.resizeStartX = event.clientX;
-    this.resizeStartWidth = this.width();
-    document.body.style.userSelect = 'none';
-    document.body.style.cursor = 'col-resize';
-    this.onMove = (e: MouseEvent) =>
-      this.width.set(Math.max(220, Math.min(560, this.resizeStartWidth + e.clientX - this.resizeStartX)));
-    this.onUp = () => this.stopResize();
-    window.addEventListener('mousemove', this.onMove);
-    window.addEventListener('mouseup', this.onUp);
-  }
-
-  private stopResize(): void {
-    // Nothing to undo unless a resize is in progress.
-    if (!this.onMove && !this.onUp) return;
-    if (this.onMove) window.removeEventListener('mousemove', this.onMove);
-    if (this.onUp) window.removeEventListener('mouseup', this.onUp);
-    this.onMove = this.onUp = undefined;
-    document.body.style.userSelect = '';
-    document.body.style.cursor = '';
-  }
+  trackByGroup = (_: number, g: ExampleGroup) => g.id;
 }

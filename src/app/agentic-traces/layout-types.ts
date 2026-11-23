@@ -23,7 +23,8 @@ import type { Mark } from './marks';
 import type { FileLane } from './file-lane';
 import type { TeamInfo } from './trace-extensions';
 
-export const BASE_OFFSET = 24;
+/** Left margin, in px, before the axis origin: room for a trace's first mark. */
+export const BASE_OFFSET = 8;
 
 export enum TraceNodeType {
   USER_INPUT = 'user_input',
@@ -168,6 +169,46 @@ export interface TraceLayout {
    * a team), which shares one axis and moves as one when rows are reordered.
    */
   groupId: string;
+  /**
+   * "Subagents inline": this row's subagents (at any depth), drawn as bars in
+   * one packed lane under its own lanes instead of as rows of their own.
+   */
+  subagents?: InlineSubagents;
+}
+
+/** One subagent in a parent's packed subagents lane. */
+export interface InlineSubagentBar {
+  /** The subagent's trace (entry) id. */
+  id: string;
+  title: string;
+  color: string;
+  /** Its span: first mark to the end of its last. */
+  x0: number;
+  x1: number;
+  /** Where it was launched (the launching call's x in the parent). */
+  launchX: number;
+  /** Sub-row in the lane: the first one free when it started. */
+  row: number;
+  /** Its first mark, selected when the bar is clicked. */
+  mark?: Mark;
+}
+
+export interface InlineSubagents {
+  bars: InlineSubagentBar[];
+  /** All the subagents' marks (not drawn in the row's lanes), for the side panel and search. */
+  marks: Mark[];
+  /** Sub-rows in the lane: the most subagents running at once (capped). */
+  rows: number;
+}
+
+/** Height of one sub-row in a packed subagents lane. */
+export const SUBAGENT_ROW_HEIGHT = 7;
+/** Most sub-rows a subagents lane grows to; more at once overlap in the last. */
+export const MAX_SUBAGENT_ROWS = 6;
+
+/** Height of a packed subagents lane with `rows` sub-rows. */
+export function subagentLaneHeight(rows: number): number {
+  return rows * SUBAGENT_ROW_HEIGHT + 8;
 }
 
 export interface LayoutOutput {
@@ -192,4 +233,8 @@ export interface LayoutParams {
   selectedTokenTypes?: Set<string>;
   containerWidth?: number;
   stretch?: boolean;
+  /** Draw subagents as bars in their parent's packed subagents lane, not as rows. */
+  subagentsInline?: boolean;
+  /** "Color by": each trace's color (by entry id), replacing its agents' colors. */
+  traceColors?: Map<string, string>;
 }

@@ -25,7 +25,10 @@ import { TraceRecord, Step, Agent } from './trace';
 import { traceExtensions } from './trace-extensions';
 import { classifyTool, inferToolKind } from './tools';
 import { getAgentColor, teamMemberColor } from './colors';
-import { hashString } from './layout-utils';
+import { estimateTokens, hashString, toolInputText } from './layout-utils';
+
+/** Unexported reasoning smaller than this isn't worth a mark (estimates are rough). */
+const HIDDEN_REASONING_MIN_TOKENS = 200;
 
 /**
  * Some harnesses prefix every tool result with
@@ -92,6 +95,18 @@ export class TraceLoaderService {
         // still draw the thinking mark so the effort is visible.
         const text = `(reasoning not shared by provider: ${reasoningTokens.toLocaleString()} tokens)`;
         nodes.push(createNode(`${stepId}_thinking`, TraceNodeType.THINKING, text, ReasoningStepType.PLANNER_RESPONSE, { reasoning_content: text, timestamp: step.timestamp, model }, thinkingTiming));
+      } else {
+        // No reasoning in the trace, but far more output tokens than the
+        // reply and tool calls account for: the model reasoned without
+        // exporting it. Draw that as a thinking mark so the spend is visible.
+        const out = step.token_usage?.output_tokens || 0;
+        const visible = estimateTokens(step.content ?? '') +
+          (step.tool_calls ?? []).reduce((sum, tc) => sum + estimateTokens(toolInputText(tc.input)), 0);
+        const hidden = out - visible;
+        if (hidden >= HIDDEN_REASONING_MIN_TOKENS && hidden > visible) {
+          const text = `(reasoning not in the trace: ~${hidden.toLocaleString()} of this step's ${out.toLocaleString()} output tokens aren't accounted for by its reply and tool calls)`;
+          nodes.push(createNode(`${stepId}_thinking`, TraceNodeType.THINKING, text, ReasoningStepType.PLANNER_RESPONSE, { reasoning_content: text, hiddenTokens: hidden, timestamp: step.timestamp, model }, thinkingTiming));
+        }
       }
 
       // 2. Tool Calls & Observations

@@ -26,8 +26,8 @@
  * Pure: positions come from the laid-out rows and their stacking.
  */
 
-import { channelCenter, ChannelId, collapsedY, COLLAPSED_TRACK, FILES_LANE, laneGeometry, usedChannels } from './channels';
-import type { TraceEntry, TraceLayout } from './layout-types';
+import { channelCenter, ChannelId, collapsedY, COLLAPSED_TRACK, expandedY, FILES_LANE, laneGeometry, usedChannels } from './channels';
+import { subagentLaneHeight, type TraceEntry, type TraceLayout } from './layout-types';
 import type { Mark } from './marks';
 import { asObject, stripQuotes } from './tools';
 
@@ -76,7 +76,8 @@ export function rowGeometry(rows: TraceLayout[], collapsed: Set<string>, filesEx
     out.set(r.id, { top: y, collapsed: false, centers: lanes.centers });
     const files = r.files.rows.length === 0 ? 0
       : filesExpanded.has(r.id) ? Math.max(FILES_LANE.height, r.files.totalHeight) : FILES_LANE.height;
-    y += lanes.height + files + ROW_GAP;
+    const subagents = r.subagents ? subagentLaneHeight(r.subagents.rows) : 0;
+    y += lanes.height + subagents + files + ROW_GAP;
   }
   return out;
 }
@@ -92,7 +93,7 @@ export function buildLinks(rows: TraceLayout[], geometry: Map<string, RowGeometr
   const markCenter = (mark: Mark, row: TraceLayout): Point => {
     const g = geometry.get(row.id)!;
     const y = g.collapsed ? collapsedY(mark)
-      : mark.y - channelCenter(mark.channel) + (g.centers.get(mark.channel) ?? channelCenter(mark.channel));
+      : expandedY(mark, g.centers.get(mark.channel) ?? channelCenter(mark.channel));
     return { x: mark.x + mark.width / 2, y: g.top + y + mark.height / 2 };
   };
 
