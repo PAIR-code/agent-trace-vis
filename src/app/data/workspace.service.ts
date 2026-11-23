@@ -31,6 +31,7 @@ import { TraceEntry } from '../agentic-traces/layout-types';
 import { hashString } from '../agentic-traces/layout-utils';
 import { TraceRecord } from '../agentic-traces/trace';
 import { TraceLoaderService } from '../agentic-traces/trace-loader.service';
+import { TELEMETRY_TRACKER } from '../shared/telemetry.service';
 import { DatasetRef, coalesceDatasetRefs, formatDatasetRef } from './dataset-refs';
 import { DatasetInfo, ExampleSummary, TRACE_SOURCES, TraceSource } from './trace-source';
 
@@ -62,6 +63,7 @@ export interface LoadedDataset {
 export class WorkspaceService {
   readonly sources: readonly TraceSource[] = inject(TRACE_SOURCES, { optional: true }) ?? [];
   private readonly traceLoader = inject(TraceLoaderService);
+  private readonly telemetry = inject(TELEMETRY_TRACKER, { optional: true });
 
   readonly datasets = signal<LoadedDataset[]>([]);
   /** Parsed traces of the selected examples, in dataset then selection order. */
@@ -186,10 +188,16 @@ export class WorkspaceService {
       try {
         const page = await source.listExamples(datasetId, 0, PAGE_SIZE);
         this.patch(key, { examples: page.examples, totalCount: page.totalCount, hasMore: page.hasMore, loadingExamples: false });
+        this.telemetry?.trackEvent('dataset_added', {
+          source_id: sourceId,
+          total_count: page.totalCount ?? page.examples.length,
+          has_initial_selection: select.length > 0,
+        });
         if (page.totalCount !== null && page.totalCount <= PREFETCH_LIMIT && page.totalCount > 0) {
           await this.fetch(key, page.examples.map(e => e.index));
         }
       } catch (err) {
+        this.telemetry?.trackEvent('dataset_error', { source_id: sourceId });
         this.patch(key, { loadingExamples: false, error: errorMessage(err) });
         return;
       }
@@ -226,6 +234,7 @@ export class WorkspaceService {
   removeDataset(key: string): void {
     const ds = this.dataset(key);
     if (!ds) return;
+    this.telemetry?.trackEvent('dataset_removed', { source_id: ds.sourceId });
     this.source(ds.sourceId)?.onRemove?.(ds.datasetId);
     for (const [entryKey, entry] of this.entries) {
       if (entryKey.startsWith(`${key}#`)) {
@@ -241,7 +250,12 @@ export class WorkspaceService {
   async toggle(key: string, index: number): Promise<void> {
     const ds = this.dataset(key);
     if (!ds) return;
-    if (ds.selected.includes(index)) {
+    const willSelect = !ds.selected.includes(index);
+    this.telemetry?.trackEvent('trace_toggled', {
+      source_id: ds.sourceId,
+      selected: willSelect,
+    });
+    if (!willSelect) {
       const group = new Set(this.groupIndices(key, index));
       await this.setSelected(key, ds.selected.filter(i => !group.has(i)));
     } else {
@@ -251,6 +265,8 @@ export class WorkspaceService {
 
   /** Selects just this example (and its group) across the whole workspace. */
   async selectOnly(key: string, index: number): Promise<void> {
+    const sourceId = this.dataset(key)?.sourceId ?? (key.split(':')[0] || 'unknown');
+    this.telemetry?.trackEvent('trace_selected_only', { source_id: sourceId });
     this.datasets.update(list => list.map(d => d.key === key ? d : { ...d, selected: [] }));
     await this.setSelected(key, [index], index);
   }

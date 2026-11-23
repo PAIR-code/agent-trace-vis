@@ -20,29 +20,30 @@
  * search query (text or AI) with its own results, color, and toggle state.
  */
 
-import { Injectable, signal, computed } from '@angular/core';
+import { Inject, Injectable, Optional, computed, signal } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { objectUrlFromSafeSource, setAnchorHref } from 'safevalues/dom';
 import {
-  SearchService,
-  SearchResult,
-  SEMANTIC_MODEL,
   SEMANTIC_GENERATION_CONFIG,
   SEMANTIC_MATCH_THRESHOLD,
-  SEMANTIC_TURN_FORMAT,
-  SEMANTIC_SEARCH_INSTRUCTION,
+  SEMANTIC_MODEL,
   SEMANTIC_PROMPT_TEMPLATE,
+  SEMANTIC_SEARCH_INSTRUCTION,
+  SEMANTIC_TURN_FORMAT,
+  SearchResult,
+  SearchService,
   fillTemplate,
 } from '../shared/search/search.service';
+import { TELEMETRY_TRACKER, type TelemetryTracker } from '../shared/telemetry.service';
 import {
+  ANALYSIS_PRESETS,
+  AnalysisConfigSearch,
+  AnalysisConfigV1,
   AnalysisLayer,
   AnalysisPreset,
-  AnalysisConfigV1,
-  AnalysisConfigSearch,
   PRESET_COLORS,
   USER_AI_COLORS,
   USER_TEXT_COLORS,
-  ANALYSIS_PRESETS,
 } from './analysis-layers.types';
 import { Mark } from './marks';
 import { CustomSearchSpec } from './url-config';
@@ -67,7 +68,10 @@ export class AnalysisLayersService {
 
   private subscriptions = new Map<string, Subscription>();
 
-  constructor(private searchService: SearchService) {
+  constructor(
+    private searchService: SearchService,
+    @Optional() @Inject(TELEMETRY_TRACKER) private telemetry?: TelemetryTracker | null,
+  ) {
     const savedKey = window.localStorage.getItem('reasoning_vis_api_key') || '';
     if (savedKey) this.apiKey.set(savedKey);
     this.initializePresets();
@@ -139,6 +143,11 @@ export class AnalysisLayersService {
       createdAt: Date.now(),
     };
     this.layers.update(layers => [layer, ...layers]);
+    this.telemetry?.trackEvent('search_layer_added', {
+      mode,
+      is_preset: isPreset,
+      ...(isPreset && name ? { preset_name: name } : {}),
+    });
     this.runSearch(id, marks);
   }
 
@@ -157,6 +166,7 @@ export class AnalysisLayersService {
   /** Toggle a layer's visibility on/off. */
   toggleLayer(id: string, marks: Mark[]): void {
     let shouldRunSearch = false;
+    let toggledLayer: AnalysisLayer | undefined;
     this.layers.update(layers =>
       layers.map(l => {
         if (l.id === id) {
@@ -164,11 +174,21 @@ export class AnalysisLayersService {
           if (nextEnabled) {
             shouldRunSearch = true;
           }
-          return { ...l, enabled: nextEnabled };
+          toggledLayer = { ...l, enabled: nextEnabled };
+          return toggledLayer;
         }
         return l;
       })
     );
+
+    if (toggledLayer) {
+      this.telemetry?.trackEvent('search_layer_toggled', {
+        mode: toggledLayer.mode,
+        is_preset: toggledLayer.isPreset,
+        enabled: toggledLayer.enabled,
+        ...(toggledLayer.isPreset ? { preset_name: toggledLayer.name } : {}),
+      });
+    }
 
     if (shouldRunSearch) {
       this.runSearch(id, marks);
@@ -323,6 +343,9 @@ export class AnalysisLayersService {
 
   /** Downloads {@link buildExportConfig} as `autoraters-YYYYMMDD-HHMM.json`. */
   downloadConfig(): void {
+    this.telemetry?.trackEvent('autoraters_exported', {
+      search_count: this.layers().length,
+    });
     const json = JSON.stringify(this.buildExportConfig(), null, 2);
     // application/octet-stream is the safevalues-approved MIME type for
     // blobs that are meant to be downloaded.

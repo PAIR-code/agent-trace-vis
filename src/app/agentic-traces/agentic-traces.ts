@@ -37,6 +37,7 @@ import { FormsModule } from "@angular/forms";
 import { ActivatedRoute } from "@angular/router";
 import { EXTRA_MANAGED_URL_PARAMS, UrlParamService } from "../shared/url-param.service";
 import { getParamFromMap, getParamValuesFromMap } from "../shared/url-params";
+import { TELEMETRY_TRACKER } from "../shared/telemetry.service";
 import { AnalysisLayersService } from "./analysis-layers.service";
 import { ANALYSIS_PRESETS } from "./analysis-layers.types";
 import { ExamplesSidebarComponent } from "../data/examples-sidebar.component";
@@ -102,6 +103,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   readonly workspace = inject(WorkspaceService);
   private readonly initialRefs = inject(INITIAL_DATASET_REFS, { optional: true });
   private readonly extraManagedParams = inject(EXTRA_MANAGED_URL_PARAMS, { optional: true }) ?? [];
+  private readonly telemetry = inject(TELEMETRY_TRACKER, { optional: true });
   /** True until the workspace has restored the URL and loaded the defaults. */
   private readonly initializing = signal(true);
   private readonly initialExpandAll = signal(true);
@@ -398,6 +400,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   ngOnInit() {
     const w = window as DevWindow;
     w.clearCache = w.clearcache = this.clearCacheFn;
+    this.telemetry?.trackPageView?.('/');
 
     void this.initWorkspace();
   }
@@ -696,6 +699,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   /** Sets the X-axis mode (time, tokens or steps). */
   setYAxisMode(mode: AxisMode) {
     this.yAxisMode.set(mode);
+    this.telemetry?.trackEvent('axis_mode_changed', { mode });
     this.processTraces();
   }
 
@@ -787,6 +791,9 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
       : new Set<string>();
     this.collapsedTraceIds.set(nextCollapsed);
     this.initialExpandAll.set(nextCollapsed.size === 0);
+    this.telemetry?.trackEvent('expand_all_toggled', {
+      expanded: nextCollapsed.size === 0,
+    });
   }
 
   /** Toggles collapse/minimize state of the legend overlay. */
@@ -812,6 +819,9 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   /** Selects a mark; the side panel scrolls to its message. */
   selectMark(mark: Mark) {
     this.selectedMark.set(mark);
+    this.telemetry?.trackEvent('mark_selected', {
+      step_type: String(mark.type),
+    });
 
     if (mark.type === TraceNodeType.THINKING) {
       // Briefly highlight that thinking chunk in the panel.
