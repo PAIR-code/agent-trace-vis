@@ -25,11 +25,11 @@
  */
 
 import { getAgentColor } from './colors';
-import { ChannelId, LANE_HEIGHT, channelCenter } from './channels';
+import { ChannelId, MAX_MARK_HEIGHT, channelCenter } from './channels';
 import { SLOT_EDIT_HEIGHT, linesToBarHeight } from './file-lane';
 import { AxisMode, BASE_OFFSET, NodeMessages, ReasoningStepType, ReasoningTraceNode, ReasoningTraceStep, TraceNodeType } from './layout-types';
-import { getStepTokens, stepAxisLength, stepTokenSegments, truncate, wordCount } from './layout-utils';
-import { fileAccess, isMessageTool, toolIcon } from './tools';
+import { getStepTokens, nodeOutputTokens, stepAxisLength, stepTokenSegments, truncate, wordCount } from './layout-utils';
+import { ToolIcon, commandGlyph, commandText, fileAccess, isMessageTool, toolIcon } from './tools';
 import { XAxis } from './x-scale';
 
 /** Styling hints for a mark; shape and base colors come from CSS keyed on `type`. */
@@ -40,7 +40,9 @@ export interface MarkLook {
    * line as a plain box. `message-send` / `message-receive`: a message to
    * other agents sent, or read / waited for, in the messages lane.
    */
-  icon?: 'command' | 'search' | 'artifact' | 'message-send' | 'message-receive';
+  icon?: ToolIcon | 'artifact' | 'message-send' | 'message-receive';
+  /** For a `command` icon: the program's name, drawn in place of `>_` (simple commands like `ls`). */
+  iconText?: string;
   /** Only set where the border follows the step's agent color (system marks). */
   borderColor?: string;
   /** A tool call whose observation reported an error. */
@@ -78,12 +80,13 @@ export interface Mark {
   stepType?: ReasoningStepType;
   /** Messages to or from other agents sent or received here; lines join them across rows (links.ts). */
   messages?: NodeMessages;
+  /** Its share of the step's output tokens (estimated unless `exact`); see nodeOutputTokens. */
+  outTokens?: { tokens: number; exact: boolean };
 }
 
 /** Vertical placement relative to the channel's center line. */
 export type Anchor =
   | 'above'   // sits just above the line
-  | 'below'   // sits just below the line
   | 'center'  // centered on the line
   | 'hang';   // top edge on the line, grows downward
 
@@ -125,9 +128,6 @@ const MARK_SPECS: Record<string, MarkSpec> = {
   [TraceNodeType.TOOL_DATA]:  { channel: 'tools', anchor: 'center', width: ICON,     height: ICON },
 };
 
-/** Directory listings sit below the tools line, clear of other tool results. */
-const LIST_DIR_SPEC: MarkSpec = { ...MARK_SPECS[TraceNodeType.TOOL_DATA], anchor: 'below' };
-
 /**
  * A file edit: a rectangle hanging down, sized by lines written. Hidden in the
  * main track; the files lane draws it with this mark's x and width.
@@ -150,22 +150,20 @@ const MESSAGE_SPEC: MarkSpec = { channel: 'artifacts', anchor: 'center', width: 
 function anchorY(anchor: Anchor, center: number, height: number): number {
   switch (anchor) {
     case 'above': return center - height - 1;
-    case 'below': return center + 1;
     case 'center': return center - height / 2;
     case 'hang': return center;
   }
 }
 
 /**
- * Tallest a mark can be on one side of its lane's center line (22px) and still
- * stay inside the lane, expanded or collapsed (every lane and the collapsed
- * track are LANE_HEIGHT tall with the line in the middle).
+ * Tallest a mark can be (22px): it fills an expanded lane, where it is
+ * centered, and half the collapsed track, where it sits on one side of the line.
  */
-export const MAX_HALF_LANE_MARK_HEIGHT = Math.floor(LANE_HEIGHT / 2) - 1;
+export const MAX_HALF_LANE_MARK_HEIGHT = MAX_MARK_HEIGHT;
 
 /** Keeps an anchored mark inside its lane: 'above' and 'hang' marks get half a lane. */
 export function clampToLane(anchor: Anchor, height: number): number {
-  return anchor === 'above' || anchor === 'hang' || anchor === 'below'
+  return anchor === 'above' || anchor === 'hang'
     ? Math.min(height, MAX_HALF_LANE_MARK_HEIGHT)
     : height;
 }
@@ -174,7 +172,7 @@ export function clampToLane(anchor: Anchor, height: number): number {
 const SPEECH_FIXED_HEIGHT = 18;
 function speechHeight(tokens: number, maxTokens: number, mode: AxisMode): number {
   if (mode !== 'time') return SPEECH_FIXED_HEIGHT;
-  return Math.round(Math.min(22, 10 + 12 * tokens / maxTokens));
+  return Math.round(Math.min(MAX_MARK_HEIGHT, 10 + 12 * tokens / maxTokens));
 }
 
 /** Shallowest thinking block, so even a short think stays visible below the line. */
@@ -213,11 +211,17 @@ function markLook(node: ReasoningTraceNode, stepColor: string): MarkLook {
     case TraceNodeType.SYSTEM:
       return { borderColor: stepColor };
   }
+  const failed = (node.type === TraceNodeType.TOOL_DATA && !!node.data?.observation?.error) || undefined;
+  if (node.stepType === ReasoningStepType.RUN_COMMAND) {
+    // Commands get a glyph for the program they run (git, python, ls, ...).
+    const { icon, text } = commandGlyph(commandText(node.data?.toolCall?.input ?? node.data?.input));
+    return { icon, ...(text ? { iconText: text } : {}), failed };
+  }
   return {
     icon: node.stepType === ReasoningStepType.SEND_MESSAGE ? 'message-send'
       : node.stepType === ReasoningStepType.RECEIVE_MESSAGE ? 'message-receive'
       : toolIcon(node.stepType),
-    failed: (node.type === TraceNodeType.TOOL_DATA && !!node.data?.observation?.error) || undefined,
+    failed,
   };
 }
 
@@ -240,6 +244,13 @@ export interface MarkTraceInput {
    * as edit bars rather than hidden in favor of the files lane.
    */
   artifactNodes?: Map<string, number>;
+  /**
+   * Tokens / sequence mode: axis length to leave after a step, for the
+   * subagents it launched (laid out there, one after another; see buildGroups).
+   */
+  axisGapsAfter?: Map<ReasoningTraceStep, number>;
+  /** "Color by": one color for the whole trace, in place of each step's agent color. */
+  colorOverride?: string;
 }
 
 /** Epoch ms of an ISO timestamp; NaN if missing. */
@@ -302,8 +313,8 @@ export function buildMarks(trace: MarkTraceInput, axis: XAxis, mode: AxisMode,
 
   trace.steps.forEach((step, i) => {
     const [start, end] = stepRange(trace.steps, i, mode, before, tokenTypes);
-    before = mode !== 'time' ? end : 0;
-    const stepColor = step.color || getAgentColor(step.agentName || trace.agentName, step.model || trace.model);
+    before = mode !== 'time' ? end + (trace.axisGapsAfter?.get(step) ?? 0) : 0;
+    const stepColor = trace.colorOverride ?? (step.color || getAgentColor(step.agentName || trace.agentName, step.model || trace.model));
     const stepX0 = axis.toX(start);
     const stepX1 = axis.toX(end);
 
@@ -326,11 +337,13 @@ export function buildMarks(trace: MarkTraceInput, axis: XAxis, mode: AxisMode,
     // Tokens mode: the step's length is shared out among its nodes by the
     // tokens each consumed, so reasoning and tool calls each get their own span.
     const segments = mode === 'tokens' ? stepTokenSegments(step, end - start) : null;
+    const outTokens = nodeOutputTokens(step);
 
     step.nodes.forEach((node, k) => {
       const base = {
         id: node.id, traceId: trace.id, label: truncate(node.text || '', 80), text: node.text,
         data: node.data, stepRef: step, timestamp: node.timestamp, stepType: node.stepType, messages: node.messages,
+        outTokens: outTokens?.get(node.id),
       };
       if (isRateLimitNode(node)) {
         marks.push({ ...base, type: TraceNodeType.ERROR, channel: 'agent', x: 0, y: 0, width: 0, height: 0,
@@ -346,7 +359,6 @@ export function buildMarks(trace: MarkTraceInput, axis: XAxis, mode: AxisMode,
       const spec = isArtifact ? ARTIFACT_SPEC
         : isTool && isMessageTool(node.stepType) ? MESSAGE_SPEC
         : fileAccess(node.stepType) === 'edit' ? EDIT_SPEC
-        : isTool && node.stepType === ReasoningStepType.LIST_DIRECTORY ? LIST_DIR_SPEC
         : MARK_SPECS[node.type] ?? MARK_SPECS[TraceNodeType.TOOL_DATA];
 
       // The node's extent on the axis, in px. `measured` = it reflects the

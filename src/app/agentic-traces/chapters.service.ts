@@ -60,6 +60,9 @@ interface GeminiResponse {
   }>;
 }
 
+/** Chapter requests running at once; the rest wait in a queue. */
+const MAX_CONCURRENT_REQUESTS = 4;
+
 const CACHE_PREFIX = 'agentic_traces_chapters_cache_v8_';
 const LEGACY_CACHE_PREFIX = 'agentic_traces_chapters_cache_';
 
@@ -74,8 +77,20 @@ export class ChaptersService {
   private memoryCache = new Map<string, TraceAnnotations>();
   private subscriptions = new Map<string, Subscription>();
 
+  /**
+   * Gemini requests waiting to start, in row order. Only a few run at once
+   * (MAX_CONCURRENT_REQUESTS): selecting hundreds of traces would otherwise
+   * fire hundreds of requests together, which time out and starve search.
+   */
+  private queue: Array<{ traceId: string; start: () => void }> = [];
+  private inFlight = 0;
+
   /** Trigger non-blocking background annotation for all currently laid-out traces. */
   annotateTraces(layouts: TraceLayout[], apiKey: string): void {
+    // Drop queued requests for traces no longer shown.
+    const shown = new Set(layouts.map(t => t.id));
+    for (const item of this.queue) if (!shown.has(item.traceId)) this.markLoading(item.traceId, false);
+    this.queue = this.queue.filter(item => shown.has(item.traceId));
     for (const trace of layouts) {
       if (this.annotations().has(trace.id) || this.loadingIds().has(trace.id)) {
         continue;
@@ -93,6 +108,8 @@ export class ChaptersService {
       sub.unsubscribe();
     }
     this.subscriptions.clear();
+    this.queue = [];
+    this.inFlight = 0;
     this.loadingIds.set(new Set());
     this.annotations.set(new Map());
     this.memoryCache.clear();
@@ -152,23 +169,38 @@ export class ChaptersService {
     this.markLoading(traceId, true);
     this.subscriptions.get(traceId)?.unsubscribe();
 
-    const sub = from(this.callGemini(prompt, apiKey)).subscribe({
-      next: responseText => {
-        const parsed = this.parseResponse(responseText, marks);
-        this.memoryCache.set(promptHash, parsed);
-        this.saveToCache(cacheKey, parsed);
-        this.setTraceAnnotation(traceId, parsed);
+    const start = () => {
+      this.inFlight++;
+      const done = () => {
         this.markLoading(traceId, false);
         this.subscriptions.delete(traceId);
-      },
-      error: err => {
-        console.warn(`[Chapters] Failed to annotate trace "${traceId}":`, err);
-        this.markLoading(traceId, false);
-        this.subscriptions.delete(traceId);
-      },
-    });
+        this.inFlight--;
+        this.pump();
+      };
+      const sub = from(this.callGemini(prompt, apiKey)).subscribe({
+        next: responseText => {
+          const parsed = this.parseResponse(responseText, marks);
+          this.memoryCache.set(promptHash, parsed);
+          this.saveToCache(cacheKey, parsed);
+          this.setTraceAnnotation(traceId, parsed);
+          done();
+        },
+        error: err => {
+          console.warn(`[Chapters] Failed to annotate trace "${traceId}":`, err);
+          done();
+        },
+      });
+      this.subscriptions.set(traceId, sub);
+    };
+    this.queue.push({ traceId, start });
+    this.pump();
+  }
 
-    this.subscriptions.set(traceId, sub);
+  /** Starts queued requests while fewer than MAX_CONCURRENT_REQUESTS are running. */
+  private pump(): void {
+    while (this.inFlight < MAX_CONCURRENT_REQUESTS && this.queue.length > 0) {
+      this.queue.shift()!.start();
+    }
   }
 
   private setTraceAnnotation(traceId: string, data: TraceAnnotations): void {
@@ -213,8 +245,10 @@ export class ChaptersService {
 
 CRITICAL REQUIREMENT — UNDERSTANDABLE WITHOUT READING THE TRACE:
 It MUST be possible for a reader to understand what happened in the trace at a high level by JUST looking at the sequence of summary chapters, without ever looking at the trace itself:
-- FIRST CHAPTER = INITIAL USER INSTRUCTION: The very first chapter MUST start at "${firstId}" (with "startNodeId": "${firstId}", "endNodeId": "${firstId}") and summarize the initial user instruction / task request in 2–4 words (e.g., "Goal: fix label overlap", "Ask: gender filter & bios", "Task: 5 Pokemon charts").
+- FIRST CHAPTER = INITIAL USER INSTRUCTION: The very first chapter MUST start at "${firstId}" (with "startNodeId": "${firstId}", "endNodeId": "${firstId}") and summarize THIS trace's initial user instruction / task request as a plain 2–4 word phrase describing what was asked for (no "Goal:", "Ask:" or "Task:" prefix).
 - Do NOT reference obscure code symbols, CSS selectors, variable names, file internals, or numbered options that require reading the trace to understand (e.g., write "Stop clipped chart bands" instead of "Cap label maxY"; write "Fix squished x-axis" instead of "Fix .container width"; write "Move labels below bands" instead of "Pick option 2").
+
+EXAMPLES ARE STYLE ONLY: Every quoted label in these instructions comes from an unrelated trace and only shows the style. Never copy their wording or topics; every label must describe what happens in THIS trace.
 
 Return a single chronological sequence of ${targetCount} non-overlapping "chapters" (unifying multi-turn phases and single-turn key events):
 - If an item is a single-turn event (like the initial user instruction or a specific course-correction/error), set "startNodeId" and "endNodeId" to that same node ID so it spans just that turn.

@@ -30,8 +30,14 @@ import { UrlParamService } from './shared/url-param.service';
   template: `
     <header>
       <h1 routerLink="/" style="cursor: pointer;">
-        Agentic Trace
+        Broomsticks
       </h1>
+      <a class="info-link" href="https://github.com/PAIR-code/agent-trace-vis" target="_blank" rel="noopener noreferrer"
+         title="About Broomsticks (GitHub)" aria-label="About Broomsticks on GitHub">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="11"></line><line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+      </a>
     </header>
 
     <main>
@@ -53,6 +59,17 @@ import { UrlParamService } from './shared/url-param.service';
       padding: 0 24px;
       font-size: 1.2rem;
       font-weight: 500;
+      color: #fff;
+    }
+
+    .info-link {
+      display: inline-flex;
+      align-items: center;
+      margin-left: -16px;
+      color: rgba(255, 255, 255, 0.7);
+      text-decoration: none;
+    }
+    .info-link:hover {
       color: #fff;
     }
 

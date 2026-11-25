@@ -25,7 +25,10 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SearchBarComponent } from '../shared/search/search-bar.component';
 import { AnalysisLayersService } from './analysis-layers.service';
-import { AnalysisLayer } from './analysis-layers.types';
+import { AnalysisLayer, PRESET_CATEGORIES } from './analysis-layers.types';
+
+/** Label of the chip group holding the user's own (non-preset) searches. */
+const YOUR_SEARCHES_LABEL = 'Your searches';
 import { Mark } from './marks';
 
 @Component({
@@ -101,6 +104,23 @@ export class AnalysisToolbarComponent implements AfterViewInit, AfterViewChecked
     return layer.id;
   }
 
+  /**
+   * The chips in labeled groups: the user's own searches first (where new ones
+   * are added), then each preset category. Empty groups are left out.
+   */
+  chipGroups(): Array<{ label: string; layers: AnalysisLayer[] }> {
+    const layers = this.layersService.layers();
+    const groups = [
+      { label: YOUR_SEARCHES_LABEL, layers: layers.filter(l => !l.category) },
+      ...PRESET_CATEGORIES.map(category => ({ label: category, layers: layers.filter(l => l.category === category) })),
+    ];
+    return groups.filter(g => g.layers.length > 0);
+  }
+
+  trackByGroupLabel(_: number, group: { label: string }): string {
+    return group.label;
+  }
+
   onSubmitSearch(): void {
     this.layersService.submitSearch(this.marks);
   }
@@ -129,7 +149,7 @@ export class AnalysisToolbarComponent implements AfterViewInit, AfterViewChecked
 
     const chip = event.currentTarget as HTMLElement;
     const rect = chip.getBoundingClientRect();
-    this.popoverX = Math.min(rect.left, window.innerWidth - 340);
+    this.popoverX = Math.min(rect.left, window.innerWidth - 380);
     this.popoverY = rect.bottom + 8;
   }
 
@@ -161,8 +181,30 @@ export class AnalysisToolbarComponent implements AfterViewInit, AfterViewChecked
     this.editingLayer = null;
   }
 
+  /** Saves any edits and reruns the layer's search (e.g. after picking another model). */
+  onRerun(): void {
+    if (!this.editingLayer) return;
+    const id = this.editingLayer.id;
+    // The Rerun button is hidden while the query is edited, so this only saves the name/color.
+    if (this.hasChanges) this.onSave();
+    this.layersService.updateLayer(id, { enabled: true });
+    this.layersService.rerunLayer(id, this.marks);
+    this.editingLayer = null;
+  }
+
   closePopover(): void {
     this.editingLayer = null;
+  }
+
+  /** Formats a search duration for the chip label, e.g. "850ms" or "4.2s". */
+  formatDuration(ms: number): string {
+    return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(1)}s`;
+  }
+
+  /** Chip tooltip: the layer's report(s), if any. */
+  chipTitle(layer: AnalysisLayer): string {
+    const reports = layer.reports.map(r => r.report).filter(r => r);
+    return reports.length > 0 ? reports.join('\n\n') : layer.query;
   }
 
 

@@ -37,6 +37,11 @@ import { DatasetInfo, ExampleSummary, TRACE_SOURCES, TraceSource } from './trace
 
 /** Examples fetched per page. */
 const PAGE_SIZE = 100;
+/** Examples fetched per page when listing a whole dataset (see loadAll). */
+const LOAD_ALL_PAGE_SIZE = 500;
+/** Traces fetched per request, and requests in flight at once (see fetch). */
+const FETCH_CHUNK_SIZE = 100;
+const FETCH_CONCURRENCY = 3;
 /** Datasets this small have all their traces fetched up front, so subagents and teams can be grouped. */
 const PREFETCH_LIMIT = 60;
 const RENAMES_KEY = 'agent_trace_vis_renames';
@@ -231,6 +236,35 @@ export class WorkspaceService {
     }
   }
 
+  /**
+   * Lists every remaining example (for grouping, which needs them all), in
+   * large pages. Only summaries: traces still load on selection.
+   */
+  async loadAll(key: string): Promise<void> {
+    for (let guard = 0; guard < 1000; guard++) {
+      const ds = this.dataset(key);
+      const source = ds && this.source(ds.sourceId);
+      if (!ds || !source || !ds.hasMore) return;
+      if (ds.loadingMore) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        continue;
+      }
+      this.patch(key, { loadingMore: true });
+      try {
+        const page = await source.listExamples(ds.datasetId, ds.examples.length, LOAD_ALL_PAGE_SIZE);
+        const current = this.dataset(key);
+        if (!current) return;
+        this.patch(key, {
+          examples: [...current.examples, ...page.examples],
+          totalCount: page.totalCount, hasMore: page.hasMore && page.examples.length > 0, loadingMore: false,
+        });
+      } catch (err) {
+        this.patch(key, { loadingMore: false, error: errorMessage(err) });
+        return;
+      }
+    }
+  }
+
   removeDataset(key: string): void {
     const ds = this.dataset(key);
     if (!ds) return;
@@ -284,11 +318,14 @@ export class WorkspaceService {
     const unique = [...new Set(indices)];
     this.patch(key, { selected: unique, error: undefined });
     await this.fetch(key, unique);
-    // Fetching may have revealed groups; select whole groups.
-    const ds = this.dataset(key);
-    if (!ds) return;
-    const expanded = [...new Set(ds.selected.flatMap(i => this.groupIndices(key, i)))];
-    if (expanded.length !== ds.selected.length) {
+    // Fetching may have revealed groups; select whole groups. Each round can
+    // reveal subagents of the subagents just fetched, so repeat (bounded).
+    for (let round = 0; round < 5; round++) {
+      const ds = this.dataset(key);
+      if (!ds) return;
+      const expanded = [...new Set(ds.selected.flatMap(i =>
+        [...this.groupIndices(key, i), ...this.launchedIndices(key, i)]))];
+      if (expanded.length === ds.selected.length) break;
       this.patch(key, { selected: expanded });
       await this.fetch(key, expanded);
     }
@@ -325,10 +362,17 @@ export class WorkspaceService {
     this.pendingFetches.update(n => n + 1);
     this.adjustFetching(key, 1);
     try {
-      const records = await source.loadTraces(ds.datasetId, missing);
-      missing.forEach((index, i) => {
-        if (records[i]) this.addEntry(key, index, records[i]);
-      });
+      // In chunks, a few at a time: sources cap indices per request, and big
+      // selections (a whole group, with subagents) can run to hundreds.
+      const chunks: number[][] = [];
+      for (let i = 0; i < missing.length; i += FETCH_CHUNK_SIZE) chunks.push(missing.slice(i, i + FETCH_CHUNK_SIZE));
+      for (let i = 0; i < chunks.length; i += FETCH_CONCURRENCY) {
+        const batch = chunks.slice(i, i + FETCH_CONCURRENCY);
+        const results = await Promise.all(batch.map(chunk => source.loadTraces(ds.datasetId, chunk)));
+        batch.forEach((chunk, c) => chunk.forEach((index, j) => {
+          if (results[c][j]) this.addEntry(key, index, results[c][j]);
+        }));
+      }
       linkGroups(this.datasetEntries(key));
     } catch (err) {
       this.patch(key, { error: errorMessage(err) });
@@ -364,6 +408,27 @@ export class WorkspaceService {
 
   private datasetEntries(key: string): TraceEntry[] {
     return [...this.entries.entries()].filter(([k]) => k.startsWith(`${key}#`)).map(([, e]) => e);
+  }
+
+  /**
+   * Example indices of the subagents a loaded trace launched: listed examples
+   * named in its `metadata.subagent_refs`, or whose `parentId` (their
+   * `metadata.parent_trace_id`) is its id. Unlike {@link groupIndices}, this finds children that
+   * aren't loaded yet (so selecting a trace can select its subagents).
+   */
+  private launchedIndices(key: string, index: number): number[] {
+    const examples = this.dataset(key)?.examples ?? [];
+    // Children named by the parent's `metadata.subagent_refs`...
+    const refs = this.entries.get(`${key}#${index}`)?.data?.metadata?.['subagent_refs'];
+    const childIds = new Set(refs && typeof refs === 'object'
+      ? Object.values(refs as Record<string, unknown>)
+          .flatMap(v => Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
+      : []);
+    // ...or naming it as their parent (`metadata.parent_trace_id`, listed as `parentId`).
+    const parentId = examples.find(e => e.index === index)?.id;
+    return examples
+      .filter(e => e.id !== undefined && (childIds.has(e.id) || (parentId !== undefined && e.parentId === parentId)))
+      .map(e => e.index);
   }
 
   /** The example indices in `index`'s group (itself, subagents, team), among loaded traces. */

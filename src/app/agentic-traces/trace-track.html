@@ -1,12 +1,24 @@
 <!-- Title row: clicking anywhere on it (text or chevron) expands / collapses the row -->
 <div class="row-trace-title" [class.is-subagent]="trace().depth > 0" [style.left.px]="trace().parent ? trace().parent!.x + 8 : 0"
      (click)="onToggleExpand($event)">
-  <span class="row-trace-title-text" [title]="trace().title">
+  <span class="row-trace-title-text" [title]="trace().title"
+        [class.trace-level-match]="!!traceLevelColor()" [style.--match-color]="traceLevelColor()">
     @if (trace().depth > 0) {
       <span class="subagent-tag">[subagent]</span>
     }
     {{ trace().title }}
   </span>
+  <!-- One dot per enabled semantic search: filled = found, hollow = not found, pulsing = running. Hover: report; click: open it in the side panel. -->
+  @if (searchReports().length > 0) {
+    <span class="search-dots">
+      @for (r of searchReports(); track r.layerId) {
+        <span class="search-dot" [class]="'search-dot state-' + r.state" [style.--dot-color]="r.color"
+              [attr.title]="searchDotTitle(r) || null"
+              (mouseenter)="onSearchDotEnter(r, $event)" (mouseleave)="searchDotHover.emit(null)"
+              (click)="onSearchDotClick(r, $event)"></span>
+      }
+    </span>
+  }
   <!-- Disclosure chevron at the row's right end, by the drag handle: ▾ expanded (lanes), ▸ collapsed (one line) -->
   <button class="expand-toggle" type="button" (click)="onToggleExpand($event)"
           [title]="expanded() ? 'Collapse to one line' : 'Expand into lanes'">
@@ -19,7 +31,6 @@
 <!-- Upper annotation bar: unified chapters and single-turn events. Stays visible when collapsed (Option D). -->
 <div class="annotation-bar" [style.width.px]="width()" [style.height.px]="annotationHeight" [class.layer-dimmed]="searching()">
   <div class="chapters-strip" [style.height.px]="chaptersStripHeight">
-    <span class="annotation-lane-label">chapters</span>
     @if (annotationsLoading() && placedChapters().length === 0) {
       <div class="annotation-status" [style.left.px]="traceStartX()">annotating...</div>
     } @else if (!hasApiKey() && placedChapters().length === 0) {
@@ -27,12 +38,15 @@
         Set Gemini API key to auto-annotate chapters
       </button>
     }
-    @for (ch of placedChapters(); track ch.id) {
+    @for (ch of placedChapters(); track ch.id; let first = $first) {
       <div class="chapter-segment"
            [style.left.px]="ch.x"
            [style.max-width.px]="ch.maxWidth"
            [attr.title]="ch.summary ? ch.label + ' — ' + ch.summary : ch.label">
-        <span class="chapter-tick"></span>
+        @if (!first) {
+          <!-- Divider between chapters (none before the first) -->
+          <span class="chapter-tick"></span>
+        }
         <span class="chapter-label">{{ ch.label }}</span>
       </div>
     }
@@ -75,7 +89,7 @@
   <div class="track-nodes-layer">
     @for (node of trace().marks; track node.id) {
       @if (!node.hidden) {
-        <div class="vis-node {{ node.type }} {{ node.look.icon ?? '' }}"
+        <div class="vis-node {{ node.type }} {{ iconOf(node) ?? '' }}"
              [class.matched]="glow().has(node.id)"
              [class.dimmed]="searching() && !glow().has(node.id)"
              [class.is-failed]="node.look.failed"
@@ -95,13 +109,57 @@
           @if (node.span) {
             <div class="duration-bar" [style.width.px]="node.span - node.width"></div>
           }
-          @if (node.look.icon === 'command') {
-            <div class="command-content">&gt;_</div>
-          } @else if (node.look.icon === 'search') {
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="11" cy="11" r="8"></circle>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-            </svg>
+          <!-- Tool glyphs (see toolIcon in tools.ts); hidden when tool icons are off. -->
+          @switch (iconOf(node)) {
+            @case ('command') {
+              <div class="command-content" [class.named]="!!node.look.iconText">{{ node.look.iconText ?? '>_' }}</div>
+            }
+            @case ('git') {
+              <!-- GitHub mark (Octocat) -->
+              <svg viewBox="0 0 16 16">
+                <path class="git-fill" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+              </svg>
+            }
+            @case ('python') {
+              <!-- Python logo -->
+              <svg viewBox="0 0 24 24">
+                <path class="py-blue" d="M11.9 2C7 2 7.3 4.1 7.3 4.1v2.2H12V7H5.4S2 6.6 2 11.9s3 5.1 3 5.1h1.8v-2.5s-.1-3 3-3h4.9s2.9 0 2.9-2.8V4.9S18 2 11.9 2z"></path>
+                <path class="py-yellow" d="M12.1 22c4.9 0 4.6-2.1 4.6-2.1v-2.2H12V17h6.6s3.4.4 3.4-4.9-3-5.1-3-5.1h-1.8v2.5s.1 3-3 3H9.3s-2.9 0-2.9 2.8v4.6S6 22 12.1 22z"></path>
+                <circle cx="9.4" cy="4.3" r="0.9" fill="#fff"></circle>
+                <circle cx="14.6" cy="19.7" r="0.9" fill="#fff"></circle>
+              </svg>
+            }
+            @case ('search') {
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="7"></circle>
+                <line x1="21" y1="21" x2="16" y2="16"></line>
+              </svg>
+            }
+            @case ('web') {
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9"></circle>
+                <path d="M3 12h18"></path>
+                <path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18"></path>
+              </svg>
+            }
+            @case ('link') {
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"></path>
+                <path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"></path>
+              </svg>
+            }
+            @case ('folder') {
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round">
+                <path d="M3 6.5a1.5 1.5 0 0 1 1.5-1.5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"></path>
+              </svg>
+            }
+            @case ('agent') {
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="6" cy="6" r="2.5"></circle>
+                <circle cx="18" cy="18" r="2.5"></circle>
+                <path d="M6 8.5v3a6 6 0 0 0 6 6h3.5"></path>
+              </svg>
+            }
           }
         </div>
       }
@@ -110,7 +168,7 @@
 
   <!-- Collapsed: file markers (dots per view, bars per edit) on the shared line, no labels or lifespan lines. Fades out when expanded. -->
   @if (trace().files.rows.length > 0) {
-    <svg class="files-svg collapsed-files" [class.hidden]="expanded()" [attr.width]="width()" [attr.height]="trackHeight()">
+    <svg class="files-svg collapsed-files" [class.hidden]="expanded()" [class.subagent-focus]="!!hoveredSubagent()" [attr.width]="width()" [attr.height]="trackHeight()">
       <g [attr.transform]="collapsedFilesTransform">
         @for (row of trace().files.rows; track row.filePath) {
           <g class="file-row" [class.active]="isRowActive(row)" [attr.opacity]="isRowDimmed(row) ? 0.3 : null">
@@ -126,10 +184,11 @@
               }
             }
             @for (view of row.views; track view.node.id) {
-              <circle class="file-marker view" cy="14" [attr.cx]="view.x"
+              <circle class="file-marker view" cy="14" [attr.cx]="view.x" [style.stroke]="view.color ?? null"
                       [attr.r]="selectedId() === view.node.id ? 5 : hoveredId() === view.node.id ? 4.5 : 3"
                       [class.search]="view.isSearch"
                       [class.is-hovered]="hoveredId() === view.node.id"
+                    [class.linked]="!!hoveredSubagent() && hoveredSubagent() === view.node.traceId"
                       [class.selected]="selectedId() === view.node.id"
                       [class.dimmed]="searching() && !searchColor(view.node.id)"
                       (click)="onSelect(view.node, $event)"
@@ -138,10 +197,11 @@
                       [attr.title]="view.label" />
             }
             @for (edit of row.edits; track edit.node.id) {
-              <rect class="file-marker edit" rx="1.5" y="14"
+              <rect class="file-marker edit" rx="1.5" y="14" [style.fill]="edit.color ?? null"
                     [attr.x]="edit.x" [attr.width]="edit.width" [attr.height]="edit.barHeight"
                     [class.plan]="row.isPlan"
                     [class.is-hovered]="hoveredId() === edit.node.id"
+                    [class.linked]="!!hoveredSubagent() && hoveredSubagent() === edit.node.traceId"
                     [class.selected]="selectedId() === edit.node.id"
                     [class.dimmed]="searching() && !searchColor(edit.node.id)"
                     (click)="onSelect(edit.node, $event)"
@@ -149,12 +209,61 @@
                     (mouseleave)="markHover.emit(null)"
                     [attr.title]="edit.label" />
             }
+            <!-- A delete: the row's line ends here at a solid dot -->
+            @for (del of row.deletes; track del.node.id) {
+              <circle class="file-marker delete" cy="14" [attr.cx]="del.x" [style.fill]="del.color ?? null"
+                      [attr.r]="selectedId() === del.node.id ? 5 : hoveredId() === del.node.id ? 4.5 : 3.5"
+                      [class.is-hovered]="hoveredId() === del.node.id"
+                    [class.linked]="!!hoveredSubagent() && hoveredSubagent() === del.node.traceId"
+                      [class.selected]="selectedId() === del.node.id"
+                      [class.dimmed]="searching() && !searchColor(del.node.id)"
+                      (click)="onSelect(del.node, $event)"
+                      (mouseenter)="markHover.emit(del.node.id)"
+                      (mouseleave)="markHover.emit(null)"
+                      [attr.title]="del.label" />
+            }
           </g>
         }
       </g>
     </svg>
   }
 </div>
+
+<!--
+  "Subagents inline": the row's subagents as bars in one packed lane (see
+  packSubagents in layout.ts), each joined to where it was launched and ending
+  in a dot. Click a bar to open the subagent in the side panel. Hidden when the
+  row is collapsed.
+-->
+@if (trace().subagents; as sub) {
+  @if (expanded()) {
+    <div class="subagents-lane" [style.width.px]="width()" [style.height.px]="subagentLaneHeight(sub.rows)">
+      <span class="lane-label subagents-label">subagents ({{ sub.bars.length }})</span>
+      <svg class="subagents-svg" [attr.width]="width()" [attr.height]="subagentLaneHeight(sub.rows)">
+        <!-- One trunk per launch point, down from the agent line; each bar joins it with a stub -->
+        @for (t of subagentTrunks(); track t.x) {
+          <path class="subagent-trunk" [attr.stroke]="t.color" [attr.d]="'M ' + t.x + ' ' + t.y1 + ' V ' + t.y2" />
+        }
+        @for (bar of sub.bars; track bar.id) {
+          <g class="subagent-bar" [class.is-hovered]="!!bar.mark && hoveredSubagent() === bar.mark.traceId"
+             [class.faded]="!!hoveredSubagent() && hoveredSubagent() !== bar.mark?.traceId"
+             [class.selected]="isSubagentSelected(bar)"
+             (click)="onSelect(bar.mark, $event)"
+             (mouseenter)="markHover.emit(bar.mark?.id ?? null)"
+             (mouseleave)="markHover.emit(null)">
+            <title>{{ bar.title }}</title>
+            <path class="subagent-connector" [attr.stroke]="bar.color"
+                  [attr.d]="'M ' + bar.launchX + ' ' + subagentRowCenter(bar.row) + ' H ' + bar.x0" />
+            <rect class="subagent-span" rx="2" [attr.fill]="bar.color"
+                  [attr.x]="bar.x0" [attr.y]="subagentRowCenter(bar.row) - subagentBarHeight / 2"
+                  [attr.width]="bar.x1 - bar.x0" [attr.height]="subagentBarHeight" />
+            <circle class="subagent-end" [attr.cx]="bar.x1" [attr.cy]="subagentRowCenter(bar.row)" r="1.8" />
+          </g>
+        }
+      </svg>
+    </div>
+  }
+}
 
 <!-- Files lane: one row per file (see file-lane.ts); with files collapsed, rows overlap in one lane. Shrinks to 0 when the row is collapsed. -->
 @if (trace().files.rows.length > 0) {
@@ -175,7 +284,7 @@
       </button>
     </div>
 
-    <svg class="files-svg" [attr.width]="width()"
+    <svg class="files-svg" [attr.width]="width()" [class.subagent-focus]="!!hoveredSubagent()"
          [attr.height]="filesExpanded() ? trace().files.totalHeight : filesLane.height">
       @for (row of trace().files.rows; track row.filePath; let r = $index) {
         <g class="file-row" [class.active]="isRowActive(row)"
@@ -197,16 +306,17 @@
           @for (edit of row.edits; track edit.node.id) {
             @if (searchColor(edit.node.id); as c) {
               <rect class="file-search-halo" rx="4" [attr.fill]="c"
-                    [attr.x]="edit.x - 4" y="10" [attr.width]="edit.width + 8" [attr.height]="edit.barHeight + 8" />
+                    [attr.x]="edit.x - 4" [attr.y]="10 - edit.barHeight / 2" [attr.width]="edit.width + 8" [attr.height]="edit.barHeight + 8" />
             }
           }
 
           <!-- A dot per view / search -->
           @for (view of row.views; track view.node.id) {
-            <circle class="file-marker view" cy="14" [attr.cx]="view.x"
+            <circle class="file-marker view" cy="14" [attr.cx]="view.x" [style.stroke]="view.color ?? null"
                     [attr.r]="selectedId() === view.node.id ? 5 : hoveredId() === view.node.id ? 4.5 : 3"
                     [class.search]="view.isSearch"
                     [class.is-hovered]="hoveredId() === view.node.id"
+                    [class.linked]="!!hoveredSubagent() && hoveredSubagent() === view.node.traceId"
                     [class.selected]="selectedId() === view.node.id"
                     [class.dimmed]="searching() && !searchColor(view.node.id)"
                     (click)="onSelect(view.node, $event)"
@@ -215,18 +325,32 @@
                     [attr.title]="view.label" />
           }
 
-          <!-- A downward bar per edit, taller for more lines written -->
+          <!-- A bar per edit, centered on the file line, taller for more lines written -->
           @for (edit of row.edits; track edit.node.id) {
-            <rect class="file-marker edit" rx="1.5" y="14"
+            <rect class="file-marker edit" rx="1.5" [attr.y]="14 - edit.barHeight / 2" [style.fill]="edit.color ?? null"
                   [attr.x]="edit.x" [attr.width]="edit.width" [attr.height]="edit.barHeight"
                   [class.plan]="row.isPlan"
                   [class.is-hovered]="hoveredId() === edit.node.id"
+                    [class.linked]="!!hoveredSubagent() && hoveredSubagent() === edit.node.traceId"
                   [class.selected]="selectedId() === edit.node.id"
                   [class.dimmed]="searching() && !searchColor(edit.node.id)"
                   (click)="onSelect(edit.node, $event)"
                   (mouseenter)="markHover.emit(edit.node.id)"
                   (mouseleave)="markHover.emit(null)"
                   [attr.title]="edit.label" />
+          }
+          <!-- A delete: the row's line ends here at a solid dot -->
+          @for (del of row.deletes; track del.node.id) {
+            <circle class="file-marker delete" cy="14" [attr.cx]="del.x" [style.fill]="del.color ?? null"
+                    [attr.r]="selectedId() === del.node.id ? 5 : hoveredId() === del.node.id ? 4.5 : 3.5"
+                    [class.is-hovered]="hoveredId() === del.node.id"
+                    [class.linked]="!!hoveredSubagent() && hoveredSubagent() === del.node.traceId"
+                    [class.selected]="selectedId() === del.node.id"
+                    [class.dimmed]="searching() && !searchColor(del.node.id)"
+                    (click)="onSelect(del.node, $event)"
+                    (mouseenter)="markHover.emit(del.node.id)"
+                    (mouseleave)="markHover.emit(null)"
+                    [attr.title]="del.label" />
           }
         </g>
       }

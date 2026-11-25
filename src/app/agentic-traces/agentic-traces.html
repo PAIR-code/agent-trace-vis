@@ -12,10 +12,12 @@
     </div>
   </div>
 
-  <!-- Show User Wait Checkbox -->
-  <div class="selector-group" *ngIf="effectiveAxisMode() === 'time'">
+  <!-- Show User Wait Checkbox: always shown so the bar doesn't shift; only applies on the time axis -->
+  <div class="selector-group" [style.opacity]="effectiveAxisMode() === 'time' ? null : 0.4"
+       [title]="effectiveAxisMode() === 'time' ? '' : 'Only applies to the Time axis'">
     <label class="selector-label" style="display: flex; align-items: center; gap: 4px; color: rgba(255,255,255,0.7); font-size: 0.7rem;">
-      <input type="checkbox" [ngModel]="showUserWait()" (ngModelChange)="showUserWait.set($event); processTraces()" style="margin: 0;">
+      <input type="checkbox" [ngModel]="showUserWait()" (ngModelChange)="showUserWait.set($event); processTraces()"
+             [disabled]="effectiveAxisMode() !== 'time'" style="margin: 0;">
       Show user wait
     </label>
   </div>
@@ -28,6 +30,36 @@
     </label>
   </div>
 
+  <!-- Color by: only when the selected traces have metadata worth coloring by -->
+  <div class="selector-group" *ngIf="colorFields().length > 0 || colorBy()">
+    <label class="selector-label" style="display: flex; align-items: center; gap: 4px; color: rgba(255,255,255,0.7); font-size: 0.7rem;"
+           title="Color each trace by a metadata field instead of by agent (errors stay red)">
+      Color by
+      <select class="color-by-select" [ngModel]="colorField()?.key ?? ''" (ngModelChange)="colorBy.set($event); processTraces()">
+        <option value="">Agent</option>
+        <option *ngFor="let f of colorFields()" [value]="f.key">{{ f.key }}</option>
+      </select>
+    </label>
+  </div>
+
+  <!-- Sort by: rows ordered by a metadata field or a total; when there is more than one row or metadata to sort by -->
+  <div class="selector-group" *ngIf="traceLayouts().length > 1 || colorFields().length > 0 || sortBy()">
+    <label class="selector-label" style="display: flex; align-items: center; gap: 4px; color: rgba(255,255,255,0.7); font-size: 0.7rem;"
+           title="Order rows by a metadata field or a total (subagents stay with their trace)">
+      Sort by
+      <select class="color-by-select" [ngModel]="sortBy()" (ngModelChange)="setSortBy($event)">
+        <option value="">Selection order</option>
+        <option *ngFor="let t of totalSorts" [value]="t.key">{{ t.label }}</option>
+        <option *ngFor="let f of colorFields()" [value]="f.key">{{ f.key }}</option>
+      </select>
+    </label>
+    <button class="timeline-btn sort-dir-btn" type="button" *ngIf="sortBy()"
+            (click)="sortDesc.set(!sortDesc()); processTraces()"
+            [title]="sortDesc() ? 'Largest first (click for smallest first)' : 'Smallest first (click for largest first)'">
+      {{ sortDesc() ? '↓' : '↑' }}
+    </button>
+  </div>
+
   <!-- Expand / collapse every row (rows also have their own toggle) -->
   <div class="selector-group">
     <button class="timeline-btn" type="button" (click)="toggleExpandAll()"
@@ -36,25 +68,66 @@
     </button>
   </div>
 
-  <!-- Token Options Dropdown -->
-  <div class="selector-group">
-    <label class="selector-label">Tokens</label>
-    <app-multi-select-dropdown
-      [items]="tokenMetricItems()"
-      [selectedIds]="selectedTokenTypes()"
-      [itemTypeName]="'token'"
-      [allowRename]="false"
-      [showSelectOnly]="true"
-      (selectionChange)="onTokenMetricSelectionChange($event)">
-    </app-multi-select-dropdown>
+  <!-- More settings: less-used display options and the AI search model -->
+  <div class="selector-group settings-group">
+    <button class="timeline-btn settings-btn" type="button" (click)="settingsOpen.set(!settingsOpen())"
+            [class.active]="settingsOpen()" title="More settings" aria-label="More settings">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+      </svg>
+    </button>
+    <ng-container *ngIf="settingsOpen()">
+      <div class="settings-backdrop" (click)="settingsOpen.set(false)"></div>
+      <div class="settings-panel" role="dialog" aria-label="More settings">
+        <!-- Subagents inline: subagents as bars in their parent's packed subagents lane instead of rows -->
+        <div class="selector-group">
+        <label class="selector-label" style="display: flex; align-items: center; gap: 4px; color: rgba(255,255,255,0.7); font-size: 0.7rem;"
+               title="Show each trace's subagents as bars in one lane of its row, instead of as rows of their own">
+          <input type="checkbox" [ngModel]="subagentsInline()" (ngModelChange)="subagentsInline.set($event); processTraces()" style="margin: 0;">
+          Subagents inline
+        </label>
+      </div>
+        <!-- Tool icons: a glyph per kind of tool (terminal, globe, ...) or plain dots -->
+      <div class="selector-group">
+        <label class="selector-label" style="display: flex; align-items: center; gap: 4px; color: rgba(255,255,255,0.7); font-size: 0.7rem;"
+               title="Show a glyph for each kind of tool (command, web search, URL, folder, subagent), or plain dots">
+          <input type="checkbox" [ngModel]="toolIcons()" (ngModelChange)="toolIcons.set($event)" style="margin: 0;">
+          Tool icons
+        </label>
+      </div>
+        <!-- Token Options Dropdown -->
+      <div class="selector-group">
+        <label class="selector-label">Tokens</label>
+        <app-multi-select-dropdown
+          [items]="tokenMetricItems()"
+          [selectedIds]="selectedTokenTypes()"
+          [itemTypeName]="'token'"
+          [allowRename]="false"
+          [showSelectOnly]="true"
+          (selectionChange)="onTokenMetricSelectionChange($event)">
+        </app-multi-select-dropdown>
+      </div>
+        <!-- Model for AI search -->
+        <div class="selector-group">
+          <label class="selector-label" style="display: flex; align-items: center; gap: 6px; color: rgba(255,255,255,0.7); font-size: 0.7rem;"
+                 title="Model used for AI searches">
+            AI search model
+            <select class="color-by-select" [ngModel]="layersService.model()" (ngModelChange)="layersService.setModel($event)"
+                    aria-label="Model for AI search">
+              <option *ngFor="let m of layersService.models" [value]="m">{{ m }}</option>
+            </select>
+          </label>
+        </div>
+      </div>
+    </ng-container>
   </div>
-
-
-
 </div>
 
 <!-- Analysis Toolbar (separate row below header) -->
-<app-analysis-toolbar [marks]="marks()"></app-analysis-toolbar>
+<app-analysis-toolbar [marks]="searchMarks()"></app-analysis-toolbar>
+<!-- Opened by the toolbar's download button; outside the toolbar so it overlays the whole page. -->
+<app-export-dialog [marks]="searchMarks()"></app-export-dialog>
 
 <div class="vis-page-container" (click)="onBackgroundClick($event)">
   <div class="main-layout">
@@ -117,10 +190,10 @@
            [style.height.px]="contentHeight()"
            [style.margin-left.px]="0">
         <!-- Time Axis -->
-        <div class="time-axis-horizontal" *ngIf="!stretch()">
+        <div class="time-axis-horizontal" *ngIf="timeTicks().length > 0">
           <div class="time-tick-h" *ngFor="let tick of timeTicks()" [style.left.px]="tick.x">
-            <div class="time-tick-line-h"></div>
             <span class="time-tick-label-h">{{ tick.label }}</span>
+            <div class="time-tick-line-h"></div>
           </div>
         </div>
 
@@ -144,7 +217,7 @@
           <div *ngFor="let t of traceLayouts(); let i = index; trackBy: trackByTraceId"
                class="trace-background-row"
                [class.is-dragging]="draggedTrackIndex() === i"
-               [class.is-active]="activeTraceId() === t.id"
+               [class.is-active]="activeRowId() === t.id"
                [class.is-subagent]="t.depth > 0"
                (pointerdown)="onRowPress($event, bar)"
                (pointermove)="onRowHover($event, bar)"
@@ -163,14 +236,18 @@
               [annotations]="chaptersService.annotations().get(t.id)"
               [annotationsLoading]="chaptersService.loadingIds().has(t.id)"
               [hasApiKey]="!!layersService.apiKey()"
+              [toolIcons]="toolIcons()"
               (markSelect)="selectMark($event)"
               (markHover)="hoveredMarkId.set($event)"
               (toggleFiles)="toggleTraceFiles(t.id)"
               (toggleExpand)="toggleTraceExpand(t.id)"
-              (requestApiKey)="promptForChaptersApiKey()">
+              (requestApiKey)="promptForChaptersApiKey()"
+              [searchReports]="rowSearchReports(t)"
+              (searchDotHover)="searchPopover.set($event)"
+              (searchDotClick)="openSearchReport(t.id, $event)">
             </app-trace-track>
             <app-scrub-bar #bar
-              [visible]="activeTraceId() === t.id"
+              [visible]="activeRowId() === t.id"
               [marks]="t.marks"
               [selectedId]="selectedMark()?.id ?? null"
               (scrub)="onScrub(t.id, $event)">
@@ -194,15 +271,13 @@
       </div>
     </div>
 
-    <!-- Resizer handle -->
-    <div class="sidebar-resizer"
-         (mousedown)="onSidebarResizeStart($event)"
-         title="Drag to resize sidebar">
-      <div class="resizer-handle-line"></div>
-    </div>
-
-    <!-- Right: Conversation Panel -->
-    <div class="panel-wrapper" [style.width.px]="sidebarWidth()" [style.flex]="'0 0 ' + sidebarWidth() + 'px'">
+    <!-- Right: Conversation Panel. Drag the splitter to resize; click it to minimize / reopen (same as the examples sidebar). -->
+    <app-panel-splitter side="right" [collapsed]="panelCollapsed()" [width]="sidebarWidth()"
+                        [minWidth]="260" [maxWidth]="1200"
+                        (collapsedChange)="panelCollapsed.set($event)"
+                        (widthChange)="sidebarWidth.set($event)"></app-panel-splitter>
+    <div class="panel-wrapper" *ngIf="!panelCollapsed()"
+         [style.width.px]="sidebarWidth()" [style.flex]="'0 0 ' + sidebarWidth() + 'px'">
       <app-conversation-viewer
         [messages]="threadMessages()"
         [showJumpButtons]="true"
@@ -221,8 +296,35 @@
         (messageHover)="hoveredMarkId.set($event)"
         (jumpToStart)="onJumpToStart()"
         (jumpToEnd)="onJumpToEnd()"
-        (overlayClick)="null">
+        (overlayClick)="null"
+        [topTemplate]="activeSearchReports().length > 0 ? searchReportsTpl : null">
       </app-conversation-viewer>
+
+      <!-- Side panel: the active trace's report from each enabled semantic search -->
+      <ng-template #searchReportsTpl>
+        <div class="search-reports">
+          <div class="search-reports-title">Search reports</div>
+          <div class="search-report-card" *ngFor="let r of activeSearchReports()"
+               [id]="'search-report-' + r.layerId"
+               [class.focused]="focusedReportLayer() === r.layerId"
+               [style.--report-color]="r.color">
+            <div class="search-report-head">
+              <span class="search-dot-inline" [class]="'search-dot-inline state-' + r.state"></span>
+              <span class="search-report-name">{{ r.name }}</span>
+              <span class="search-report-verdict">{{ r.state === 'found' ? (r.traceLevel ? 'Found (whole trace)' : 'Found') : r.state === 'notFound' ? 'Not found' : r.state === 'running' ? 'Searching…' : 'Failed' }}</span>
+            </div>
+            <div class="search-report-text" *ngIf="r.parts.length > 0">
+              <ng-container *ngFor="let p of r.parts">
+                <a *ngIf="p.nodeId; else plain" class="step-link" href="javascript:void(0)"
+                   (click)="selectMarkById(p.nodeId)" (mouseenter)="hoveredMarkId.set(p.nodeId)"
+                   (mouseleave)="hoveredMarkId.set(null)">{{ p.text }}</a>
+                <ng-template #plain>{{ p.text }}</ng-template>
+              </ng-container>
+            </div>
+          </div>
+          <div class="search-reports-title conversation-title">Conversation</div>
+        </div>
+      </ng-template>
     </div>
     </ng-container>
   </div>
@@ -243,3 +345,15 @@
   </div>
 </ng-template>
 
+<!-- Hovered search dot: that row's report for the search -->
+<div class="search-popover" *ngIf="searchPopover() as pop"
+     [style.left.px]="pop.x" [style.top.px]="pop.y + 4" [style.--report-color]="pop.report.color">
+  <div class="search-report-head">
+    <span class="search-dot-inline" [class]="'search-dot-inline state-' + pop.report.state"></span>
+    <span class="search-report-name">{{ pop.report.name }}</span>
+    <span class="search-report-verdict">{{ pop.report.state === 'found' ? (pop.report.traceLevel ? 'Found (whole trace)' : 'Found') : pop.report.state === 'notFound' ? 'Not found' : pop.report.state === 'running' ? 'Searching…' : 'Failed' }}</span>
+  </div>
+  <div class="search-report-text" *ngIf="pop.report.report">{{ pop.report.report }}</div>
+  <div class="search-report-sub" *ngIf="pop.report.subagentsFound">Also found in {{ pop.report.subagentsFound }} {{ pop.report.subagentsFound === 1 ? 'subagent' : 'subagents' }}.</div>
+  <div class="search-report-hint">Click to open in the side panel</div>
+</div>

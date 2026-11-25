@@ -171,27 +171,23 @@ function niceInterval(span: number, intervals: number[]): number {
 
 function formatTokens(tokens: number): string {
   if (tokens === 0) return '0';
-  if (tokens >= 1000000) return `+${(tokens / 1000000).toFixed(1).replace('.0', '')}M`;
-  if (tokens >= 1000) return `+${(tokens / 1000).toFixed(1).replace('.0', '')}k`;
-  return `+${tokens}`;
+  if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1).replace('.0', '')}M`;
+  if (tokens >= 1000) return `${(tokens / 1000).toFixed(1).replace('.0', '')}k`;
+  return `${tokens}`;
 }
 
-/**
- * Tick marks for the shared axis ruler. With hidden gaps, elapsed-time labels
- * would be misleading, so ticks are unlabeled and only show the interval spacing.
- */
+/** Labeled tick marks for the shared axis ruler (none on the sequence axis). */
 export function computeTicks(
   yAxisMode: AxisMode,
   span: number,
   scale: number,
-  gapsHidden: boolean,
 ): Array<{ label: string; x: number }> {
   if (yAxisMode === 'sequence') return [];
   const intervals = yAxisMode === 'time' ? TIME_INTERVALS : TOKEN_INTERVALS;
   const interval = niceInterval(span, intervals);
   const ticks: Array<{ label: string; x: number }> = [];
   for (let d = 0; d <= span; d += interval) {
-    const label = yAxisMode === 'tokens' ? formatTokens(d) : gapsHidden ? '' : formatElapsedTime(d);
+    const label = yAxisMode === 'tokens' ? formatTokens(d) : formatElapsedTime(d);
     ticks.push({ label, x: BASE_OFFSET + d * scale });
   }
   return ticks;
