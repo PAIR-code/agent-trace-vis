@@ -33,16 +33,22 @@ export interface Channel {
   background: string;
 }
 
-/** Default height of one lane. */
-export const LANE_HEIGHT = 140 / 3;
+/**
+ * Tallest a mark gets: a thinking block at full effort, or the longest speech
+ * bar. Expanded lanes center their marks, so a lane is exactly this tall.
+ */
+export const MAX_MARK_HEIGHT = 22;
+
+/** Height of one expanded lane. */
+export const LANE_HEIGHT = MAX_MARK_HEIGHT;
 
 /** Channels in top-to-bottom order. */
 export const CHANNELS: readonly Channel[] = [
-  { id: 'user', label: 'user / agent conversation', height: LANE_HEIGHT, background: '#f4f7f9' },
-  { id: 'agent', label: 'agent internal processes', height: LANE_HEIGHT, background: '#ebf0f4' },
-  { id: 'tools', label: 'tools', height: LANE_HEIGHT, background: '#dde3ea' },
+  { id: 'user', label: 'user / agent conversation', height: LANE_HEIGHT, background: '#f5f7f9' },
+  { id: 'agent', label: 'agent internal processes', height: LANE_HEIGHT, background: '#eff2f5' },
+  { id: 'tools', label: 'tools', height: LANE_HEIGHT, background: '#e9edf1' },
   // The agent's own plan / scratch files (see `isArtifact` in file-events.ts).
-  { id: 'artifacts', label: 'scratch files', height: LANE_HEIGHT, background: '#d6dde5' },
+  { id: 'artifacts', label: 'scratch files', height: LANE_HEIGHT, background: '#e4e9ee' },
 ];
 
 /**
@@ -50,7 +56,7 @@ export const CHANNELS: readonly Channel[] = [
  * file and expands to show them all (see file-lane.ts). Collapsed, it is one
  * lane tall.
  */
-export const FILES_LANE = { label: 'files', height: LANE_HEIGHT, background: '#cfd7e0' };
+export const FILES_LANE = { label: 'files', height: LANE_HEIGHT, background: '#dde3e9' };
 
 /** Total height of the channels in one trace track. */
 export const TRACK_HEIGHT = CHANNELS.reduce((sum, c) => sum + c.height, 0);
@@ -70,9 +76,11 @@ export function channelCenter(id: ChannelId): number {
 /**
  * The collapsed track: one lane with every channel (and the file markers)
  * stacked on a single center line. Marks keep their size and anchoring; only
- * the line they hang off changes (see `collapsedY`).
+ * the line they hang off changes (see `collapsedY`). Marks sit above or hang
+ * below that line, so it has room for the tallest mark on each side.
  */
-export const COLLAPSED_TRACK = { height: LANE_HEIGHT, center: LANE_HEIGHT / 2, background: '#ebf0f4' };
+const COLLAPSED_HEIGHT = 2 * (MAX_MARK_HEIGHT + 1);
+export const COLLAPSED_TRACK = { height: COLLAPSED_HEIGHT, center: COLLAPSED_HEIGHT / 2, background: '#eff2f5' };
 
 /**
  * A mark's y in the collapsed track. Mark y's are anchored to their channel's
@@ -81,6 +89,15 @@ export const COLLAPSED_TRACK = { height: LANE_HEIGHT, center: LANE_HEIGHT / 2, b
  */
 export function collapsedY(mark: { y: number; channel: ChannelId }): number {
   return mark.y - channelCenter(mark.channel) + COLLAPSED_TRACK.center;
+}
+
+/**
+ * A mark's y in an expanded lane centered on `laneCenter`. Each channel has its
+ * own lane there, so marks drop their anchoring (above / hang) and sit centered
+ * on the lane's line.
+ */
+export function expandedY(mark: { height: number }, laneCenter: number): number {
+  return laneCenter - mark.height / 2;
 }
 
 /**

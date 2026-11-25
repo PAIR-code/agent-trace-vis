@@ -55,6 +55,10 @@ export interface ExampleSummary {
   date?: string;
   stepCount?: number;
   outcome?: { success?: boolean; reward?: number };
+  /** The trace's simple metadata values (see scalarMetadata), for grouping and coloring. */
+  metadata?: Record<string, string | number | boolean>;
+  /** Trace id of the trace that launched this one, for a subagent. */
+  parentId?: string;
 }
 
 export interface ExamplesPage {

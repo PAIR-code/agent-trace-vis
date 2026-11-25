@@ -25,6 +25,7 @@
  */
 
 import { FileEvent, normalizeFilePath } from './file-events';
+import { MAX_MARK_HEIGHT } from './channels';
 import { ReasoningStepType, type AxisMode } from './layout-types';
 import type { Mark } from './marks';
 
@@ -39,6 +40,8 @@ export interface FileViewMarker {
   label: string;
   isSearch: boolean;
   node: Mark;
+  /** Set when an inline subagent did this: its color. */
+  color?: string;
 }
 
 export interface FileEditSegment {
@@ -48,6 +51,17 @@ export interface FileEditSegment {
   barHeight: number;
   label: string;
   node: Mark;
+  /** Set when an inline subagent did this: its color. */
+  color?: string;
+}
+
+/** A file deleted here: its row's line ends at a solid dot. */
+export interface FileDeleteMarker {
+  x: number;
+  label: string;
+  node: Mark;
+  /** Set when an inline subagent did this: its color. */
+  color?: string;
 }
 
 export interface FileRow {
@@ -55,9 +69,11 @@ export interface FileRow {
   basename: string;
   isPlan: boolean;
   startX: number;
+  /** The trace's end, or where the file was deleted if nothing touched it after. */
   endX: number;
   views: FileViewMarker[];
   edits: FileEditSegment[];
+  deletes: FileDeleteMarker[];
   /** Ids of every node with a marker on this row. */
   nodeIds: Set<string>;
 }
@@ -73,7 +89,12 @@ export interface FileLane {
  * marks are slot-sized bars (see marks.ts): edits take that width and a
  * constant height, and view dots sit at the slot's center.
  */
-export function buildFileLane(events: FileEvent[], marks: Mark[], contentWidth: number, mode: AxisMode = 'time'): FileLane {
+export function buildFileLane(
+  events: FileEvent[], marks: Mark[], contentWidth: number, mode: AxisMode = 'time',
+  /** Colors for events by node id: an inline subagent's edits, tinted by subagent. */
+  tints?: ReadonlyMap<string, string>,
+): FileLane {
+  const tint = (e: { nodeId: string }) => tints?.get(e.nodeId);
   const slots = mode === 'sequence';
   const markById = new Map(marks.map(m => [m.id, m]));
   const placed = events
@@ -100,50 +121,56 @@ export function buildFileLane(events: FileEvent[], marks: Mark[], contentWidth: 
     drawn.length > 0 ? Math.max(...drawn.map(m => m.x + m.width)) : contentWidth,
     ...placed.map(e => e.x + (slots || e.kind === 'edit' ? e.node.width : 0)));
 
+  const isDelete = (e: { node: Mark }) => e.node.stepType === ReasoningStepType.DELETE_FILE;
   const rows = [...groups.entries()].map(([key, evs]): FileRow & { key: string } => {
     const first = evs[0];
+    const last = evs[evs.length - 1];
     const basename = normalizeFilePath(first.filePath).split('/').pop() ?? key;
     const isPlan = evs.some(e => e.isPlan);
+    const deleteX = (e: typeof last) => slots ? e.x + e.node.width / 2 : e.x;
     return {
       key,
       filePath: first.filePath,
       basename,
       isPlan,
       startX: first.x,
-      endX,
+      // A file deleted and never touched again stops at the delete.
+      endX: isDelete(last) ? deleteX(last) : endX,
       views: evs.filter(e => e.kind !== 'edit').map(e => ({
         x: slots ? e.x + e.node.width / 2 : e.x,
         isSearch: e.kind === 'search',
         label: e.kind === 'search' ? `${basename}: ${e.node.text || 'grep search'}` : `${basename}: viewed`,
         node: e.node,
+        color: tint(e),
       })),
-      edits: evs.filter(e => e.kind === 'edit').map(e => ({
+      edits: evs.filter(e => e.kind === 'edit' && !isDelete(e)).map(e => ({
         x: e.x,
         width: e.node.width,
         barHeight: slots ? SLOT_EDIT_HEIGHT : linesToBarHeight(e.linesCount),
-        label: e.node.stepType === ReasoningStepType.DELETE_FILE
-          ? `${basename}: deleted`
-          : e.linesCount > 0 ? `${basename}: ${e.linesCount} lines written` : `${basename}: written`,
+        label: e.linesCount > 0 ? `${basename}: ${e.linesCount} lines written` : `${basename}: written`,
         node: e.node,
+        color: tint(e),
       })),
+      deletes: evs.filter(isDelete).map(e => ({ x: deleteX(e), label: `${basename}: deleted`, node: e.node, color: tint(e) })),
       nodeIds: new Set(evs.map(e => e.nodeId)),
     };
   });
 
   // Edited files first, then view-only; each group by first access.
-  const edited = (r: FileRow) => r.edits.length > 0;
+  const edited = (r: FileRow) => r.edits.length > 0 || r.deletes.length > 0;
   rows.sort((a, b) =>
     Number(edited(b)) - Number(edited(a)) || a.startX - b.startX || a.key.localeCompare(b.key));
 
   return {
     rows: rows.map(({ key, ...row }) => row),
-    // Rows are FILE_ROW_HEIGHT apart; the last row's edit bars reach 40px below its top.
-    totalHeight: Math.max(FILE_ROW_HEIGHT, (rows.length - 1) * FILE_ROW_HEIGHT + 40),
+    // Rows are FILE_ROW_HEIGHT apart; the last row's edit bars, centered on its
+    // line (14px down), reach half the tallest bar below that.
+    totalHeight: Math.max(FILE_ROW_HEIGHT, (rows.length - 1) * FILE_ROW_HEIGHT + 14 + MAX_MARK_HEIGHT / 2 + 1),
   };
 }
 
-/** Lines written → bar height: 1 line ≈ 8px, 100 lines ≈ 21px, capped at 26px. */
+/** Lines written → bar height: 1 line ≈ 8px, 100 lines ≈ 21px, capped at the lane height (22px). */
 export function linesToBarHeight(linesCount: number): number {
   if (linesCount <= 0) return 6;
-  return Math.min(26, Math.round(6 + Math.log1p(linesCount) * 3.2));
+  return Math.min(MAX_MARK_HEIGHT, Math.round(6 + Math.log1p(linesCount) * 3.2));
 }

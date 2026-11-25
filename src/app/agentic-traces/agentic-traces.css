@@ -1,6 +1,6 @@
 :host {
   display: block;
-  background-color: #f8fafc;
+  background-color: #f8f7f3;
   height: calc(100vh - 50px);
   overflow: hidden;
   box-sizing: border-box;
@@ -14,6 +14,7 @@
   height: 64px;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 20px;
   padding: 0 24px;
   z-index: 100;
@@ -100,7 +101,8 @@ app-analysis-toolbar {
   overflow-x: auto;
   position: relative;
   padding-left: 16px;
-  padding-right: 16px;
+  /* With the 12px slack in onScrollAreaResize, just room for the row drag handles (18px past each row). */
+  padding-right: 8px;
 }
 
 .no-results-banner {
@@ -258,41 +260,6 @@ app-analysis-toolbar {
 
 .vis-content {
   position: relative;
-}
-
-.sidebar-resizer {
-  width: 8px;
-  margin-left: -4px;
-  margin-right: -4px;
-  cursor: col-resize;
-  z-index: 30;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  background: transparent;
-  transition: background 0.15s ease;
-  user-select: none;
-}
-
-.sidebar-resizer:hover,
-.sidebar-resizer:active {
-  background: rgba(59, 130, 246, 0.08);
-}
-
-.sidebar-resizer .resizer-handle-line {
-  width: 3px;
-  height: 32px;
-  border-radius: 1.5px;
-  background: #cbd5e1;
-  transition: background 0.15s ease, height 0.15s ease;
-}
-
-.sidebar-resizer:hover .resizer-handle-line,
-.sidebar-resizer:active .resizer-handle-line {
-  background: #3b82f6;
-  height: 48px;
 }
 
 .panel-wrapper {
@@ -535,8 +502,13 @@ app-analysis-toolbar {
   align-items: center;
   justify-content: flex-end;
   transform: translateX(-50%);
-  gap: 4px;
-  padding-bottom: 4px;
+  gap: 2px;
+}
+
+/* The origin tick sits at the content's left edge: align it left so its label isn't clipped. */
+.time-tick-h:first-child {
+  transform: none;
+  align-items: flex-start;
 }
 
 .time-tick-label-h {
@@ -544,9 +516,6 @@ app-analysis-toolbar {
   font-weight: 600;
   color: #64748b;
   white-space: nowrap;
-  background: rgba(248,250,252,0.9);
-  padding: 1px 4px;
-  border-radius: 3px;
   line-height: 1.2;
 }
 
@@ -556,3 +525,64 @@ app-analysis-toolbar {
   background: #cbd5e1;
   flex-shrink: 0;
 }
+
+/* "Color by" picker in the top bar. */
+.color-by-select {
+  font: inherit;
+  font-size: 0.7rem;
+  max-width: 160px;
+  padding: 1px 2px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+.color-by-select option { color: #111827; }
+
+/* Search reports: the side panel section and the dot hover card. */
+.search-reports { margin-bottom: 8px; }
+.search-reports-title.conversation-title { margin-top: 14px; }
+.search-reports-title {
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: #64748b; margin: 2px 0 6px;
+}
+.search-report-card {
+  border: 1px solid color-mix(in srgb, var(--report-color) 35%, white);
+  border-radius: 8px; padding: 8px 10px; margin-bottom: 6px;
+  background: color-mix(in srgb, var(--report-color) 9%, white);
+}
+.search-report-card.focused { box-shadow: 0 0 0 2px color-mix(in srgb, var(--report-color) 40%, transparent); }
+.search-report-head { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; }
+.search-report-name { font-weight: 600; color: #1e293b; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-report-verdict { font-size: 0.68rem; color: #64748b; white-space: nowrap; }
+.search-report-text { margin-top: 4px; font-size: 0.78rem; line-height: 1.45; color: #334155; white-space: pre-wrap; }
+.search-report-sub, .search-report-hint { margin-top: 4px; font-size: 0.68rem; color: #94a3b8; }
+.step-link { color: #2563eb; text-decoration: underline; text-decoration-color: #93c5fd; cursor: pointer; }
+.search-dot-inline {
+  width: 8px; height: 8px; border-radius: 50%; box-sizing: border-box; flex-shrink: 0;
+  border: 1.5px solid var(--report-color);
+}
+.search-dot-inline.state-found, .search-dot-inline.state-running { background: var(--report-color); }
+.search-dot-inline.state-notFound { background: #fff; }
+.search-dot-inline.state-failed { border-color: #cbd5e1; background: #f1f5f9; }
+.search-popover {
+  position: fixed; z-index: 1000; max-width: 360px; transform: translateX(-100%);
+  background: color-mix(in srgb, var(--report-color) 9%, white);
+  border: 1px solid color-mix(in srgb, var(--report-color) 35%, white);
+  border-radius: 8px; padding: 8px 10px; box-shadow: 0 6px 20px rgba(15, 23, 42, 0.15);
+  pointer-events: none;
+}
+
+/* "More settings": a gear in the top bar opening a panel of less-used options. */
+.settings-group { position: relative; }
+.settings-btn { display: inline-flex; align-items: center; justify-content: center; padding: 4px 6px; }
+.settings-backdrop { position: fixed; inset: 0; z-index: 150; }
+.settings-panel {
+  position: absolute; top: calc(100% + 10px); right: 0; z-index: 160;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 12px;
+  min-width: 240px; padding: 12px 14px; border-radius: 8px;
+  background: #3a506b; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.35);
+}
+
+/* Sort direction toggle next to "Sort by". */
+.sort-dir-btn { padding: 2px 6px; margin-left: 4px; font-size: 0.75rem; }

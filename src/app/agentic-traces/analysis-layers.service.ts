@@ -25,8 +25,6 @@ import { Subscription } from 'rxjs';
 import { objectUrlFromSafeSource, setAnchorHref } from 'safevalues/dom';
 import {
   SEMANTIC_GENERATION_CONFIG,
-  SEMANTIC_MATCH_THRESHOLD,
-  SEMANTIC_MODEL,
   SEMANTIC_PROMPT_TEMPLATE,
   SEMANTIC_SEARCH_INSTRUCTION,
   SEMANTIC_TURN_FORMAT,
@@ -41,12 +39,32 @@ import {
   AnalysisConfigV1,
   AnalysisLayer,
   AnalysisPreset,
+  AnalysisResultsExample,
+  AnalysisSearchExampleReport,
+  AnalysisSearchResults,
   PRESET_COLORS,
   USER_AI_COLORS,
   USER_TEXT_COLORS,
 } from './analysis-layers.types';
 import { Mark } from './marks';
 import { CustomSearchSpec } from './url-config';
+
+/** What {@link AnalysisLayersService.buildExportConfig} includes. */
+export interface ExportOptions {
+  /** Layers to export; all when unset. */
+  layerIds?: ReadonlySet<string>;
+  /** Also export each search's current matches on these examples. */
+  results?: {
+    examples: readonly AnalysisResultsExample[];
+    /** Example id of each trace (by trace entry id), for the traces in `examples`. */
+    exampleIdByTrace: ReadonlyMap<string, string>;
+    /** The searched marks, to map each matched node to its trace. */
+    marks: readonly Mark[];
+  };
+}
+
+/** localStorage key for the model picked for semantic search. */
+const MODEL_STORAGE_KEY = 'agent_trace_vis_search_model';
 
 @Injectable()
 export class AnalysisLayersService {
@@ -58,13 +76,22 @@ export class AnalysisLayersService {
   currentQuery = signal<string>('');
   currentMode = signal<'fuzzy' | 'semantic'>('semantic');
   searchFocused = signal<boolean>(false);
+  /** The export dialog (opened from the toolbar's download button). */
+  exportDialogOpen = signal(false);
 
   // ─── API key ──────────────────────────────────────────────────────
   apiKey = signal<string>('');
 
+  // ─── Model for semantic search ────────────────────────────────────
+  /** Models offered in the toolbar's model picker. */
+  readonly models: readonly string[];
+  model = signal<string>('');
+
   // ─── Derived state ────────────────────────────────────────────────
   anyLayerEnabled = computed(() => this.layers().some(l => l.enabled));
-  noResultsLayers = computed(() => this.layers().filter(l => l.enabled && !l.loading && l.results.size === 0));
+  /** Enabled layers with nothing found: no matched steps and no trace reported as found (e.g. absence searches). */
+  noResultsLayers = computed(() => this.layers().filter(l =>
+    l.enabled && !l.loading && l.results.size === 0 && !l.reports.some(r => r.found)));
 
   private subscriptions = new Map<string, Subscription>();
 
@@ -74,6 +101,9 @@ export class AnalysisLayersService {
   ) {
     const savedKey = window.localStorage.getItem('reasoning_vis_api_key') || '';
     if (savedKey) this.apiKey.set(savedKey);
+    this.models = searchService.models;
+    const savedModel = window.localStorage.getItem(MODEL_STORAGE_KEY) || '';
+    this.model.set(this.models.includes(savedModel) ? savedModel : searchService.defaultModel);
     this.initializePresets();
   }
 
@@ -89,8 +119,10 @@ export class AnalysisLayersService {
         color,
         enabled: false,
         results: new Map<string, SearchResult>(),
+        reports: [],
         loading: false,
         isPreset: true,
+        category: preset.category,
         createdAt: Date.now() + index,
       };
     });
@@ -127,6 +159,7 @@ export class AnalysisLayersService {
     marks: Mark[],
     name?: string,
     isPreset = false,
+    category?: AnalysisLayer['category'],
   ): void {
     const id = crypto.randomUUID();
     const color = this.getNextColor(mode);
@@ -138,8 +171,10 @@ export class AnalysisLayersService {
       color,
       enabled: true,
       results: new Map(),
+      reports: [],
       loading: false,
       isPreset,
+      ...(category ? { category } : {}),
       createdAt: Date.now(),
     };
     this.layers.update(layers => [layer, ...layers]);
@@ -153,7 +188,7 @@ export class AnalysisLayersService {
 
   /** Add a preset as a new layer. */
   addPreset(preset: AnalysisPreset, marks: Mark[]): void {
-    this.addLayer(preset.query, preset.mode, marks, preset.name, true);
+    this.addLayer(preset.query, preset.mode, marks, preset.name, true, preset.category);
   }
 
   /** Remove a layer and cancel its pending search. */
@@ -237,6 +272,7 @@ export class AnalysisLayersService {
           color,
           enabled: true,
           results: new Map<string, SearchResult>(),
+          reports: [],
           loading: false,
           isPreset: false,
           createdAt: Date.now() + idx,
@@ -273,6 +309,12 @@ export class AnalysisLayersService {
     this.currentMode.set(mode);
   }
 
+  /** Set the model used for semantic search (remembered across reloads). */
+  setModel(model: string): void {
+    this.model.set(model);
+    window.localStorage.setItem(MODEL_STORAGE_KEY, model);
+  }
+
   /** Clear all cached search results from memory and window.localStorage. */
   clearSearchCache(): number {
     return this.searchService.clearCache();
@@ -303,20 +345,23 @@ export class AnalysisLayersService {
    * Builds a JSON-serializable config of all layers plus the method details
    * (prompt, model, ...) needed to reproduce them in an external pipeline.
    */
-  buildExportConfig(): AnalysisConfigV1 {
+  buildExportConfig(options: ExportOptions = {}): AnalysisConfigV1 {
     // Oldest first, so presets come first in their original order.
-    const layers = [...this.layers()].sort((a, b) => a.createdAt - b.createdAt);
+    const layers = [...this.layers()]
+      .filter(l => !options.layerIds || options.layerIds.has(l.id))
+      .sort((a, b) => a.createdAt - b.createdAt);
     const searches: AnalysisConfigSearch[] = layers.map(l => ({
       name: l.name,
       query: l.query,
       method: l.mode,
       source: l.isPreset ? 'preset' : 'user',
+      ...(options.results ? { results: layerResults(l, options.results) } : {}),
     }));
 
     const methods: AnalysisConfigV1['methods'] = {};
     if (searches.some(s => s.method === 'semantic')) {
       methods.semantic = {
-        model: SEMANTIC_MODEL,
+        model: this.model(),
         generationConfig: { ...SEMANTIC_GENERATION_CONFIG },
         scope: 'perTrace',
         turnFormat: SEMANTIC_TURN_FORMAT,
@@ -325,7 +370,6 @@ export class AnalysisLayersService {
         promptTemplate: fillTemplate(SEMANTIC_PROMPT_TEMPLATE, {
           searchInstruction: SEMANTIC_SEARCH_INSTRUCTION,
         }),
-        matchThreshold: SEMANTIC_MATCH_THRESHOLD,
       };
     }
     if (searches.some(s => s.method === 'fuzzy')) {
@@ -338,15 +382,21 @@ export class AnalysisLayersService {
       exportedAt: new Date().toISOString(),
       methods,
       searches,
+      ...(options.results ? {
+        results: {
+          note: 'Matches the app had already found on these examples; searches were not re-run.',
+          examples: [...options.results.examples],
+        },
+      } : {}),
     };
   }
 
   /** Downloads {@link buildExportConfig} as `autoraters-YYYYMMDD-HHMM.json`. */
-  downloadConfig(): void {
+  downloadConfig(options: ExportOptions = {}): void {
     this.telemetry?.trackEvent('autoraters_exported', {
       search_count: this.layers().length,
     });
-    const json = JSON.stringify(this.buildExportConfig(), null, 2);
+    const json = JSON.stringify(this.buildExportConfig(options), null, 2);
     // application/octet-stream is the safevalues-approved MIME type for
     // blobs that are meant to be downloaded.
     const blob = new Blob([json], { type: 'application/octet-stream' });
@@ -386,19 +436,58 @@ export class AnalysisLayersService {
       traceId: m.traceId,
     }));
 
+    const model = this.model();
+    const start = performance.now();
     const sub = this.searchService
-      .search(layer.query, [], searchNodes, layer.mode, this.apiKey())
+      .search(layer.query, [], searchNodes, layer.mode, this.apiKey(), model)
       .subscribe({
-        next: results => {
-          this.updateLayer(layerId, { results, loading: false });
+        next: ({ results, reports }) => {
+          const durationMs = performance.now() - start;
+          this.updateLayer(layerId, {
+            results,
+            reports,
+            model: layer.mode === 'semantic' ? model : undefined,
+            durationMs,
+            loading: false,
+          });
+          if (layer.mode === 'semantic') {
+            this.logReport(layer.name, layer.query, model, durationMs, reports, results);
+          }
         },
         error: err => {
           console.error(`[AnalysisLayers] Search failed for layer "${layer.name}":`, err);
-          this.updateLayer(layerId, { loading: false });
+          this.updateLayer(layerId, { durationMs: performance.now() - start, loading: false });
         },
       });
 
     this.subscriptions.set(layerId, sub);
+  }
+
+  /** Prints a semantic search's reports and evidence to the console for debugging. */
+  private logReport(
+    name: string,
+    query: string,
+    model: string,
+    durationMs: number,
+    reports: AnalysisLayer['reports'],
+    results: Map<string, SearchResult>,
+  ): void {
+    const lines = [
+      `[AnalysisLayers] Report for "${name}" (${model}, ${(durationMs / 1000).toFixed(1)}s)`,
+      `Query: ${query}`,
+    ];
+    for (const r of reports) {
+      lines.push('', `── Trace ${r.traceId}: ${r.found ? 'FOUND' : 'NOT FOUND'} ──`, r.report || '(no report)');
+    }
+    console.log(lines.join('\n'));
+    if (results.size > 0) {
+      console.table([...results].map(([nodeId, r]) => ({
+        step: r.step,
+        nodeId,
+        spans: r.spans.map(s => s.text).join(' | '),
+        explanation: r.explanation ?? '',
+      })));
+    }
   }
 
   private getNextColor(mode: 'fuzzy' | 'semantic'): string {
@@ -411,4 +500,42 @@ export class AnalysisLayersService {
     const words = query.trim().split(/\s+/).slice(0, 4).join(' ');
     return words.length > 30 ? words.substring(0, 27) + '...' : words;
   }
+}
+
+/**
+ * A layer's current matches on the exported examples. Only an enabled layer's
+ * results are current: a disabled one isn't re-run when the traces change.
+ */
+export function layerResults(
+  layer: AnalysisLayer,
+  input: NonNullable<ExportOptions['results']>,
+): AnalysisSearchResults {
+  const status = layer.loading ? 'running' : layer.enabled ? 'complete' : 'notRun';
+  if (status === 'notRun') return { status, matchedExampleIds: [], matches: [] };
+  const traceOfNode = new Map(input.marks.map(m => [m.id, m.traceId]));
+  const order = new Map(input.examples.map((e, i) => [e.id, i]));
+  const matches = [...layer.results]
+    .map(([nodeId, r]) => {
+      const traceId = traceOfNode.get(nodeId);
+      const exampleId = traceId === undefined ? undefined : input.exampleIdByTrace.get(traceId);
+      if (exampleId === undefined) return null;
+      return {
+        exampleId,
+        nodeId,
+        ...(r.step !== undefined ? { step: r.step } : {}),
+        ...(r.explanation ? { explanation: r.explanation } : {}),
+      };
+    })
+    .filter((m): m is NonNullable<typeof m> => m !== null)
+    .sort((a, b) => (order.get(a.exampleId) ?? 0) - (order.get(b.exampleId) ?? 0));
+  // Reports are keyed by trace (entry) id, like the searched marks.
+  const reports = layer.reports
+    .map(r => ({ exampleId: input.exampleIdByTrace.get(r.traceId), found: r.found, report: r.report }))
+    .filter((r): r is AnalysisSearchExampleReport => r.exampleId !== undefined)
+    .sort((a, b) => (order.get(a.exampleId) ?? 0) - (order.get(b.exampleId) ?? 0));
+  // An example matches if any of its steps matched, or its report says found
+  // (whole-trace and absence searches have no step to point at).
+  const matchedExampleIds = [...new Set([...matches.map(m => m.exampleId), ...reports.filter(r => r.found).map(r => r.exampleId)])]
+    .sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
+  return { status, matchedExampleIds, matches, ...(reports.length > 0 ? { reports } : {}) };
 }

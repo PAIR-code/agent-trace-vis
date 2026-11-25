@@ -19,6 +19,7 @@
 
 import type { TraceRecord } from '../agentic-traces/trace';
 import type { ExampleSummary } from './trace-source';
+import { scalarMetadata } from '../agentic-traces/metadata-fields';
 
 /** Summary fields read from a full trace record. */
 export function summarizeRecord(index: number, record: TraceRecord, fallbackTitle = ''): ExampleSummary {
@@ -36,6 +37,10 @@ export function summarizeRecord(index: number, record: TraceRecord, fallbackTitl
   if (typeof record.outcome?.success === 'boolean') outcome.success = record.outcome.success;
   if (typeof record.outcome?.reward === 'number') outcome.reward = record.outcome.reward;
   if (outcome.success !== undefined || outcome.reward !== undefined) summary.outcome = outcome;
+  const metadata = scalarMetadata(record.metadata);
+  if (metadata) summary.metadata = metadata;
+  const parent = (record.metadata as Record<string, unknown> | undefined)?.['parent_trace_id'];
+  if (typeof parent === 'string' && parent) summary.parentId = parent;
   return summary;
 }
 

@@ -42,11 +42,11 @@ export function formatElapsedTime(ms: number): string {
 
   if (minutes > 0) {
     if (remainingSeconds === 0) {
-      return `+${minutes}m`;
+      return `${minutes}m`;
     }
-    return `+${minutes}m ${remainingSeconds}s`;
+    return `${minutes}m ${remainingSeconds}s`;
   }
-  return `+${remainingSeconds}s`;
+  return `${remainingSeconds}s`;
 }
 
 export function truncate(text: string, max: number): string {
@@ -93,26 +93,72 @@ export function estimateTokens(text: string | undefined): number {
 }
 
 /**
- * How a step's length on the tokens axis divides among its nodes: the tokens
- * the model produced went to its reasoning, to each tool call's arguments
- * (a file edit's new content, a command line, ...) and to its reply, so each
- * gets a share of the axis and the same distance means the same tokens
- * whatever they were spent on. Exact where the trace says so (per-step
- * reasoning tokens); otherwise each part's share is estimated from the size of
- * its text. Returns, per node id, its [start, end] offset within the step in
- * axis units (`length` is the step's total length).
+ * How a step's output tokens divide among its nodes, as weights: the tokens
+ * the model produced went to its reasoning, to each tool call's arguments (a
+ * file edit's new content, a command line, ...) and to its reply. Each part is
+ * estimated from the size of its text, except reasoning when the trace reports
+ * its size. Output the visible text doesn't account for (reasoning the trace
+ * omits or only summarizes) goes to the thinking node.
  */
-export function stepTokenSegments(step: any, length: number): Map<string, [number, number]> {
+function nodeTokenWeights(step: any): number[] {
   const nodes: any[] = step.nodes ?? [];
+  const out: number = step.token_usage?.output_tokens || 0;
   const weightOf = (n: any): number => {
-    if (n.type === TraceNodeType.THINKING) return step.reasoningTokens || estimateTokens(n.text);
-    if (n.data?.toolCall) {
-      const input = n.data.toolCall.input;
-      return estimateTokens(typeof input === 'string' ? input : JSON.stringify(input ?? {}));
-    }
+    if (n.type === TraceNodeType.THINKING) return step.reasoningTokens || n.data?.hiddenTokens || estimateTokens(n.text);
+    if (n.data?.toolCall) return estimateTokens(toolInputText(n.data.toolCall.input));
     return estimateTokens(n.text);
   };
   const weights = nodes.map(n => Math.max(1, weightOf(n)));
+  const think = nodes.findIndex(n => n.type === TraceNodeType.THINKING);
+  if (out > 0 && think >= 0) {
+    const others = weights.reduce((a, b) => a + b, 0) - weights[think];
+    if (step.reasoningTokens) {
+      // Exact reasoning; the rest of the output is shared by the other nodes.
+      const rest = Math.max(0, out - step.reasoningTokens);
+      if (others > 0) weights.forEach((w, i) => { if (i !== think) weights[i] = Math.max(1e-6, w * rest / others); });
+    } else {
+      weights[think] = Math.max(weights[think], out - others);
+    }
+  }
+  return weights;
+}
+
+/** A tool call's arguments as text, for estimating the tokens they took. */
+export function toolInputText(input: unknown): string {
+  return typeof input === 'string' ? input : JSON.stringify(input ?? {});
+}
+
+/**
+ * Each node's share of its step's output tokens (see nodeTokenWeights), for
+ * the side panel. `exact` when the trace reports it: reasoning with a
+ * reported size, or a step's only node. Null when the step has no output count.
+ */
+export function nodeOutputTokens(step: any): Map<string, { tokens: number; exact: boolean }> | null {
+  const nodes: any[] = step.nodes ?? [];
+  const out: number = step.token_usage?.output_tokens || 0;
+  if (out <= 0 || nodes.length === 0) return null;
+  const weights = nodeTokenWeights(step);
+  const total = weights.reduce((a, b) => a + b, 0) || 1;
+  const shares = new Map<string, { tokens: number; exact: boolean }>();
+  nodes.forEach((n, i) => {
+    const exactReasoning = n.type === TraceNodeType.THINKING && !!step.reasoningTokens;
+    shares.set(n.id, {
+      tokens: exactReasoning ? step.reasoningTokens : Math.round(out * weights[i] / total),
+      exact: exactReasoning || nodes.length === 1,
+    });
+  });
+  return shares;
+}
+
+/**
+ * How a step's length on the tokens axis divides among its nodes, by their
+ * share of its output (nodeTokenWeights), so the same distance means the same
+ * tokens whatever they were spent on. Returns, per node id, its [start, end]
+ * offset within the step in axis units (`length` is the step's total length).
+ */
+export function stepTokenSegments(step: any, length: number): Map<string, [number, number]> {
+  const nodes: any[] = step.nodes ?? [];
+  const weights = nodeTokenWeights(step);
   const total = weights.reduce((a, b) => a + b, 0) || 1;
   const segments = new Map<string, [number, number]>();
   let at = 0;
