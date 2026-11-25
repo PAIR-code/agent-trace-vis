@@ -34,7 +34,10 @@ import {
 } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
-import { ActivatedRoute } from "@angular/router";
+import { ActivatedRoute, NavigationEnd, Router } from "@angular/router";
+import { Subscription } from "rxjs";
+import { filter } from "rxjs/operators";
+import { EmbedStateService } from "../shared/embed-state.service";
 import { EXTRA_MANAGED_URL_PARAMS, UrlParamService } from "../shared/url-param.service";
 import { getParamFromMap, getParamValuesFromMap } from "../shared/url-params";
 import { TELEMETRY_TRACKER } from "../shared/telemetry.service";
@@ -45,6 +48,7 @@ import { INITIAL_DATASET_REFS } from "../data/initial-refs";
 import { DatasetRef, parseDatasetRef, parseIndices } from "../data/dataset-refs";
 import {
   CustomSearchSpec,
+  isEmbedLocation,
   LEGACY_CONFIG_PARAM_ALIASES,
   MANAGED_URL_PARAM_KEYS,
   parseUrlUiConfig,
@@ -106,9 +110,15 @@ interface LegendEntry {
   providers: [AnalysisLayersService],
   templateUrl: './agentic-traces.html',
   styleUrls: ['./agentic-traces.css'],
+  host: {
+    '[class.embed-mode]': 'embedState.embed()',
+    '[class.no-header]': '!embedState.headerVisible()',
+    '[class.no-toolbar]': '!embedState.toolbarVisible()',
+  },
 })
 export class AgenticTracesComponent implements OnInit, OnDestroy {
   readonly workspace = inject(WorkspaceService);
+  readonly embedState = inject(EmbedStateService);
   private readonly initialRefs = inject(INITIAL_DATASET_REFS, { optional: true });
   private readonly extraManagedParams = inject(EXTRA_MANAGED_URL_PARAMS, { optional: true }) ?? [];
   private readonly telemetry = inject(TELEMETRY_TRACKER, { optional: true });
@@ -302,6 +312,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   /** Re-lays out the rows when the timeline area changes width. */
   private resizeObserver = new ResizeObserver(([entry]) => this.onScrollAreaResize(entry.contentRect.width));
   private scrollArea?: HTMLElement;
+  private routerEventsSub?: Subscription;
 
   /** The scroll area comes and goes with the loading screen; observe whichever is current. */
   @ViewChild('visScrollArea', { static: false })
@@ -457,8 +468,17 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
     public layersService: AnalysisLayersService,
     public chaptersService: ChaptersService,
     private route: ActivatedRoute,
+    private router: Router,
     private urlParamService: UrlParamService,
   ) {
+    this.routerEventsSub = this.router.events
+      .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
+      .subscribe(() => {
+        if (typeof window !== 'undefined') {
+          this.embedState.updateFullAppUrl(window.location.href);
+        }
+      });
+
     this.currentUrlConfigParams = computed(() => {
       const presetByName = new Map(ANALYSIS_PRESETS.map(p => [p.name, p]));
       const presets: string[] = [];
@@ -478,6 +498,12 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
       const activeIdx = activeId ? traces.findIndex(t => t.id === activeId) : -1;
 
       return serializeUrlUiConfig({
+        embed: this.embedState.embed(),
+        headerVisible: this.embedState.headerVisible(),
+        toolbarVisible: this.embedState.toolbarVisible(),
+        panelVisible: this.embedState.panelVisible(),
+        sidebarHidden: this.embedState.sidebarHidden(),
+        legendHidden: this.embedState.legendHidden(),
         axis: this.yAxisMode(),
         wait: this.showUserWait(),
         fill: this.stretch(),
@@ -497,7 +523,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
         sidebarCollapsed: this.workspace.sidebarCollapsed(),
         panelCollapsed: this.panelCollapsed(),
         sidebarFilter: this.workspace.sidebarFilter(),
-      });
+      }, this.embedState.isEmbedRoute());
     });
     // Show the workspace's selected traces, keeping any row order the user dragged.
     effect(() => {
@@ -550,15 +576,24 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   ngOnInit() {
     const w = window as DevWindow;
     w.clearCache = w.clearcache = this.clearCacheFn;
-    this.telemetry?.trackPageView?.('/');
+    const href = typeof window !== 'undefined' ? window.location.href : '';
+    const onEmbedRoute = isEmbedLocation(href, this.route.snapshot?.routeConfig?.path);
+    const initialConfig = this.embedState.syncFromLocation(
+      href,
+      this.route.snapshot?.routeConfig?.path,
+      this.route.snapshot?.queryParams,
+    );
+    this.telemetry?.trackPageView?.(initialConfig.embed ? '/embed' : '/');
 
-    void this.initWorkspace();
+    void this.initWorkspace(onEmbedRoute);
   }
 
   /** Restores the workspace and UI configuration from the URL, then loads defaults if empty. */
-  private async initWorkspace() {
+  private async initWorkspace(onEmbedRoute = false) {
     const allParams = this.urlParamService.readAllQueryParams(this.route);
-    const uiConfig = parseUrlUiConfig(allParams);
+    const uiConfig = parseUrlUiConfig(allParams, onEmbedRoute);
+    const href = typeof window !== 'undefined' ? window.location.href : '';
+    this.embedState.applyUiConfig(uiConfig, href, onEmbedRoute);
 
     this.yAxisMode.set(uiConfig.axis);
     this.showUserWait.set(uiConfig.wait);
@@ -665,6 +700,7 @@ export class AgenticTracesComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    this.routerEventsSub?.unsubscribe();
     this.resizeObserver.disconnect();
     const w = window as DevWindow;
     if (w.clearCache === this.clearCacheFn) {

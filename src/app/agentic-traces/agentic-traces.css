@@ -6,6 +6,53 @@
   box-sizing: border-box;
 }
 
+:host.no-header {
+  height: 100vh;
+}
+
+:host.no-header app-analysis-toolbar {
+  top: 0;
+}
+
+:host.no-toolbar .vis-page-container {
+  padding-top: 0;
+}
+
+:host.embed-mode .loading-container {
+  min-height: 0;
+}
+
+.embed-open-btn {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  z-index: 35;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(6px);
+  color: #1e40af;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.embed-open-btn:hover {
+  border-color: #3b82f6;
+  background: #fff;
+}
+
+.embed-open-btn.inline {
+  position: static;
+  margin-top: 4px;
+}
+
 .selector-bar {
   position: fixed;
   top: 0;
@@ -22,7 +69,8 @@
   color: white;
 }
 
-.selector-group, .conv-selector-group {
+.selector-group,
+.conv-selector-group {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -87,7 +135,7 @@ app-analysis-toolbar {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
+  background: #fff;
   position: relative;
   min-width: 200px;
   overflow: hidden;
@@ -159,7 +207,7 @@ app-analysis-toolbar {
 }
 
 .trace-legend.collapsed:hover {
-  background: #ffffff;
+  background: #fff;
   border-color: #cbd5e1;
   box-shadow: 0 2px 8px rgba(0,0,0,0.12);
 }
@@ -295,7 +343,7 @@ app-analysis-toolbar {
 .loading-spinner {
   width: 40px;
   height: 40px;
-  border: 3.5px solid rgba(255, 255, 255, 0.1);
+  border: 3.5px solid #e2e8f0;
   border-top-color: #6366f1; /* beautiful premium indigo */
   border-radius: 50%;
   animation: spin 1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
@@ -303,7 +351,7 @@ app-analysis-toolbar {
 
 .loading-text {
   font-size: 1.1rem;
-  color: rgba(255, 255, 255, 0.6);
+  color: #475569;
   font-weight: 400;
 }
 
@@ -556,7 +604,8 @@ app-analysis-toolbar {
 .search-report-name { font-weight: 600; color: #1e293b; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .search-report-verdict { font-size: 0.68rem; color: #64748b; white-space: nowrap; }
 .search-report-text { margin-top: 4px; font-size: 0.78rem; line-height: 1.45; color: #334155; white-space: pre-wrap; }
-.search-report-sub, .search-report-hint { margin-top: 4px; font-size: 0.68rem; color: #94a3b8; }
+.search-report-sub,
+.search-report-hint { margin-top: 4px; font-size: 0.68rem; color: #94a3b8; }
 .step-link { color: #2563eb; text-decoration: underline; text-decoration-color: #93c5fd; cursor: pointer; }
 .search-dot-inline {
   width: 8px; height: 8px; border-radius: 50%; box-sizing: border-box; flex-shrink: 0;

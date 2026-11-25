@@ -38,9 +38,18 @@ export class PreserveSearchHashLocationStrategy extends HashLocationStrategy {
 
   override prepareExternalUrl(internal: string): string {
     const hashUrl = super.prepareExternalUrl(internal);
+    if (hashUrl && !hashUrl.startsWith('#')) {
+      return hashUrl;
+    }
     const rawSearch = this.platformLocation.search || '';
-    if (!rawSearch) return hashUrl;
-    const search = rawSearch.startsWith('?') ? rawSearch : `?${rawSearch}`;
-    return hashUrl ? `${search}${hashUrl}` : search;
+    const search = rawSearch
+      ? (rawSearch.startsWith('?') ? rawSearch : `?${rawSearch}`)
+      : '';
+    // Keep pathname (e.g. /embed) across replaceState calls so <base href="/">
+    // never drops it during initial hash navigation or query-param updates.
+    const pathname = this.platformLocation.pathname || '';
+    const base = `${pathname}${search}`;
+    if (!base) return hashUrl;
+    return hashUrl ? `${base}${hashUrl}` : base;
   }
 }

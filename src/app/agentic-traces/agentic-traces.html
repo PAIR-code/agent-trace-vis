@@ -1,4 +1,4 @@
-<div class="selector-bar">
+<div class="selector-bar" *ngIf="embedState.headerVisible()">
   <!-- X Axis Toggle. Time is disabled when no selected trace has timestamps; the choice is remembered. -->
   <div class="selector-group">
     <label class="selector-label">X Axis</label>
@@ -125,17 +125,25 @@
 </div>
 
 <!-- Analysis Toolbar (separate row below header) -->
-<app-analysis-toolbar [marks]="searchMarks()"></app-analysis-toolbar>
+<app-analysis-toolbar *ngIf="embedState.toolbarVisible()" [marks]="searchMarks()"></app-analysis-toolbar>
 <!-- Opened by the toolbar's download button; outside the toolbar so it overlays the whole page. -->
 <app-export-dialog [marks]="searchMarks()"></app-export-dialog>
 
 <div class="vis-page-container" (click)="onBackgroundClick($event)">
   <div class="main-layout">
     <!-- Left: datasets and examples to pick traces from -->
-    <app-examples-sidebar></app-examples-sidebar>
+    <app-examples-sidebar *ngIf="!embedState.sidebarHidden()"></app-examples-sidebar>
 
     <ng-container *ngIf="!isLoading() && activeTrace(); else loading">
     <div class="vis-container">
+      <a class="embed-open-btn"
+         *ngIf="embedState.embed()"
+         [href]="embedState.fullAppUrl()"
+         target="_blank"
+         rel="noopener noreferrer"
+         title="Open in full Agent Trace Vis">
+        Open in Agent Trace Vis &#8599;
+      </a>
       <!-- No results banner -->
       <div class="no-results-banner" *ngIf="layersService.noResultsLayers().length > 0">
         No matches found for:
@@ -146,7 +154,7 @@
 
       <!-- Legend -->
       <div class="legend-bar trace-legend" 
-           *ngIf="legendEntries().length > 0"
+           *ngIf="legendEntries().length > 0 && !embedState.legendHidden()"
            [class.collapsed]="isLegendCollapsed()"
            (click)="$event.stopPropagation()">
         <div class="legend-header" (click)="toggleLegend($event)" [title]="isLegendCollapsed() ? 'Expand legend' : 'Minimize legend'">
@@ -272,11 +280,12 @@
     </div>
 
     <!-- Right: Conversation Panel. Drag the splitter to resize; click it to minimize / reopen (same as the examples sidebar). -->
-    <app-panel-splitter side="right" [collapsed]="panelCollapsed()" [width]="sidebarWidth()"
+    <app-panel-splitter *ngIf="embedState.panelVisible()"
+                        side="right" [collapsed]="panelCollapsed()" [width]="sidebarWidth()"
                         [minWidth]="260" [maxWidth]="1200"
                         (collapsedChange)="panelCollapsed.set($event)"
                         (widthChange)="sidebarWidth.set($event)"></app-panel-splitter>
-    <div class="panel-wrapper" *ngIf="!panelCollapsed()"
+    <div class="panel-wrapper" *ngIf="embedState.panelVisible() && !panelCollapsed()"
          [style.width.px]="sidebarWidth()" [style.flex]="'0 0 ' + sidebarWidth() + 'px'">
       <app-conversation-viewer
         [messages]="threadMessages()"
@@ -342,6 +351,13 @@
         <div class="loading-text">Use “+ Add dataset” on the left to open a demo trace or your own trace files.</div>
       </ng-template>
     </ng-template>
+    <a class="embed-open-btn inline"
+       *ngIf="embedState.embed()"
+       [href]="embedState.fullAppUrl()"
+       target="_blank"
+       rel="noopener noreferrer">
+      Open in Agent Trace Vis &#8599;
+    </a>
   </div>
 </ng-template>
 
