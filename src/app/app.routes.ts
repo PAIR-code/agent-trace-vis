@@ -27,6 +27,7 @@ import { AgenticTracesComponent } from './agentic-traces/agentic-traces';
 export const routes: Routes = [
   { path: '', component: HomeComponent },
   { path: 'agentic-traces', component: AgenticTracesComponent },
+  { path: 'embed', component: AgenticTracesComponent },
 
 ];
 

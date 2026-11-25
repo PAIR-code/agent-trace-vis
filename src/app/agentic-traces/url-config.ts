@@ -38,6 +38,10 @@ export const DEFAULT_TOKEN_METRICS: readonly string[] = ['output_tokens'];
 
 /** UI configuration URL parameter keys managed by `serializeUrlUiConfig`. */
 export const MANAGED_URL_PARAM_KEYS: readonly string[] = [
+  'embed',
+  'header',
+  'toolbar',
+  'panel',
   'axis',
   'wait',
   'fill',
@@ -57,7 +61,6 @@ export const MANAGED_URL_PARAM_KEYS: readonly string[] = [
   'mark',
   'legend',
   'sidebar',
-  'panel',
   'filter',
 ];
 
@@ -83,6 +86,12 @@ export interface CustomSearchSpec {
 
 /** Complete set of URL-backed UI configuration settings for `AgenticTracesComponent`. */
 export interface UrlUiConfig {
+  embed: boolean;
+  headerVisible: boolean;
+  toolbarVisible: boolean;
+  panelVisible: boolean;
+  sidebarHidden: boolean;
+  legendHidden: boolean;
   axis: AxisMode;
   wait: boolean;
   fill: boolean;
@@ -110,9 +119,15 @@ export interface UrlUiConfig {
   sidebarFilter: string;
 }
 
-/** Returns the default UI configuration matching an unadorned app load. */
-export function defaultUrlUiConfig(): UrlUiConfig {
+/** Returns the default UI configuration matching an unadorned app load (or embed route). */
+export function defaultUrlUiConfig(embed = false): UrlUiConfig {
   return {
+    embed,
+    headerVisible: !embed,
+    toolbarVisible: !embed,
+    panelVisible: !embed,
+    sidebarHidden: embed,
+    legendHidden: false,
     axis: 'time',
     wait: false,
     fill: false,
@@ -128,11 +143,28 @@ export function defaultUrlUiConfig(): UrlUiConfig {
     searchMode: 'semantic',
     activeIndex: null,
     markId: null,
-    legendCollapsed: false,
+    legendCollapsed: embed,
     sidebarCollapsed: false,
     panelCollapsed: false,
     sidebarFilter: '',
   };
+}
+
+/** Returns true when `href` or Angular `routePath` targets the `/embed` view. */
+export function isEmbedLocation(href: string, routePath?: string): boolean {
+  if (routePath === 'embed') return true;
+  if (!href) return false;
+  try {
+    const url = new URL(href, 'https://example.com');
+    const cleanPath = url.pathname.replace(/\/+$/, '');
+    if (cleanPath === '/embed' || cleanPath.endsWith('/embed')) {
+      return true;
+    }
+    const hashPath = url.hash.startsWith('#') ? url.hash.slice(1).split('?')[0].replace(/\/+$/, '') : '';
+    return hashPath === '/embed';
+  } catch {
+    return false;
+  }
 }
 
 function parseBoolFlag(raw: string | undefined, fallback: boolean): boolean {
@@ -140,6 +172,18 @@ function parseBoolFlag(raw: string | undefined, fallback: boolean): boolean {
   const v = raw.trim().toLowerCase();
   if (v === '1' || v === 'true' || v === 'yes' || v === 'on') return true;
   if (v === '0' || v === 'false' || v === 'no' || v === 'off') return false;
+  return fallback;
+}
+
+function parseVisibilityFlag(raw: string | undefined, fallback: boolean): boolean {
+  if (raw === undefined) return fallback;
+  const v = raw.trim().toLowerCase();
+  if (v === '1' || v === 'true' || v === 'yes' || v === 'on' || v === 'open' || v === 'expanded' || v === 'shown') {
+    return true;
+  }
+  if (v === '0' || v === 'false' || v === 'no' || v === 'off' || v === 'hidden' || v === 'none') {
+    return false;
+  }
   return fallback;
 }
 
@@ -177,10 +221,50 @@ function parseExpandAll(raw: string | undefined): boolean {
   return true;
 }
 
-function parseCollapsed(raw: string | undefined): boolean {
-  if (raw === undefined) return false;
+function parseTriStateChrome(
+  raw: string | undefined,
+  collapseOnHide: boolean,
+  defaultHidden: boolean,
+  defaultCollapsed: boolean,
+): { hidden: boolean; collapsed: boolean } {
+  if (raw === undefined) {
+    return { hidden: defaultHidden, collapsed: defaultCollapsed };
+  }
   const v = raw.trim().toLowerCase();
-  return v === 'collapsed' || v === '1' || v === 'true' || v === 'hidden';
+  if (v === 'hidden' || v === '0' || v === 'false' || v === 'off' || v === 'none') {
+    return { hidden: true, collapsed: collapseOnHide };
+  }
+  if (v === 'collapsed') {
+    return { hidden: false, collapsed: true };
+  }
+  if (v === '1' || v === 'true' || v === 'on' || v === 'open' || v === 'expanded' || v === 'shown') {
+    return { hidden: false, collapsed: false };
+  }
+  return { hidden: defaultHidden, collapsed: defaultCollapsed };
+}
+
+function parseSidebarState(
+  raw: string | undefined,
+  embedDefaultHidden: boolean,
+): { sidebarHidden: boolean; sidebarCollapsed: boolean } {
+  const { hidden, collapsed } = parseTriStateChrome(raw, false, embedDefaultHidden, false);
+  return { sidebarHidden: hidden, sidebarCollapsed: collapsed };
+}
+
+function parsePanelState(
+  raw: string | undefined,
+  embedDefaultHidden: boolean,
+): { panelVisible: boolean; panelCollapsed: boolean } {
+  const { hidden, collapsed } = parseTriStateChrome(raw, false, embedDefaultHidden, false);
+  return { panelVisible: !hidden, panelCollapsed: collapsed };
+}
+
+function parseLegendState(
+  raw: string | undefined,
+  embedDefaultCollapsed: boolean,
+): { legendHidden: boolean; legendCollapsed: boolean } {
+  const { hidden, collapsed } = parseTriStateChrome(raw, true, false, embedDefaultCollapsed);
+  return { legendHidden: hidden, legendCollapsed: collapsed };
 }
 
 function parseSearchMode(raw: string | undefined): 'fuzzy' | 'semantic' {
@@ -244,7 +328,13 @@ function parseCustomSearches(
 /** Parses all UI configuration parameters from a merged query parameter map. */
 export function parseUrlUiConfig(
   params: ReadonlyMap<string, readonly string[]>,
+  isEmbedRoute = false,
 ): UrlUiConfig {
+  const embed = isEmbedRoute || parseBoolFlag(getParamFromMap(params, ['embed']), false);
+  const defaultChromeVisible = !embed;
+  const sidebarState = parseSidebarState(getParamFromMap(params, ['sidebar']), embed);
+  const panelState = parsePanelState(getParamFromMap(params, ['panel']), embed);
+  const legendState = parseLegendState(getParamFromMap(params, ['legend']), embed);
   const searchMode = parseSearchMode(
     getParamFromMap(params, ['searchMode', 'search_mode']),
   );
@@ -256,6 +346,18 @@ export function parseUrlUiConfig(
   const rawMark = getParamFromMap(params, ['mark'])?.trim();
 
   return {
+    embed,
+    headerVisible: parseVisibilityFlag(
+      getParamFromMap(params, ['header']),
+      defaultChromeVisible,
+    ),
+    toolbarVisible: parseVisibilityFlag(
+      getParamFromMap(params, ['toolbar']),
+      defaultChromeVisible,
+    ),
+    panelVisible: panelState.panelVisible,
+    sidebarHidden: sidebarState.sidebarHidden,
+    legendHidden: legendState.legendHidden,
     axis: parseAxisMode(getParamFromMap(params, ['axis', 'xAxis', 'x_axis'])),
     wait: parseBoolFlag(
       getParamFromMap(params, ['wait', 'showUserWait', 'show_user_wait']),
@@ -281,9 +383,9 @@ export function parseUrlUiConfig(
     searchMode,
     activeIndex,
     markId: rawMark ? rawMark : null,
-    legendCollapsed: parseCollapsed(getParamFromMap(params, ['legend'])),
-    sidebarCollapsed: parseCollapsed(getParamFromMap(params, ['sidebar'])),
-    panelCollapsed: parseCollapsed(getParamFromMap(params, ['panel'])),
+    legendCollapsed: legendState.legendCollapsed,
+    sidebarCollapsed: sidebarState.sidebarCollapsed,
+    panelCollapsed: panelState.panelCollapsed,
     sidebarFilter: getParamFromMap(params, ['filter']) ?? '',
   };
 }
@@ -294,6 +396,7 @@ export function parseUrlUiConfig(
  */
 export function serializeUrlUiConfig(
   config: UrlUiConfig,
+  isEmbedRoute = false,
 ): Record<string, string | string[] | null> {
   const canonicalTokens = VALID_TOKEN_METRICS.filter(m =>
     config.tokens.includes(m),
@@ -301,8 +404,45 @@ export function serializeUrlUiConfig(
   const isDefaultTokens =
     canonicalTokens.length === DEFAULT_TOKEN_METRICS.length &&
     canonicalTokens.every((t, i) => t === DEFAULT_TOKEN_METRICS[i]);
+  const defaultVisible = !config.embed;
+
+  let sidebarParam: string | null;
+  if (!config.embed) {
+    sidebarParam = config.sidebarHidden ? 'hidden' : config.sidebarCollapsed ? 'collapsed' : null;
+  } else {
+    sidebarParam = config.sidebarHidden ? null : config.sidebarCollapsed ? 'collapsed' : '1';
+  }
+
+  let panelParam: string | null;
+  if (!config.embed) {
+    panelParam = !config.panelVisible ? '0' : config.panelCollapsed ? 'collapsed' : null;
+  } else {
+    panelParam = !config.panelVisible ? null : config.panelCollapsed ? 'collapsed' : '1';
+  }
+
+  let legendParam: string | null;
+  if (config.legendHidden) {
+    legendParam = 'hidden';
+  } else if (!config.embed) {
+    legendParam = config.legendCollapsed ? 'collapsed' : null;
+  } else {
+    legendParam = config.legendCollapsed ? null : 'open';
+  }
 
   return {
+    embed: config.embed && !isEmbedRoute ? '1' : null,
+    header:
+      config.headerVisible === defaultVisible
+        ? null
+        : config.headerVisible
+          ? '1'
+          : '0',
+    toolbar:
+      config.toolbarVisible === defaultVisible
+        ? null
+        : config.toolbarVisible
+          ? '1'
+          : '0',
     axis:
       config.axis === 'time'
         ? null
@@ -334,11 +474,72 @@ export function serializeUrlUiConfig(
         ? String(config.activeIndex)
         : null,
     mark: config.markId ? config.markId : null,
-    legend: config.legendCollapsed ? 'collapsed' : null,
-    sidebar: config.sidebarCollapsed ? 'collapsed' : null,
-    panel: config.panelCollapsed ? 'collapsed' : null,
+    legend: legendParam,
+    sidebar: sidebarParam,
+    panel: panelParam,
     filter: config.sidebarFilter.trim() ? config.sidebarFilter.trim() : null,
   };
+}
+
+const COLAB_PORT_PROXY_HOST_RE =
+  /^.+-([1-9]\d{0,4})-colab(?:\.corp)?\.googleusercontent\.com$/i;
+
+/**
+ * Rewrites ephemeral Colab kernel `proxyPort` iframe origins back to
+ * `http://localhost:<port>` so "Open in Agent Trace Vis" links open a working
+ * standalone tab outside Colab's service-worker sandbox.
+ */
+function resolveColabProxyPort(hostname: string): number | null {
+  const match = COLAB_PORT_PROXY_HOST_RE.exec(hostname);
+  if (!match) return null;
+  const port = Number(match[1]);
+  return Number.isInteger(port) && port >= 1 && port <= 65535 ? port : null;
+}
+
+/** Builds a full-viewer URL from an embed URL by leaving `/embed` and stripping chrome-hiding flags. */
+export function buildFullAppUrl(href: string): string {
+  if (!href) return '/';
+  try {
+    const url = new URL(href, 'https://example.com');
+    const colabPort = resolveColabProxyPort(url.hostname);
+    if (colabPort !== null) {
+      url.protocol = 'http:';
+      url.hostname = 'localhost';
+      url.port = String(colabPort);
+    }
+    if (url.pathname.replace(/\/+$/, '') === '/embed') {
+      url.pathname = '/';
+    } else if (url.pathname.replace(/\/+$/, '').endsWith('/embed')) {
+      url.pathname = url.pathname.replace(/\/embed\/?$/, '/');
+    }
+
+    const embedKeys = ['embed', 'header', 'toolbar', 'panel', 'sidebar', 'legend'];
+    for (const key of embedKeys) {
+      url.searchParams.delete(key);
+    }
+
+    if (url.hash) {
+      const qIdx = url.hash.indexOf('?');
+      const hashPath = (qIdx >= 0 ? url.hash.slice(0, qIdx) : url.hash).replace(
+        /^#\/embed(?=\/|$)/,
+        '#/agentic-traces',
+      );
+      if (qIdx >= 0) {
+        const hashParams = new URLSearchParams(url.hash.slice(qIdx + 1));
+        for (const key of embedKeys) {
+          hashParams.delete(key);
+        }
+        const qs = hashParams.toString();
+        url.hash = qs ? `${hashPath}?${qs}` : hashPath === '#/' ? '' : hashPath;
+      } else {
+        url.hash = hashPath === '#/' ? '' : hashPath;
+      }
+    }
+
+    return url.toString();
+  } catch {
+    return '/';
+  }
 }
 
 /** Input to `resolvePendingUrlSelection`. */

@@ -19,26 +19,30 @@
  * @fileoverview Root AppComponent. Renders the top-level header and router outlet.
  */
 
-import { Component } from '@angular/core';
-import { RouterOutlet, RouterLink } from '@angular/router';
-import { UrlParamService } from './shared/url-param.service';
+import {Component, inject} from '@angular/core';
+import {RouterLink, RouterOutlet} from '@angular/router';
+
+import {EmbedStateService} from './shared/embed-state.service';
+import {UrlParamService} from './shared/url-param.service';
 
 @Component({
   selector: 'app-root',
   standalone: true,
   imports: [RouterOutlet, RouterLink],
   template: `
-    <header>
-      <h1 routerLink="/" style="cursor: pointer;">
-        Broomsticks
-      </h1>
-      <a class="info-link" href="https://github.com/PAIR-code/agent-trace-vis" target="_blank" rel="noopener noreferrer"
-         title="About Broomsticks (GitHub)" aria-label="About Broomsticks on GitHub">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="11"></line><line x1="12" y1="8" x2="12.01" y2="8"></line>
-        </svg>
-      </a>
-    </header>
+    @if (embedState.headerVisible()) {
+      <header>
+        <h1 routerLink="/" style="cursor: pointer;">
+          Broomsticks
+        </h1>
+        <a class="info-link" href="https://github.com/PAIR-code/agent-trace-vis" target="_blank" rel="noopener noreferrer"
+           title="About Broomsticks (GitHub)" aria-label="About Broomsticks on GitHub">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="11"></line><line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+        </a>
+      </header>
+    }
 
     <main>
       <router-outlet></router-outlet>
@@ -78,6 +82,8 @@ import { UrlParamService } from './shared/url-param.service';
   `]
 })
 export class AppComponent {
+  readonly embedState = inject(EmbedStateService);
+
   constructor(private urlParamService: UrlParamService) {
     this.urlParamService.processUrlParameters();
   }
